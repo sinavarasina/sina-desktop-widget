@@ -37,10 +37,10 @@ pub struct PersistedStore {
 pub fn default_store_path() -> PathBuf {
     #[cfg(test)]
     {
-        return std::env::temp_dir().join(format!(
+        std::env::temp_dir().join(format!(
             "sina-desktop-widget-test-{}.json",
             std::process::id()
-        ));
+        ))
     }
     #[cfg(not(test))]
     {

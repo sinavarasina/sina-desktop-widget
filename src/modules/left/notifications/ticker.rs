@@ -4,10 +4,10 @@ use waywi::prelude::*;
 
 use crate::app::notifications::IncomingTicker;
 use crate::app::state::Msg;
-use crate::theme::{BAR_HEIGHT, NOTIF_TICKER_WIDTH, SURFACE0, TEXT, font_ui};
+use crate::theme::{BAR_HEIGHT, NOTIF_ICON_SIZE, NOTIF_TICKER_WIDTH, SURFACE0, TEXT, font_ui};
 use crate::widgets::separators::{SepShape, separator};
 
-use super::icon::build_circle_icon;
+use super::icon::build_notif_icon;
 
 pub fn build_incoming_ticker(ticker: &IncomingTicker) -> Element<Msg> {
     let text_pos = Position::RelativeToParent {
@@ -44,7 +44,7 @@ pub fn build_incoming_ticker(ticker: &IncomingTicker) -> Element<Msg> {
         .padding(Edges::symmetric(0.logical_px(), 6.logical_px()))
         .gap(6.logical_px())
         .align(Align::Center)
-        .child(build_circle_icon(ticker.icon, false))
+        .child(build_notif_icon(ticker.icon, false, NOTIF_ICON_SIZE))
         .child(scrolling_clip);
 
     Row::new()

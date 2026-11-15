@@ -1,37 +1,24 @@
-//! Notification icon widget (image or fallback glyph, no grey circle background).
+//! Notification icon widget (image or fallback glyph).
 
 use waywi::prelude::*;
 
 use crate::app::state::Msg;
-use crate::theme::{NOTIF_ICON_SIZE, OVERLAY0, RED, font_ui};
+use crate::theme::{OVERLAY0, RED, font_ui};
 
-pub fn build_circle_icon(asset: Option<ImageAsset>, dnd: bool) -> Element<Msg> {
+pub fn build_notif_icon(asset: Option<ImageAsset>, dnd: bool, size: f32) -> Element<Msg> {
     if let Some(img) = asset {
-        let radius = (NOTIF_ICON_SIZE * 0.5).logical_px();
-        Clip::new(
-            Image::new(img)
-                .size(Size::px(
-                    NOTIF_ICON_SIZE.logical_px(),
-                    NOTIF_ICON_SIZE.logical_px(),
-                ))
-                .fit(ImageFit::Cover),
-        )
-        .corner_radius(radius)
-        .size(Size::px(
-            NOTIF_ICON_SIZE.logical_px(),
-            NOTIF_ICON_SIZE.logical_px(),
-        ))
-        .into()
+        Image::new(img)
+            .size(Size::px(size.logical_px(), size.logical_px()))
+            .fit(ImageFit::Cover)
+            .into()
     } else {
+        let glyph_px = (size * 0.65).max(12.0);
         Group::new()
-            .size(Size::px(
-                NOTIF_ICON_SIZE.logical_px(),
-                NOTIF_ICON_SIZE.logical_px(),
-            ))
+            .size(Size::px(size.logical_px(), size.logical_px()))
             .child(
                 Text::new(if dnd { "\u{f009b}" } else { "\u{f009a}" })
                     .font(font_ui())
-                    .font_size(12.logical_px())
+                    .font_size(glyph_px.logical_px())
                     .color(if dnd { RED } else { OVERLAY0 })
                     .position(Position::relative_to_parent(
                         Percent::new(50.0),

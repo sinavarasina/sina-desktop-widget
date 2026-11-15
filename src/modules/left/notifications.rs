@@ -12,7 +12,7 @@ use crate::theme::{
 };
 use crate::widgets::separators::{SepShape, separator};
 
-pub use icon::build_circle_icon;
+pub use icon::build_notif_icon;
 use ticker::build_incoming_ticker;
 
 pub fn build_notification_segment(state: &State) -> Element<Msg> {
@@ -29,7 +29,7 @@ pub fn build_notification_segment(state: &State) -> Element<Msg> {
         .align(Align::Center);
 
     if state.notifications.items.is_empty() {
-        content = content.child(build_circle_icon(None, state.notifications.dnd));
+        content = content.child(build_notif_icon(None, state.notifications.dnd, NOTIF_ICON_SIZE));
     } else {
         for (idx, item) in state
             .notifications
@@ -45,7 +45,7 @@ pub fn build_notification_segment(state: &State) -> Element<Msg> {
                         NOTIF_ICON_SIZE.logical_px(),
                         NOTIF_ICON_SIZE.logical_px(),
                     ))
-                    .child(build_circle_icon(item.icon, false)),
+                    .child(build_notif_icon(item.icon, false, NOTIF_ICON_SIZE)),
             );
         }
     }

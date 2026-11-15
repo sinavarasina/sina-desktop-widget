@@ -31,11 +31,12 @@ pub const BT_EXPANDED_WIDTH: f32 = 74.0;
 pub const DRAWER_REVEALED_WIDTH: f32 = GPU_EXPANDED_WIDTH + DISK_EXPANDED_WIDTH + BT_EXPANDED_WIDTH;
 
 pub const NOTIF_ICON_SIZE: f32 = 16.0;
+pub const NOTIF_CENTER_ICON_SIZE: f32 = 44.0;
 pub const NOTIF_MAX_BAR_ICONS: usize = 4;
 pub const NOTIF_TICKER_WIDTH: f32 = 240.0;
 pub const NOTIF_CENTER_WIDTH: f32 = 380.0;
 pub const NOTIF_CENTER_TOP_MARGIN: f32 = 34.0;
-pub const NOTIF_CARD_TEXT_WIDTH: f32 = 316.0;
+pub const NOTIF_CARD_TEXT_WIDTH: f32 = 288.0;
 
 pub const GENTOO_MAUVE_SVG: &[u8] = include_bytes!("../assets/gentoo-mauve.svg");
 

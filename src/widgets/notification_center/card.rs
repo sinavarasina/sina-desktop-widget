@@ -4,14 +4,14 @@ use waywi::prelude::*;
 
 use crate::app::notifications::NotificationItem;
 use crate::app::state::{HoverTarget, Msg, State};
-use crate::modules::left::notifications::build_circle_icon;
+use crate::modules::left::notifications::build_notif_icon;
 use crate::theme::{
-    BLUE, MANTLE, NOTIF_CARD_TEXT_WIDTH, OVERLAY0, RED, SUBTEXT0, SUBTEXT1, SURFACE0, SURFACE1,
-    TEXT, font_ui, font_ui_bold,
+    BLUE, MANTLE, NOTIF_CARD_TEXT_WIDTH, NOTIF_CENTER_ICON_SIZE, OVERLAY0, RED, SUBTEXT0,
+    SUBTEXT1, SURFACE0, SURFACE1, TEXT, font_ui, font_ui_bold,
 };
 
-const MAX_SUMMARY_CHARS: usize = 32;
-const MAX_BODY_CHARS: usize = 43;
+const MAX_SUMMARY_CHARS: usize = 28;
+const MAX_BODY_CHARS: usize = 39;
 
 pub fn build_notification_card(state: &State, item: &NotificationItem) -> Element<Msg> {
     let id = item.stored.id;
@@ -105,7 +105,7 @@ pub fn build_notification_card(state: &State, item: &NotificationItem) -> Elemen
                 .padding(Edges::symmetric(8.logical_px(), 10.logical_px()))
                 .gap(8.logical_px())
                 .align(Align::Center)
-                .child(build_circle_icon(item.icon, false))
+                .child(build_notif_icon(item.icon, false, NOTIF_CENTER_ICON_SIZE))
                 .child(text_col),
         )
         .into()

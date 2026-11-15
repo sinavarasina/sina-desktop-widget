@@ -13,7 +13,9 @@ use crate::theme::{
 use card::build_notification_card;
 use header::{HEADER_HEIGHT, build_header};
 
-const CARD_ESTIMATED_HEIGHT: f32 = 60.0;
+const CARD_HEIGHT: f32 = 62.0;
+const CARD_GAP: f32 = 4.0;
+const LIST_PAD_Y: f32 = 12.0;
 
 pub fn build_notification_center_surface(state: &State) -> Surface<Msg> {
     let p = state.notifications.center_progress.clamp(0.0, 1.0);
@@ -21,7 +23,9 @@ pub fn build_notification_center_surface(state: &State) -> Surface<Msg> {
 
     let max_total_height = (state.screen_height - NOTIF_CENTER_TOP_MARGIN - 16.0).max(200.0);
     let max_body_height = (max_total_height - HEADER_HEIGHT - 8.0).max(120.0);
-    let visible_slots = ((max_body_height / CARD_ESTIMATED_HEIGHT).floor() as usize).max(1);
+    let visible_slots =
+        (((max_body_height - LIST_PAD_Y + CARD_GAP) / (CARD_HEIGHT + CARD_GAP)).floor() as usize)
+            .max(1);
 
     let start = state
         .notifications
@@ -66,8 +70,13 @@ pub fn build_notification_center_surface(state: &State) -> Surface<Msg> {
             .items
             .len()
             .saturating_sub(start)
-            .min(visible_slots) as f32;
-        (shown * CARD_ESTIMATED_HEIGHT + 12.0).min(max_body_height)
+            .min(visible_slots);
+        if shown == 0 {
+            60.0
+        } else {
+            let gaps = shown.saturating_sub(1) as f32 * CARD_GAP;
+            ((shown as f32) * CARD_HEIGHT + gaps + LIST_PAD_Y + 2.0).min(max_body_height)
+        }
     };
 
     let scrollable_body = Clip::new(list_col)
