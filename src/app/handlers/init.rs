@@ -8,8 +8,8 @@ use waywi::prelude::*;
 use waywi::system::LocalDateTime;
 
 use crate::app::state::{
-    AudioControlTarget, HoverTarget, State, TrayEntry, WindowScroller, resolve_tray_icon,
-    upsert_tray_entry_into,
+    AudioControlTarget, HoverTarget, NotificationStore, State, TrayEntry, WindowScroller,
+    resolve_tray_icon, upsert_tray_entry_into,
 };
 use crate::theme::GENTOO_MAUVE_SVG;
 
@@ -24,21 +24,30 @@ pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
         .map(|o| o.logical_size.width.get())
         .filter(|w| *w >= 320.0)
         .unwrap_or(1920.0);
+    let screen_height = ctx
+        .outputs()
+        .first()
+        .map(|o| o.logical_size.height.get())
+        .filter(|h| *h >= 240.0)
+        .unwrap_or(1080.0);
 
     let (workspaces, active_ws_id, scroller) = init_hyprland(ctx);
     let audio = init_audio(ctx);
     let nm = init_network_manager(ctx);
     let bluetooth = init_bluetooth(ctx);
     let tray_items = init_tray(ctx, &mut icon_lookup, &mut path_asset_cache);
+    let notifications = NotificationStore::load_lazy(None, &mut icon_lookup, &mut path_asset_cache, ctx);
 
     Ok(State {
         logo_asset,
         icon_lookup,
         path_asset_cache,
         bar_width,
+        screen_height,
         workspaces,
         active_ws_id,
         scroller,
+        notifications,
         tray_items,
         tray_menu: None,
         blink_phase: false,

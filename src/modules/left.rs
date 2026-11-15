@@ -1,6 +1,7 @@
 //! Left bar group: Gentoo launcher logo, Hyprland workspaces, and active window scroller.
 
 mod logo;
+pub mod notifications;
 mod window_scroll;
 mod workspaces;
 
@@ -11,6 +12,7 @@ use crate::theme::{BAR_HEIGHT, CRUST, MANTLE, SURFACE0};
 use crate::widgets::separators::{SepShape, separator};
 
 use logo::build_logo;
+use notifications::build_notification_segment;
 use window_scroll::build_window_scroll;
 use workspaces::{build_active_ws, build_inactive_ws, resolve_active_ws_id};
 
@@ -69,4 +71,5 @@ pub fn build_left_modules(state: &State) -> Row<Msg> {
             SURFACE0,
             Color::TRANSPARENT,
         ))
+        .child(build_notification_segment(state))
 }

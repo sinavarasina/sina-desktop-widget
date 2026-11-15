@@ -11,6 +11,7 @@ use waywi::system::{
 };
 
 pub use super::msg::Msg;
+pub use super::notifications::NotificationStore;
 pub use super::scroller::WindowScroller;
 pub use super::tray_cache::{resolve_tray_icon, upsert_tray_entry_into};
 pub use super::types::{AudioControlTarget, HoverTarget, TrayEntry, TrayMenuPopup};
@@ -22,10 +23,12 @@ pub struct State {
     pub icon_lookup: XdgIconLookup,
     pub path_asset_cache: HashMap<String, ImageAsset>,
     pub bar_width: f32,
+    pub screen_height: f32,
 
     pub workspaces: Vec<WorkspaceInfo>,
     pub active_ws_id: i32,
     pub scroller: WindowScroller,
+    pub notifications: NotificationStore,
 
     pub tray_items: Vec<TrayEntry>,
     pub tray_menu: Option<TrayMenuPopup>,

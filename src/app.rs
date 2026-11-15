@@ -3,6 +3,7 @@
 pub mod format;
 pub mod handlers;
 pub mod msg;
+pub mod notifications;
 pub mod scroller;
 pub mod state;
 pub mod tray_cache;

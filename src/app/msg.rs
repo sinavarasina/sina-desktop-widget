@@ -5,7 +5,9 @@ use waywi::system::{
     CpuSnapshot, DiskSnapshot, GpuSnapshot, MemorySnapshot, NetworkSnapshot, TimeSnapshot,
 };
 
-use super::types::{HoverTarget, TrayMenuPopup};
+use super::types::HoverTarget;
+#[cfg(test)]
+use super::types::TrayMenuPopup;
 
 #[derive(Clone)]
 pub enum Msg {
@@ -16,6 +18,20 @@ pub enum Msg {
     SwitchWorkspace(WorkspaceId),
     HyprEvent(HyprlandEvent),
     ScrollTick,
+    NotificationEvent(Box<NotificationEvent>),
+    NotifBarPointerDown(PointerEvent),
+    NotifTickerTick,
+    NotifCenterAnimTick,
+    NotifCenterMarqueeTick,
+    CloseNotificationCenter,
+    NotifCenterScroll(ScrollEvent),
+    NotifCenterCardPointerDown {
+        id: u32,
+        ev: PointerEvent,
+    },
+    NotifCenterClearAll,
+    NotifCenterToggleDnd,
+    Noop,
     TrayEvent(Box<TrayEvent>),
     TrayClick {
         index: usize,

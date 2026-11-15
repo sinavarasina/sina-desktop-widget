@@ -2,6 +2,7 @@
 
 mod events;
 mod init;
+mod notifications;
 mod subscriptions;
 mod update;
 

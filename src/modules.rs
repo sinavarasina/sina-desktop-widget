@@ -10,6 +10,7 @@ use waywi::prelude::*;
 
 use crate::app::state::{Msg, State};
 use crate::theme::BAR_HEIGHT;
+use crate::widgets::notification_center::build_notification_center_surface;
 use crate::widgets::tooltip::build_tooltip_surface;
 use crate::widgets::tray_menu::build_tray_menu_surface;
 
@@ -21,6 +22,9 @@ pub fn build_surfaces(state: &State) -> Surfaces<Msg> {
     }
     if let Some(menu) = &state.tray_menu {
         surfaces.push(build_tray_menu_surface(state, menu));
+    }
+    if state.notifications.is_center_visible() {
+        surfaces.push(build_notification_center_surface(state));
     }
     surfaces
 }

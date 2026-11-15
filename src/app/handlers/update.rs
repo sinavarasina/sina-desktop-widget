@@ -9,6 +9,10 @@ use super::events::{
     handle_audio_scroll, handle_hypr_event, handle_tray_click, handle_tray_event,
     scroll_direction_y,
 };
+use super::notifications::{
+    handle_notif_bar_pointer, handle_notif_card_pointer, handle_notif_center_scroll,
+    handle_notification_event,
+};
 
 pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Result<()> {
     match msg {
@@ -37,6 +41,25 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
         }
         Msg::HyprEvent(ev) => handle_hypr_event(state, ev, ctx),
         Msg::ScrollTick => state.scroller.advance(),
+        Msg::NotificationEvent(ev) => handle_notification_event(state, *ev, ctx),
+        Msg::NotifBarPointerDown(ev) => handle_notif_bar_pointer(state, ev, ctx),
+        Msg::NotifTickerTick => state.notifications.step_ticker(),
+        Msg::NotifCenterAnimTick => state.notifications.step_center_animation(),
+        Msg::NotifCenterMarqueeTick => state.notifications.advance_marquee(),
+        Msg::CloseNotificationCenter => {
+            state.notifications.close_center();
+        }
+        Msg::NotifCenterScroll(sc) => handle_notif_center_scroll(state, sc, ctx),
+        Msg::NotifCenterCardPointerDown { id, ev } => {
+            handle_notif_card_pointer(state, id, ev, ctx);
+        }
+        Msg::NotifCenterClearAll => {
+            state.notifications.clear_all();
+        }
+        Msg::NotifCenterToggleDnd => {
+            state.notifications.toggle_dnd();
+        }
+        Msg::Noop => {}
         Msg::TrayEvent(ev) => handle_tray_event(state, *ev, ctx),
         Msg::TrayClick { index, ev } => handle_tray_click(state, index, ev, ctx),
         Msg::TrayMenuClick { item_id } => {
