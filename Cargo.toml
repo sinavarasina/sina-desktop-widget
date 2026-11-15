@@ -1,0 +1,19 @@
+[package]
+name = "sina-desktop-widget"
+version = "0.1.0"
+edition = "2024"
+description = "Native WayWi desktop widget suite (bar, notification center, launcher, OSD)"
+
+[dependencies]
+waywi = { version = "0.1.1", features = [
+    "renderer-gpu",
+    "renderer-software",
+    "text",
+    "image-png",
+    "image-svg",
+    "image-webp",
+    "animation",
+    "hyprland-ipc",
+    "dbus",
+    "pipewire",
+] }

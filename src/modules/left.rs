@@ -1,0 +1,72 @@
+//! Left bar group: Gentoo launcher logo, Hyprland workspaces, and active window scroller.
+
+mod logo;
+mod window_scroll;
+mod workspaces;
+
+use waywi::prelude::*;
+
+use crate::app::state::{Msg, State};
+use crate::theme::{BAR_HEIGHT, CRUST, MANTLE, SURFACE0};
+use crate::widgets::separators::{SepShape, separator};
+
+use logo::build_logo;
+use window_scroll::build_window_scroll;
+use workspaces::{build_active_ws, build_inactive_ws, resolve_active_ws_id};
+
+pub fn build_left_modules(state: &State) -> Row<Msg> {
+    let active_id = resolve_active_ws_id(state);
+    let inactive_block = build_inactive_ws(state, active_id);
+
+    Row::new()
+        .key("modules-left")
+        .size(Size::new(Length::Auto, BAR_HEIGHT.logical_px()))
+        .align(Align::Center)
+        .child(build_logo(state))
+        .child(separator("sep-l-1", SepShape::ArrowR, CRUST, MANTLE))
+        .child(build_active_ws(active_id))
+        .child(separator(
+            "sep-l-2",
+            SepShape::ArrowR,
+            MANTLE,
+            Color::TRANSPARENT,
+        ))
+        .child(separator(
+            "sep-l-3",
+            SepShape::CurveL,
+            MANTLE,
+            Color::TRANSPARENT,
+        ))
+        .child(inactive_block)
+        .child(separator(
+            "sep-l-4",
+            SepShape::SlashR,
+            MANTLE,
+            Color::TRANSPARENT,
+        ))
+        .child(separator(
+            "sep-l-5",
+            SepShape::SlashRThin,
+            SURFACE0,
+            Color::TRANSPARENT,
+        ))
+        .child(separator(
+            "sep-l-6",
+            SepShape::SlashLInv,
+            CRUST,
+            Color::TRANSPARENT,
+        ))
+        .child(build_window_scroll(state))
+        .child(separator(
+            "sep-l-7",
+            SepShape::SlashR,
+            CRUST,
+            Color::TRANSPARENT,
+        ))
+        .child(separator(
+            "sep-l-8",
+            SepShape::SlashRThin,
+            SURFACE0,
+            Color::TRANSPARENT,
+        ))
+}

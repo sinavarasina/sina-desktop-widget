@@ -1,0 +1,66 @@
+//! Catppuccin Mocha palette, and typography.
+
+use waywi::prelude::*;
+
+pub const BAR_HEIGHT: f32 = 24.0;
+pub const SEP_WIDTH: f32 = 11.0;
+
+/// Distance from the top of the monitor (`exclusive_zone` ignored on floating popups).
+pub const POPUP_TOP_MARGIN: f32 = 26.0;
+
+pub const LOGO_MIN_WIDTH: f32 = 22.0;
+pub const LOGO_PAD_LEFT: f32 = 12.0;
+pub const LOGO_PAD_RIGHT: f32 = 4.0;
+
+pub const TRAY_ICON_SIZE: f32 = 16.0;
+pub const TRAY_SPACING: f32 = 8.0;
+pub const TRAY_PAD_H: f32 = 8.0;
+
+pub const MODULE_PAD_H: f32 = 6.0;
+pub const CLOCK_PAD_H: f32 = 12.0;
+pub const WINDOW_PAD_H: f32 = 8.0;
+pub const MAX_WINDOW_CHARS: usize = 24;
+
+pub const METRIC_ICON_WIDTH: f32 = 11.0;
+pub const METRIC_ICON_GAP: f32 = 2.0;
+
+pub const EXPAND_SIGN_WIDTH: f32 = 28.0;
+pub const GPU_EXPANDED_WIDTH: f32 = 74.0;
+pub const DISK_EXPANDED_WIDTH: f32 = 82.0;
+pub const BT_EXPANDED_WIDTH: f32 = 74.0;
+pub const DRAWER_REVEALED_WIDTH: f32 = GPU_EXPANDED_WIDTH + DISK_EXPANDED_WIDTH + BT_EXPANDED_WIDTH;
+
+pub const GENTOO_MAUVE_SVG: &[u8] = include_bytes!("../assets/gentoo-mauve.svg");
+
+// Catppuccin Mocha palette from style.css
+pub const MAUVE: Color = Color::rgb(203, 166, 247);
+pub const RED: Color = Color::rgb(243, 139, 168);
+pub const BLUE: Color = Color::rgb(137, 180, 250);
+pub const TEXT: Color = Color::rgb(205, 214, 244);
+pub const SUBTEXT1: Color = Color::rgb(186, 194, 222);
+pub const SUBTEXT0: Color = Color::rgb(166, 173, 200);
+pub const OVERLAY0: Color = Color::rgb(108, 112, 134);
+pub const SURFACE1: Color = Color::rgb(69, 71, 90);
+pub const SURFACE0: Color = Color::rgb(49, 50, 68);
+pub const MANTLE: Color = Color::rgb(24, 24, 37);
+pub const CRUST: Color = Color::rgb(17, 17, 27);
+
+#[must_use]
+pub fn font_ui() -> Font {
+    Font::family("MesloLGS Nerd Font")
+}
+
+#[must_use]
+pub fn font_ui_semibold() -> Font {
+    font_ui().weight(FontWeight::SemiBold)
+}
+
+#[must_use]
+pub fn font_ui_bold() -> Font {
+    font_ui().weight(FontWeight::Bold)
+}
+
+#[must_use]
+pub fn font_window_scroll() -> Font {
+    Font::family("BlexMono Nerd Font")
+}

@@ -1,0 +1,10 @@
+//! Initialization, subscriptions, and IPC/input event handlers.
+
+mod events;
+mod init;
+mod subscriptions;
+mod update;
+
+pub use init::init_state;
+pub use subscriptions::build_subscriptions;
+pub use update::update_state;
