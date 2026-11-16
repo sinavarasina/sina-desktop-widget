@@ -49,6 +49,11 @@ pub fn handle_mpris_event(state: &mut State, ev: MprisEvent, ctx: &mut EffectCtx
 pub fn handle_mpris_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &EffectCtx<'_>) {
     match ev.button {
         Some(MouseButton::Left) => {
+            let module_left = ev.position.x.get() - ev.local_position.x.get();
+            state.mpris.popup_left_x = (module_left + SEP_WIDTH).max(8.0);
+            state.mpris.toggle_popup();
+        }
+        Some(MouseButton::Right) => {
             if let Some(svc) = state.mpris.active_player().map(|p| p.service_name.clone()) {
                 if let Ok(dbus) = ctx.dbus() {
                     let _ = dbus.mpris_play_pause(&svc);
@@ -60,11 +65,6 @@ pub fn handle_mpris_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &Effec
                     };
                 }
             }
-        }
-        Some(MouseButton::Right) => {
-            let module_left = ev.position.x.get() - ev.local_position.x.get();
-            state.mpris.popup_left_x = (module_left + SEP_WIDTH).max(8.0);
-            state.mpris.toggle_popup();
         }
         _ => {}
     }

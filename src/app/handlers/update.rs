@@ -5,6 +5,10 @@ use waywi::prelude::*;
 
 use crate::app::state::{AudioControlTarget, Msg, State};
 
+use super::bluetooth::{
+    handle_bluetooth_agent_event, handle_bt_agent_decision, handle_bt_bar_pointer,
+    handle_bt_device_pointer, handle_bt_popup_scroll, handle_bt_toggle_power, handle_bt_toggle_scan,
+};
 use super::events::{
     handle_audio_scroll, handle_hypr_event, handle_tray_click, handle_tray_event,
     scroll_direction_y,
@@ -25,9 +29,6 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
         }
         Msg::SpawnBtop => {
             let _ = spawn_detached("footclient", &["btop"]);
-        }
-        Msg::SpawnBluetui => {
-            let _ = spawn_detached("footclient", &["bluetui"]);
         }
         Msg::SwitchWorkspace(id) => {
             if let Ok(hc) = ctx.hyprland() {
@@ -73,6 +74,17 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
         Msg::CloseMprisPopup => {
             state.mpris.close_popup();
         }
+        Msg::BluetoothAgentEvent(ev) => handle_bluetooth_agent_event(state, *ev, ctx),
+        Msg::BtBarPointerDown(ev) => handle_bt_bar_pointer(state, ev),
+        Msg::BtTogglePower => handle_bt_toggle_power(state, ctx),
+        Msg::BtToggleScan => handle_bt_toggle_scan(state, ctx),
+        Msg::BtDevicePointerDown { path, ev } => handle_bt_device_pointer(state, path, ev, ctx),
+        Msg::BtAgentDecision { request_id, accept } => {
+            handle_bt_agent_decision(state, request_id, accept, ctx);
+        }
+        Msg::BtPopupScroll(sc) => handle_bt_popup_scroll(state, sc),
+        Msg::BtPopupAnimTick => state.bt_ui.step_popup_animation(),
+        Msg::CloseBtPopup => state.bt_ui.close_popup(),
         Msg::Noop => {}
         Msg::TrayEvent(ev) => handle_tray_event(state, *ev, ctx),
         Msg::TrayClick { index, ev } => handle_tray_click(state, index, ev, ctx),

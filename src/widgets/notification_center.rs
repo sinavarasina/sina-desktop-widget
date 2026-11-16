@@ -10,10 +10,9 @@ use crate::theme::{
     BAR_HEIGHT, CRUST, NOTIF_CENTER_TOP_MARGIN, NOTIF_CENTER_WIDTH, OVERLAY0, SURFACE1, font_ui,
 };
 
-use card::build_notification_card;
+use card::{BASE_CARD_HEIGHT, build_notification_card};
 use header::{HEADER_HEIGHT, build_header};
 
-const CARD_HEIGHT: f32 = 62.0;
 const CARD_GAP: f32 = 4.0;
 const LIST_PAD_Y: f32 = 12.0;
 
@@ -24,26 +23,28 @@ pub fn build_notification_center_surface(state: &State) -> Surface<Msg> {
     let max_total_height = (state.screen_height - NOTIF_CENTER_TOP_MARGIN - 16.0).max(200.0);
     let max_body_height = (max_total_height - HEADER_HEIGHT - 8.0).max(120.0);
     let visible_slots =
-        (((max_body_height - LIST_PAD_Y + CARD_GAP) / (CARD_HEIGHT + CARD_GAP)).floor() as usize)
+        (((max_body_height - LIST_PAD_Y + CARD_GAP) / (BASE_CARD_HEIGHT + CARD_GAP)).floor()
+            as usize)
             .max(1);
 
     let start = state
         .notifications
         .scroll_index
         .min(state.notifications.items.len());
-    let visible_items = state
+    let visible_slice: Vec<_> = state
         .notifications
         .items
         .iter()
         .skip(start)
-        .take(visible_slots);
+        .take(visible_slots)
+        .collect();
 
     let mut list_col = Column::new()
         .size(Size::new(Length::Fill, Length::Auto))
-        .gap(4.logical_px())
+        .gap(CARD_GAP.logical_px())
         .padding(Edges::all(6.logical_px()));
 
-    if state.notifications.items.is_empty() {
+    if visible_slice.is_empty() {
         list_col = list_col.child(
             Row::new()
                 .size(Size::new(Length::Fill, 48.logical_px()))
@@ -57,26 +58,17 @@ pub fn build_notification_center_surface(state: &State) -> Surface<Msg> {
                 ),
         );
     } else {
-        for item in visible_items {
+        for item in &visible_slice {
             list_col = list_col.child(build_notification_card(state, item));
         }
     }
 
-    let body_height = if state.notifications.items.is_empty() {
+    let body_height = if visible_slice.is_empty() {
         60.0
     } else {
-        let shown = state
-            .notifications
-            .items
-            .len()
-            .saturating_sub(start)
-            .min(visible_slots);
-        if shown == 0 {
-            60.0
-        } else {
-            let gaps = shown.saturating_sub(1) as f32 * CARD_GAP;
-            ((shown as f32) * CARD_HEIGHT + gaps + LIST_PAD_Y + 2.0).min(max_body_height)
-        }
+        let cards_h = (visible_slice.len() as f32) * BASE_CARD_HEIGHT;
+        let gaps = visible_slice.len().saturating_sub(1) as f32 * CARD_GAP;
+        (cards_h + gaps + LIST_PAD_Y + 2.0).min(max_body_height)
     };
 
     let scrollable_body = Clip::new(list_col)

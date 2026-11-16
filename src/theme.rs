@@ -41,7 +41,7 @@ pub const NOTIF_CARD_TEXT_WIDTH: f32 = 288.0;
 pub const MPRIS_ART_SIZE: f32 = 20.0;
 pub const MPRIS_BAR_TEXT_WIDTH: f32 = 128.0;
 pub const MPRIS_POPUP_WIDTH: f32 = 310.0;
-pub const MPRIS_SEEK_TRACK_WIDTH: f32 = 200.0;
+pub const MPRIS_SEEK_TRACK_WIDTH: f32 = 216.0;
 
 pub const GENTOO_MAUVE_SVG: &[u8] = include_bytes!("../assets/gentoo-mauve.svg");
 

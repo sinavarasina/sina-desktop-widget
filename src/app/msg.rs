@@ -40,6 +40,21 @@ pub enum Msg {
     MprisTick,
     MprisPopupAnimTick,
     CloseMprisPopup,
+    BluetoothAgentEvent(Box<BluetoothAgentEvent>),
+    BtBarPointerDown(PointerEvent),
+    BtTogglePower,
+    BtToggleScan,
+    BtDevicePointerDown {
+        path: String,
+        ev: PointerEvent,
+    },
+    BtAgentDecision {
+        request_id: u64,
+        accept: bool,
+    },
+    BtPopupScroll(ScrollEvent),
+    BtPopupAnimTick,
+    CloseBtPopup,
     Noop,
     TrayEvent(Box<TrayEvent>),
     TrayClick {
@@ -69,7 +84,6 @@ pub enum Msg {
     DrawerTick,
     DrawerTimeoutCheck,
     SpawnBtop,
-    SpawnBluetui,
     #[cfg(test)]
     TestSetWorkspaces(Vec<WorkspaceInfo>, i32),
     #[cfg(test)]

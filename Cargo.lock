@@ -2434,9 +2434,9 @@ dependencies = [
 
 [[package]]
 name = "waywi"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6149ad4ce43743ea780107129c05ef38792f9408e6d4613c4f311f4bc6b5227a"
+checksum = "1ee9ed2f981e0a03b6d0fba2ed8714f51dface291efd30be71dd801e331c5360"
 dependencies = [
  "bitflags",
  "bumpalo",

@@ -9,60 +9,51 @@ use crate::theme::{
 };
 use crate::widgets::separators::{SepShape, separator};
 
-const MAX_BAR_META_CHARS: usize = 19;
+const MAX_BAR_META_COLS: usize = 22;
 
 pub fn build_mpris(state: &State) -> Element<Msg> {
     let hovered = state.hovered == HoverTarget::MprisBar;
     let badge_bg = if hovered { SURFACE0 } else { CRUST };
 
-    let art_elem: Element<Msg> = if let Some(img) = state.mpris.art_asset {
+    let album_inner: Element<Msg> = if let Some(img) = state.mpris.art_asset {
         Image::new(img)
             .size(Size::px(
                 MPRIS_ART_SIZE.logical_px(),
                 MPRIS_ART_SIZE.logical_px(),
             ))
             .fit(ImageFit::Cover)
-            .into()
-    } else {
-        let icon_glyph = if state.mpris.is_playing() {
-            "\u{f001}"
-        } else {
-            "\u{f075a}"
-        };
-        let icon_col = if state.mpris.has_active_session() {
-            MAUVE
-        } else {
-            OVERLAY0
-        };
-        Text::new(icon_glyph)
-            .font(font_ui())
-            .font_size(12.logical_px())
-            .color(icon_col)
             .position(Position::relative_to_parent(
                 Percent::new(50.0),
                 Percent::new(50.0),
             ))
             .anchor(ElementAnchor::Center)
             .into()
+    } else {
+        let icon_col = if state.mpris.has_active_session() {
+            MAUVE
+        } else {
+            OVERLAY0
+        };
+        Text::new("\u{f001}")
+            .font(font_ui())
+            .font_size(11.logical_px())
+            .line_height(1.0)
+            .color(icon_col)
+            .position(Position::RelativeToParent {
+                x: Percent::new(50.0),
+                y: Percent::new(50.0),
+                offset_x: (-1.0).logical_px(),
+                offset_y: 0.logical_px(),
+            })
+            .anchor(ElementAnchor::Center)
+            .into()
     };
 
     let album_box = Group::new()
         .key("mpris-art-box")
-        .size(Size::px(22.logical_px(), BAR_HEIGHT.logical_px()))
+        .size(Size::px(24.logical_px(), BAR_HEIGHT.logical_px()))
         .child(Rect::new().size(Size::fill()).fill(badge_bg))
-        .child(
-            Group::new()
-                .size(Size::px(
-                    MPRIS_ART_SIZE.logical_px(),
-                    MPRIS_ART_SIZE.logical_px(),
-                ))
-                .position(Position::relative_to_parent(
-                    Percent::new(50.0),
-                    Percent::new(50.0),
-                ))
-                .anchor(ElementAnchor::Center)
-                .child(art_elem),
-        );
+        .child(album_inner);
 
     let mut row = Row::new()
         .key("mod-mpris")
@@ -98,8 +89,8 @@ pub fn build_mpris(state: &State) -> Element<Msg> {
             .or(player.identity.as_deref())
             .unwrap_or("Playing");
 
-        let top_text = marquee_slice(&top_raw, MAX_BAR_META_CHARS, state.mpris.marquee_tick);
-        let bot_text = marquee_slice(bot_raw, MAX_BAR_META_CHARS, state.mpris.marquee_tick);
+        let top_text = marquee_slice(&top_raw, MAX_BAR_META_COLS, state.mpris.marquee_tick);
+        let bot_text = marquee_slice(bot_raw, MAX_BAR_META_COLS, state.mpris.marquee_tick);
 
         let text_col = Column::new()
             .size(Size::px(
@@ -117,7 +108,7 @@ pub fn build_mpris(state: &State) -> Element<Msg> {
             .child(
                 Text::new(bot_text)
                     .font(font_ui_semibold())
-                    .font_size(10.5.logical_px())
+                    .font_size(10.0.logical_px())
                     .line_height(1.05)
                     .color(if player.status == MprisPlaybackStatus::Playing {
                         TEXT
@@ -178,10 +169,12 @@ pub fn format_artist_album(p: &MprisSnapshot) -> String {
     }
 }
 
-pub fn marquee_slice(input: &str, max_chars: usize, tick: u32) -> String {
+/// Visual-column aware marquee slicer (CJK / fullwidth chars count as ~1.5x ASCII width).
+pub fn marquee_slice(input: &str, max_cols: usize, tick: u32) -> String {
     let clean = input.trim();
-    let total = clean.chars().count();
-    if total <= max_chars {
+    let budget_half_cols = max_cols * 2;
+    let total_half_cols: usize = clean.chars().map(char_half_cols).sum();
+    if total_half_cols <= budget_half_cols {
         return clean.to_owned();
     }
     let looped: Vec<char> = format!("{clean}   \u{2022}   ").chars().collect();
@@ -189,9 +182,35 @@ pub fn marquee_slice(input: &str, max_chars: usize, tick: u32) -> String {
     let cycle = looped.len() + pause;
     let step = (tick as usize) % cycle;
     let offset = step.saturating_sub(pause) % looped.len();
-    let mut out = String::with_capacity(max_chars * 2);
-    for i in 0..max_chars {
-        out.push(looped[(offset + i) % looped.len()]);
+    let mut out = String::with_capacity(max_cols * 2);
+    let mut used = 0usize;
+    let mut idx = 0usize;
+    while used < budget_half_cols {
+        let ch = looped[(offset + idx) % looped.len()];
+        let w = char_half_cols(ch);
+        if used + w > budget_half_cols {
+            break;
+        }
+        out.push(ch);
+        used += w;
+        idx += 1;
     }
     out
+}
+
+#[must_use]
+const fn char_half_cols(c: char) -> usize {
+    let u = c as u32;
+    if (u >= 0x1100 && u <= 0x115F)
+        || (u >= 0x2E80 && u <= 0xA4CF)
+        || (u >= 0xAC00 && u <= 0xD7A3)
+        || (u >= 0xF900 && u <= 0xFAFF)
+        || (u >= 0xFE10 && u <= 0xFE6F)
+        || (u >= 0xFF00 && u <= 0xFF60)
+        || (u >= 0x1F300 && u <= 0x1FAFF)
+    {
+        3
+    } else {
+        2
+    }
 }

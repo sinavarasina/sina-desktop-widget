@@ -4,6 +4,7 @@ use waywi::prelude::*;
 
 use crate::app::state::State;
 
+use super::bluetooth::handle_bt_agent_decision;
 use super::events::scroll_direction_y;
 
 pub fn handle_notification_event(
@@ -85,15 +86,33 @@ pub fn handle_notif_card_pointer(state: &mut State, id: u32, ev: PointerEvent, c
             }
         }
         Some(MouseButton::Left) => {
-            if let Some((notif_id, action_key)) = state.notifications.take_action_and_dismiss(id)
-                && let Ok(dbus) = ctx.dbus()
-            {
+            if let Some((notif_id, action_key)) = state.notifications.take_action_and_dismiss(id) {
                 if let Some(key) = action_key {
-                    let _ = dbus.invoke_notification_action(notif_id, &key);
+                    invoke_or_route_action(state, notif_id, &key, ctx);
+                } else if let Ok(dbus) = ctx.dbus() {
+                    let _ = dbus.close_notification(notif_id, NotificationCloseReason::Dismissed);
                 }
-                let _ = dbus.close_notification(notif_id, NotificationCloseReason::Dismissed);
             }
         }
         _ => {}
+    }
+}
+
+fn invoke_or_route_action(state: &mut State, id: u32, action_key: &str, ctx: &EffectCtx<'_>) {
+    if let Some(req_str) = action_key.strip_prefix("bt-accept:")
+        && let Ok(req_id) = req_str.parse::<u64>()
+    {
+        handle_bt_agent_decision(state, req_id, true, ctx);
+        return;
+    }
+    if let Some(req_str) = action_key.strip_prefix("bt-reject:")
+        && let Ok(req_id) = req_str.parse::<u64>()
+    {
+        handle_bt_agent_decision(state, req_id, false, ctx);
+        return;
+    }
+    if let Ok(dbus) = ctx.dbus() {
+        let _ = dbus.invoke_notification_action(id, action_key);
+        let _ = dbus.close_notification(id, NotificationCloseReason::Dismissed);
     }
 }

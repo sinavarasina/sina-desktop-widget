@@ -1,5 +1,6 @@
 //! Initialization, subscriptions, and IPC/input event handlers.
 
+mod bluetooth;
 mod events;
 mod init;
 mod mpris;

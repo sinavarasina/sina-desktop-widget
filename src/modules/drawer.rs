@@ -86,13 +86,7 @@ pub fn build_expandable_mon(state: &State) -> Element<Msg> {
             target: HoverTarget::Bluetooth,
             hovered: state.hovered == HoverTarget::Bluetooth,
             fixed_width: Some(BT_EXPANDED_WIDTH),
-            on_pointer_down: Some(|ev| {
-                if ev.button == Some(MouseButton::Right) {
-                    Msg::SpawnBluetui
-                } else {
-                    Msg::Hover(HoverTarget::Bluetooth)
-                }
-            }),
+            on_pointer_down: Some(Msg::BtBarPointerDown),
             on_scroll: None,
         });
 

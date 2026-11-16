@@ -1,5 +1,6 @@
 //! Application state, formatting models, messages, and event handlers.
 
+pub mod bluetooth;
 pub mod format;
 pub mod handlers;
 pub mod mpris;

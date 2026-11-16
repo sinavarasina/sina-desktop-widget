@@ -8,8 +8,8 @@ use waywi::prelude::*;
 use waywi::system::LocalDateTime;
 
 use crate::app::state::{
-    AudioControlTarget, HoverTarget, MprisState, NotificationStore, State, TrayEntry,
-    WindowScroller, resolve_tray_icon, upsert_tray_entry_into,
+    AudioControlTarget, BluetoothUiState, HoverTarget, MprisState, NotificationStore, State,
+    TrayEntry, WindowScroller, resolve_tray_icon, upsert_tray_entry_into,
 };
 use crate::theme::GENTOO_MAUVE_SVG;
 
@@ -71,6 +71,7 @@ pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
         disk_pct_used: 0.0,
         disk_pct_free: 0.0,
         bluetooth,
+        bt_ui: BluetoothUiState::default(),
         now: LocalDateTime::from_system_time(SystemTime::now()),
         clock_alt: false,
         cal_year_mode: false,

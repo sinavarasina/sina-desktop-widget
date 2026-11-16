@@ -11,7 +11,7 @@ use crate::theme::{
 };
 
 const ART_POPUP_SIZE: f32 = 52.0;
-const META_TEXT_WIDTH: f32 = 226.0;
+const META_TEXT_WIDTH: f32 = 232.0;
 
 pub fn build_control_box(state: &State) -> Element<Msg> {
     let player = state.mpris.active_player();
@@ -21,8 +21,8 @@ pub fn build_control_box(state: &State) -> Element<Msg> {
         .unwrap_or("No active track");
     let sub_raw = player.map_or_else(|| String::from("Idle"), format_artist_album);
 
-    let title_text = marquee_slice(title_raw, 30, state.mpris.marquee_tick);
-    let sub_text = marquee_slice(&sub_raw, 34, state.mpris.marquee_tick);
+    let title_text = marquee_slice(title_raw, 25, state.mpris.marquee_tick);
+    let sub_text = marquee_slice(&sub_raw, 26, state.mpris.marquee_tick);
 
     let art_elem: Element<Msg> = if let Some(img) = state.mpris.art_asset {
         Image::new(img)
@@ -48,11 +48,14 @@ pub fn build_control_box(state: &State) -> Element<Msg> {
                 Text::new("\u{f001}")
                     .font(font_ui())
                     .font_size(20.logical_px())
+                    .line_height(1.0)
                     .color(MAUVE)
-                    .position(Position::relative_to_parent(
-                        Percent::new(50.0),
-                        Percent::new(50.0),
-                    ))
+                    .position(Position::RelativeToParent {
+                        x: Percent::new(50.0),
+                        y: Percent::new(50.0),
+                        offset_x: (-2.0).logical_px(),
+                        offset_y: 0.logical_px(),
+                    })
                     .anchor(ElementAnchor::Center),
             )
             .into()

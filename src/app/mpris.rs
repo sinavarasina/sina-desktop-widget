@@ -65,12 +65,6 @@ impl MprisState {
     }
 
     #[must_use]
-    pub fn is_playing(&self) -> bool {
-        self.active_player()
-            .is_some_and(|p| p.status == MprisPlaybackStatus::Playing)
-    }
-
-    #[must_use]
     pub fn is_popup_visible(&self) -> bool {
         self.popup_target || self.popup_progress > 0.001
     }

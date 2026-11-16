@@ -21,6 +21,7 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
     subs.push(System::time().every(Duration::from_secs(1), Msg::TimeTick));
     subs.push(Dbus::network_manager(Msg::NetworkManagerUpdated));
     subs.push(Dbus::bluetooth(Msg::BluetoothUpdated));
+    subs.push(Dbus::bluetooth_agent(|ev| Msg::BluetoothAgentEvent(Box::new(ev))));
 
     if state.scroller.needs_scroll() {
         subs.push(Timer::every(
@@ -83,6 +84,13 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
             "mpris-popup-anim",
             Duration::from_millis(16),
             Msg::MprisPopupAnimTick,
+        ));
+    }
+    if state.bt_ui.is_animating_popup() {
+        subs.push(Timer::every(
+            "bt-popup-anim",
+            Duration::from_millis(16),
+            Msg::BtPopupAnimTick,
         ));
     }
     subs

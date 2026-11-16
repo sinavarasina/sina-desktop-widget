@@ -5,13 +5,15 @@ use waywi::prelude::*;
 use crate::app::notifications::NotificationItem;
 use crate::app::state::{HoverTarget, Msg, State};
 use crate::modules::left::notifications::build_notif_icon;
+use crate::modules::mpris::marquee_slice;
 use crate::theme::{
     BLUE, MANTLE, NOTIF_CARD_TEXT_WIDTH, NOTIF_CENTER_ICON_SIZE, OVERLAY0, RED, SUBTEXT0,
     SUBTEXT1, SURFACE0, SURFACE1, TEXT, font_ui, font_ui_bold,
 };
 
-const MAX_SUMMARY_CHARS: usize = 28;
-const MAX_BODY_CHARS: usize = 39;
+const MAX_SUMMARY_COLS: usize = 28;
+const MAX_BODY_COLS: usize = 39;
+pub const BASE_CARD_HEIGHT: f32 = 62.0;
 
 pub fn build_notification_card(state: &State, item: &NotificationItem) -> Element<Msg> {
     let id = item.stored.id;
@@ -30,12 +32,8 @@ pub fn build_notification_card(state: &State, item: &NotificationItem) -> Elemen
     } else {
         item.stored.summary.as_str()
     };
-    let summary_text = marquee_slice(raw_summary, MAX_SUMMARY_CHARS, state.notifications.marquee_tick);
-    let app_text = marquee_slice(
-        &item.stored.app_name,
-        14,
-        state.notifications.marquee_tick,
-    );
+    let summary_text = marquee_slice(raw_summary, MAX_SUMMARY_COLS, state.notifications.marquee_tick);
+    let app_text = marquee_slice(&item.stored.app_name, 14, state.notifications.marquee_tick);
 
     let header_row = Clip::new(
         Row::new()
@@ -64,7 +62,7 @@ pub fn build_notification_card(state: &State, item: &NotificationItem) -> Elemen
 
     let clean_body = item.stored.body.trim().replace('\n', " ");
     if !clean_body.is_empty() {
-        let body_text = marquee_slice(&clean_body, MAX_BODY_CHARS, state.notifications.marquee_tick);
+        let body_text = marquee_slice(&clean_body, MAX_BODY_COLS, state.notifications.marquee_tick);
         text_col = text_col.child(
             Clip::new(
                 Row::new()
@@ -109,21 +107,4 @@ pub fn build_notification_card(state: &State, item: &NotificationItem) -> Elemen
                 .child(text_col),
         )
         .into()
-}
-
-fn marquee_slice(input: &str, max_chars: usize, tick: u32) -> String {
-    let total = input.chars().count();
-    if total <= max_chars {
-        return input.to_owned();
-    }
-    let looped: Vec<char> = format!("{input}   \u{2022}   ").chars().collect();
-    let pause = 5usize;
-    let cycle = looped.len() + pause;
-    let step = (tick as usize) % cycle;
-    let offset = step.saturating_sub(pause) % looped.len();
-    let mut out = String::with_capacity(max_chars * 2);
-    for i in 0..max_chars {
-        out.push(looped[(offset + i) % looped.len()]);
-    }
-    out
 }

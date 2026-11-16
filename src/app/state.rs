@@ -10,6 +10,7 @@ use waywi::system::{
     TimeFormat, shift_year_month,
 };
 
+pub use super::bluetooth::BluetoothUiState;
 pub use super::mpris::MprisState;
 pub use super::msg::Msg;
 pub use super::notifications::NotificationStore;
@@ -53,6 +54,7 @@ pub struct State {
     pub disk_pct_free: f32,
 
     pub bluetooth: BluetoothSnapshot,
+    pub bt_ui: BluetoothUiState,
 
     pub now: LocalDateTime,
     pub clock_alt: bool,
