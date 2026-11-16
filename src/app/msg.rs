@@ -5,6 +5,7 @@ use waywi::system::{
     CpuSnapshot, DiskSnapshot, GpuSnapshot, MemorySnapshot, NetworkSnapshot, TimeSnapshot,
 };
 
+use super::mpris::MprisControlAction;
 use super::types::HoverTarget;
 #[cfg(test)]
 use super::types::TrayMenuPopup;
@@ -31,6 +32,14 @@ pub enum Msg {
     },
     NotifCenterClearAll,
     NotifCenterToggleDnd,
+    MprisEvent(Box<MprisEvent>),
+    MprisBarPointerDown(PointerEvent),
+    MprisBarScroll(ScrollEvent),
+    MprisAction(MprisControlAction),
+    MprisSeekClick(PointerEvent),
+    MprisTick,
+    MprisPopupAnimTick,
+    CloseMprisPopup,
     Noop,
     TrayEvent(Box<TrayEvent>),
     TrayClick {

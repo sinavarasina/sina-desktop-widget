@@ -2,6 +2,7 @@
 
 pub mod format;
 pub mod handlers;
+pub mod mpris;
 pub mod msg;
 pub mod notifications;
 pub mod scroller;

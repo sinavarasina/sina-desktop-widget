@@ -2,23 +2,12 @@
 
 use crate::theme::MAX_WINDOW_CHARS;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct WindowScroller {
     pub raw_title: String,
     pub raw_class: String,
     pub offset: usize,
     pub pause_ticks: u8,
-}
-
-impl Default for WindowScroller {
-    fn default() -> Self {
-        Self {
-            raw_title: String::from("No window under cursor"),
-            raw_class: String::new(),
-            offset: 0,
-            pause_ticks: 0,
-        }
-    }
 }
 
 impl WindowScroller {
@@ -28,7 +17,7 @@ impl WindowScroller {
         } else if !class.trim().is_empty() {
             class.clone()
         } else {
-            String::from("No window under cursor")
+            String::new()
         };
         if self.raw_title != normalized || self.raw_class != class {
             self.raw_title = normalized;

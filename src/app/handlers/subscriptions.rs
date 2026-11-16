@@ -11,6 +11,7 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
     subs.push(Hyprland::subscribe(Msg::HyprEvent));
     subs.push(Dbus::tray(|ev| Msg::TrayEvent(Box::new(ev))));
     subs.push(Dbus::notifications(|ev| Msg::NotificationEvent(Box::new(ev))));
+    subs.push(Dbus::mpris(|ev| Msg::MprisEvent(Box::new(ev))));
     subs.push(Audio::subscribe(Msg::AudioUpdated));
     subs.push(System::cpu().every(Duration::from_secs(1), Msg::CpuSampled));
     subs.push(System::gpu().every(Duration::from_secs(2), Msg::GpuSampled));
@@ -68,6 +69,20 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
             "notif-center-marquee",
             Duration::from_millis(200),
             Msg::NotifCenterMarqueeTick,
+        ));
+    }
+    if state.mpris.has_active_session() || state.mpris.popup_target {
+        subs.push(Timer::every(
+            "mpris-tick",
+            Duration::from_millis(200),
+            Msg::MprisTick,
+        ));
+    }
+    if state.mpris.is_animating_popup() {
+        subs.push(Timer::every(
+            "mpris-popup-anim",
+            Duration::from_millis(16),
+            Msg::MprisPopupAnimTick,
         ));
     }
     subs

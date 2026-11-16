@@ -3,6 +3,7 @@
 pub mod clock;
 pub mod drawer;
 pub mod left;
+pub mod mpris;
 pub mod right;
 pub mod tray;
 
@@ -10,6 +11,7 @@ use waywi::prelude::*;
 
 use crate::app::state::{Msg, State};
 use crate::theme::BAR_HEIGHT;
+use crate::widgets::mpris_popup::build_mpris_popup_surface;
 use crate::widgets::notification_center::build_notification_center_surface;
 use crate::widgets::tooltip::build_tooltip_surface;
 use crate::widgets::tray_menu::build_tray_menu_surface;
@@ -25,6 +27,9 @@ pub fn build_surfaces(state: &State) -> Surfaces<Msg> {
     }
     if state.notifications.is_center_visible() {
         surfaces.push(build_notification_center_surface(state));
+    }
+    if state.mpris.is_popup_visible() {
+        surfaces.push(build_mpris_popup_surface(state));
     }
     surfaces
 }

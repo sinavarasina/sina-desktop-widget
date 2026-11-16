@@ -8,8 +8,8 @@ use waywi::prelude::*;
 use waywi::system::LocalDateTime;
 
 use crate::app::state::{
-    AudioControlTarget, HoverTarget, NotificationStore, State, TrayEntry, WindowScroller,
-    resolve_tray_icon, upsert_tray_entry_into,
+    AudioControlTarget, HoverTarget, MprisState, NotificationStore, State, TrayEntry,
+    WindowScroller, resolve_tray_icon, upsert_tray_entry_into,
 };
 use crate::theme::GENTOO_MAUVE_SVG;
 
@@ -37,6 +37,12 @@ pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
     let bluetooth = init_bluetooth(ctx);
     let tray_items = init_tray(ctx, &mut icon_lookup, &mut path_asset_cache);
     let notifications = NotificationStore::load_lazy(None, &mut icon_lookup, &mut path_asset_cache, ctx);
+    let mut mpris = MprisState::default();
+    if let Ok(dbus) = ctx.dbus()
+        && let Ok(players) = dbus.mpris_snapshots()
+    {
+        mpris.set_players(players, &mut path_asset_cache, ctx);
+    }
 
     Ok(State {
         logo_asset,
@@ -48,6 +54,7 @@ pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
         active_ws_id,
         scroller,
         notifications,
+        mpris,
         tray_items,
         tray_menu: None,
         blink_phase: false,

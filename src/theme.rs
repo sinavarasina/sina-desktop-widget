@@ -25,9 +25,9 @@ pub const METRIC_ICON_WIDTH: f32 = 11.0;
 pub const METRIC_ICON_GAP: f32 = 2.0;
 
 pub const EXPAND_SIGN_WIDTH: f32 = 28.0;
-pub const GPU_EXPANDED_WIDTH: f32 = 74.0;
-pub const DISK_EXPANDED_WIDTH: f32 = 82.0;
-pub const BT_EXPANDED_WIDTH: f32 = 74.0;
+pub const GPU_EXPANDED_WIDTH: f32 = 56.0;
+pub const DISK_EXPANDED_WIDTH: f32 = 72.0;
+pub const BT_EXPANDED_WIDTH: f32 = 56.0;
 pub const DRAWER_REVEALED_WIDTH: f32 = GPU_EXPANDED_WIDTH + DISK_EXPANDED_WIDTH + BT_EXPANDED_WIDTH;
 
 pub const NOTIF_ICON_SIZE: f32 = 16.0;
@@ -37,6 +37,11 @@ pub const NOTIF_TICKER_WIDTH: f32 = 240.0;
 pub const NOTIF_CENTER_WIDTH: f32 = 380.0;
 pub const NOTIF_CENTER_TOP_MARGIN: f32 = 34.0;
 pub const NOTIF_CARD_TEXT_WIDTH: f32 = 288.0;
+
+pub const MPRIS_ART_SIZE: f32 = 20.0;
+pub const MPRIS_BAR_TEXT_WIDTH: f32 = 128.0;
+pub const MPRIS_POPUP_WIDTH: f32 = 310.0;
+pub const MPRIS_SEEK_TRACK_WIDTH: f32 = 200.0;
 
 pub const GENTOO_MAUVE_SVG: &[u8] = include_bytes!("../assets/gentoo-mauve.svg");
 

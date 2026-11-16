@@ -5,7 +5,7 @@ edition = "2024"
 description = "Native WayWi desktop widget suite (bar, notification center, launcher, OSD)"
 
 [dependencies]
-waywi = { version = "0.1.1", features = [
+waywi = { version = "0.1.2", features = [
     "renderer-gpu",
     "renderer-software",
     "text",

@@ -10,6 +10,7 @@ use waywi::system::{
     TimeFormat, shift_year_month,
 };
 
+pub use super::mpris::MprisState;
 pub use super::msg::Msg;
 pub use super::notifications::NotificationStore;
 pub use super::scroller::WindowScroller;
@@ -29,6 +30,7 @@ pub struct State {
     pub active_ws_id: i32,
     pub scroller: WindowScroller,
     pub notifications: NotificationStore,
+    pub mpris: MprisState,
 
     pub tray_items: Vec<TrayEntry>,
     pub tray_menu: Option<TrayMenuPopup>,

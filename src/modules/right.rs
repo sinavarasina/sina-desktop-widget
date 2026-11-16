@@ -3,7 +3,7 @@
 use waywi::prelude::*;
 
 use crate::app::state::{HoverTarget, Msg, State};
-use crate::modules::{clock, drawer, tray};
+use crate::modules::{clock, drawer, mpris, tray};
 use crate::theme::{BAR_HEIGHT, CRUST, MANTLE, SURFACE0};
 use crate::widgets::metric::{MetricModuleConfig, metric_module};
 use crate::widgets::separators::{SepShape, separator};
@@ -71,6 +71,7 @@ pub fn build_right_modules(state: &State) -> Row<Msg> {
         .key("modules-right")
         .size(Size::new(Length::Auto, BAR_HEIGHT.logical_px()))
         .align(Align::Center)
+        .child(mpris::build_mpris(state))
         .child(separator(
             "sep-r-1",
             SepShape::SlashL,

@@ -2,6 +2,7 @@
 
 mod events;
 mod init;
+mod mpris;
 mod notifications;
 mod subscriptions;
 mod update;

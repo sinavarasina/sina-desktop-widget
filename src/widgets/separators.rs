@@ -13,12 +13,16 @@ pub enum SepShape {
     ArrowL,
     /// Thin left-pointing chevron (`\u{e0b3}` ``).
     ArrowLThin,
+    /// Thin right-pointing chevron (`\u{e0b1}` ``).
+    ArrowRThin,
     /// Solid block with left-facing triangular notch cutout (`\u{e0d7}` ``).
     CurveL,
     /// Solid block with right-facing triangular notch cutout (`\u{e0d6}` ``).
     CurveR,
     /// Solid upper-left diagonal triangle (`\u{e0bc}` ``).
     SlashR,
+    /// Solid lower-left diagonal triangle (`\` right edge).
+    SlashRInv,
     /// Thin `/` diagonal stroke (`\u{e0bb}` ``).
     SlashRThin,
     /// Solid upper-right diagonal triangle (`\u{e0be}` ``).
@@ -92,6 +96,9 @@ fn draw_separator(p: &mut Painter<'_>, shape: SepShape, fg: Color, bg: Color) {
         SepShape::SlashR => {
             fill_poly(p, fg, &[(-0.3, 0.0), (w, 0.0), (-0.3, h)]);
         }
+        SepShape::SlashRInv => {
+            fill_poly(p, fg, &[(-0.3, 0.0), (w, h), (-0.3, h)]);
+        }
         SepShape::SlashL => {
             fill_poly(p, fg, &[(0.0, 0.0), (w + 0.3, 0.0), (w + 0.3, h)]);
         }
@@ -109,6 +116,13 @@ fn draw_separator(p: &mut Painter<'_>, shape: SepShape, fg: Color, bg: Color) {
             pb.move_to((w - 0.6).logical_px(), 0.6.logical_px())
                 .line_to(1.2.logical_px(), mid_y.logical_px())
                 .line_to((w - 0.6).logical_px(), (h - 0.6).logical_px());
+            p.stroke_path(&pb, 1.15.logical_px(), fg);
+        }
+        SepShape::ArrowRThin => {
+            let mut pb = PathBuilder::new();
+            pb.move_to(0.6.logical_px(), 0.6.logical_px())
+                .line_to((w - 1.2).logical_px(), mid_y.logical_px())
+                .line_to(0.6.logical_px(), (h - 0.6).logical_px());
             p.stroke_path(&pb, 1.15.logical_px(), fg);
         }
     }
