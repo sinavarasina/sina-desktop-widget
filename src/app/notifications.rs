@@ -4,12 +4,13 @@ pub mod icons;
 pub mod storage;
 pub mod ticker;
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::UNIX_EPOCH;
 
 use waywi::desktop::icons::XdgIconLookup;
 use waywi::prelude::*;
+
+use crate::app::asset_lru::PathAssetCache;
 
 use icons::resolve_notification_icon;
 use storage::{
@@ -45,7 +46,7 @@ impl NotificationStore {
     pub fn load_lazy(
         store_path: Option<PathBuf>,
         icon_lookup: &mut XdgIconLookup,
-        path_cache: &mut HashMap<String, ImageAsset>,
+        path_cache: &mut PathAssetCache,
         ctx: &mut EffectCtx<'_>,
     ) -> Self {
         let path = store_path.unwrap_or_else(default_store_path);
@@ -103,7 +104,7 @@ impl NotificationStore {
         &mut self,
         notif: DesktopNotification,
         icon_lookup: &mut XdgIconLookup,
-        path_cache: &mut HashMap<String, ImageAsset>,
+        path_cache: &mut PathAssetCache,
         ctx: &mut EffectCtx<'_>,
     ) {
         let cached_icon_path = notif
@@ -190,7 +191,7 @@ impl NotificationStore {
         start: usize,
         count: usize,
         icon_lookup: &mut XdgIconLookup,
-        path_cache: &mut HashMap<String, ImageAsset>,
+        path_cache: &mut PathAssetCache,
         ctx: &mut EffectCtx<'_>,
     ) {
         let end = (start + count).min(self.items.len());

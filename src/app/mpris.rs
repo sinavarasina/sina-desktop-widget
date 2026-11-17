@@ -1,8 +1,8 @@
 //! MPRIS session state, active player selection, album art loading, and marquee scrolling.
 
-use std::collections::HashMap;
 use std::path::Path;
 
+use crate::app::asset_lru::PathAssetCache;
 use waywi::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,7 +97,7 @@ impl MprisState {
     pub fn set_players(
         &mut self,
         list: Vec<MprisSnapshot>,
-        path_cache: &mut HashMap<String, ImageAsset>,
+        path_cache: &mut PathAssetCache,
         ctx: &mut EffectCtx<'_>,
     ) {
         self.players = list;
@@ -107,7 +107,7 @@ impl MprisState {
     pub fn upsert_player(
         &mut self,
         snap: MprisSnapshot,
-        path_cache: &mut HashMap<String, ImageAsset>,
+        path_cache: &mut PathAssetCache,
         ctx: &mut EffectCtx<'_>,
     ) {
         if let Some(slot) = self
@@ -125,7 +125,7 @@ impl MprisState {
     pub fn remove_player(
         &mut self,
         service_name: &str,
-        path_cache: &mut HashMap<String, ImageAsset>,
+        path_cache: &mut PathAssetCache,
         ctx: &mut EffectCtx<'_>,
     ) {
         self.players.retain(|p| p.service_name != service_name);
@@ -158,11 +158,7 @@ impl MprisState {
         }
     }
 
-    fn sync_selection_and_art(
-        &mut self,
-        path_cache: &mut HashMap<String, ImageAsset>,
-        ctx: &mut EffectCtx<'_>,
-    ) {
+    fn sync_selection_and_art(&mut self, path_cache: &mut PathAssetCache, ctx: &mut EffectCtx<'_>) {
         if let Some(playing) = self
             .players
             .iter()
@@ -190,7 +186,7 @@ impl MprisState {
 
 fn resolve_art_url(
     art_url: &str,
-    path_cache: &mut HashMap<String, ImageAsset>,
+    path_cache: &mut PathAssetCache,
     ctx: &mut EffectCtx<'_>,
 ) -> Option<ImageAsset> {
     if art_url.is_empty() {

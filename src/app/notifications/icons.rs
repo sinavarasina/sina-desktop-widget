@@ -1,8 +1,8 @@
 //! Lazy notification icon resolution from XDG icon names, file paths, or cached/raw pixel hints.
 
-use std::collections::HashMap;
 use std::path::Path;
 
+use crate::app::asset_lru::PathAssetCache;
 use waywi::desktop::icons::XdgIconLookup;
 use waywi::prelude::*;
 
@@ -18,7 +18,7 @@ pub fn resolve_notification_icon(
     cached_icon_path: Option<&str>,
     image_data: Option<&NotificationImageData>,
     icon_lookup: &mut XdgIconLookup,
-    path_cache: &mut HashMap<String, ImageAsset>,
+    path_cache: &mut PathAssetCache,
     ctx: &mut EffectCtx<'_>,
 ) -> Option<ImageAsset> {
     if let Some(raw) = image_data

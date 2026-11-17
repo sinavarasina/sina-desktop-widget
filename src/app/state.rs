@@ -1,6 +1,5 @@
 //! Core application state, hover tracking, and drawer animation.
 
-use std::collections::HashMap;
 use std::time::{Duration, Instant, SystemTime};
 
 use waywi::desktop::icons::XdgIconLookup;
@@ -10,6 +9,7 @@ use waywi::system::{
     TimeFormat, shift_year_month,
 };
 
+use super::asset_lru::PathAssetCache;
 pub use super::bluetooth::BluetoothUiState;
 pub use super::mpris::MprisState;
 pub use super::msg::Msg;
@@ -23,7 +23,7 @@ pub const DRAWER_ANIM_STEP: f32 = 16.0 / 300.0;
 pub struct State {
     pub logo_asset: Option<ImageAsset>,
     pub icon_lookup: XdgIconLookup,
-    pub path_asset_cache: HashMap<String, ImageAsset>,
+    pub path_asset_cache: PathAssetCache,
     pub bar_width: f32,
     pub screen_height: f32,
 

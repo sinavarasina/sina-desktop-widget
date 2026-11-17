@@ -1,8 +1,8 @@
 //! Initial state construction and snapshot seeding.
 
-use std::collections::HashMap;
 use std::time::SystemTime;
 
+use crate::app::asset_lru::PathAssetCache;
 use waywi::desktop::icons::XdgIconLookup;
 use waywi::prelude::*;
 use waywi::system::LocalDateTime;
@@ -16,7 +16,7 @@ use crate::theme::GENTOO_MAUVE_SVG;
 pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
     let logo_asset = ctx.load_image_bytes_sized(GENTOO_MAUVE_SVG, 64).ok();
     let mut icon_lookup = XdgIconLookup::new();
-    let mut path_asset_cache = HashMap::new();
+    let mut path_asset_cache = PathAssetCache::default();
 
     let bar_width = ctx
         .outputs()
@@ -36,7 +36,8 @@ pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
     let nm = init_network_manager(ctx);
     let bluetooth = init_bluetooth(ctx);
     let tray_items = init_tray(ctx, &mut icon_lookup, &mut path_asset_cache);
-    let notifications = NotificationStore::load_lazy(None, &mut icon_lookup, &mut path_asset_cache, ctx);
+    let notifications =
+        NotificationStore::load_lazy(None, &mut icon_lookup, &mut path_asset_cache, ctx);
     let mut mpris = MprisState::default();
     if let Ok(dbus) = ctx.dbus()
         && let Ok(players) = dbus.mpris_snapshots()
@@ -129,7 +130,7 @@ fn init_bluetooth(ctx: &EffectCtx<'_>) -> BluetoothSnapshot {
 fn init_tray(
     ctx: &mut EffectCtx<'_>,
     lookup: &mut XdgIconLookup,
-    cache: &mut HashMap<String, ImageAsset>,
+    cache: &mut PathAssetCache,
 ) -> Vec<TrayEntry> {
     let Ok(dbus) = ctx.dbus() else {
         return Vec::new();

@@ -1,10 +1,12 @@
 //! System tray entry deduplication and icon asset caching.
 
-use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
 
 use waywi::desktop::icons::XdgIconLookup;
 use waywi::prelude::*;
 
+use super::asset_lru::PathAssetCache;
 use super::types::TrayEntry;
 
 /// Minimum source raster dimension (2x supersampled for `TRAY_ICON_SIZE`) so both XDG SVGs and
@@ -36,7 +38,7 @@ fn same_tray_identity(a: &TrayItemSnapshot, b: &TrayItemSnapshot) -> bool {
 pub fn resolve_tray_icon(
     entry: &TrayItemSnapshot,
     icon_lookup: &mut XdgIconLookup,
-    path_cache: &mut HashMap<String, ImageAsset>,
+    path_cache: &mut PathAssetCache,
     ctx: &mut EffectCtx<'_>,
 ) -> (Option<ImageAsset>, String) {
     let icon_name =
@@ -65,7 +67,12 @@ pub fn resolve_tray_icon(
         && let (Ok(w), Ok(h)) = (u32::try_from(pix.width), u32::try_from(pix.height))
         && let Ok(asset) = ctx.load_rgba_image(w, h, (w as usize) * 4, true, &rgba)
     {
-        let sig = format!("pix:{}x{}:{}", w, h, rgba.len());
+        // Content-hash signature: pixmap updates with identical dimensions but
+        // different pixels previously collided and returned the wrong cached icon.
+        let mut hasher = DefaultHasher::new();
+        hasher.write(&rgba);
+        let sig = format!("pix:{:016x}:{w}x{h}", hasher.finish());
+        path_cache.insert(sig.clone(), asset);
         return (Some(asset), sig);
     }
 
