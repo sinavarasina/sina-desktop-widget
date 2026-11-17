@@ -5,6 +5,11 @@ use waywi::prelude::*;
 
 use crate::app::state::{AudioControlTarget, Msg, State};
 
+use super::audio::{
+    handle_audio_updated, handle_mixer_bar_pointer, handle_mixer_capture_scroll,
+    handle_mixer_capture_seek_click, handle_mixer_master_seek_click, handle_mixer_set_target,
+    handle_mixer_stream_scroll, handle_mixer_stream_seek_click,
+};
 use super::bluetooth::{
     handle_bluetooth_agent_event, handle_bt_agent_decision, handle_bt_bar_pointer,
     handle_bt_device_menu_action, handle_bt_device_pointer, handle_bt_popup_scroll,
@@ -106,9 +111,7 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
         Msg::TrayBlinkTick => {
             state.blink_phase = !state.blink_phase;
         }
-        Msg::AudioUpdated(snap) => {
-            state.audio = Some(snap);
-        }
+        Msg::AudioUpdated(snap) => handle_audio_updated(state, snap, ctx),
         Msg::AudioPointerDown(ev) => match ev.button {
             Some(MouseButton::Middle) => {
                 state.audio_target = match state.audio_target {
@@ -131,6 +134,21 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
             _ => {}
         },
         Msg::AudioScroll(sc) => handle_audio_scroll(state, sc, ctx),
+        Msg::MixerBarPointerDown(ev) => handle_mixer_bar_pointer(state, ev, ctx),
+        Msg::MixerPopupAnimTick => state.audio_ui.step_popup_animation(),
+        Msg::MixerMarqueeTick => state.audio_ui.advance_marquee(),
+        Msg::CloseMixerPopup => state.audio_ui.close_popup(),
+        Msg::MixerSetTarget(target) => handle_mixer_set_target(state, target),
+        Msg::MixerMasterScroll(sc) => handle_audio_scroll(state, sc, ctx),
+        Msg::MixerMasterSeekClick(ev) => handle_mixer_master_seek_click(state, ev, ctx),
+        Msg::MixerStreamScroll { id, sc } => handle_mixer_stream_scroll(state, id, sc, ctx),
+        Msg::MixerStreamSeekClick { id, ev } => {
+            handle_mixer_stream_seek_click(state, id, ev, ctx);
+        }
+        Msg::MixerCaptureScroll { id, sc } => handle_mixer_capture_scroll(state, id, sc, ctx),
+        Msg::MixerCaptureSeekClick { id, ev } => {
+            handle_mixer_capture_seek_click(state, id, ev, ctx);
+        }
         Msg::CpuSampled(snap) => {
             state.cpu = Some(snap);
         }

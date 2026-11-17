@@ -1,6 +1,7 @@
 //! Application state, formatting models, messages, and event handlers.
 
 pub mod asset_lru;
+pub mod audio;
 pub mod bluetooth;
 pub mod format;
 pub mod handlers;

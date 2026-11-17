@@ -10,7 +10,7 @@ impl State {
     #[must_use]
     pub fn network_metric(&self) -> ModuleMetric {
         let disconnected = || ModuleMetric {
-            lines: vec![MetricLine::new("\u{f092d}", "0/0")],
+            lines: vec![MetricLine::new("\u{f092d}", "0/0").strikethrough()],
             tooltip: String::from("Disconnected"),
             inactive: true,
         };

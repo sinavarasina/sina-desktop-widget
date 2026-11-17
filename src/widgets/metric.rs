@@ -22,7 +22,6 @@ pub struct MetricModuleConfig {
 /// Renders one bar or drawer telemetry module with dedicated icon columns so PUA glyphs never overlap digits.
 pub fn metric_module(cfg: MetricModuleConfig) -> Element<Msg> {
     let dim_inactive = cfg.metric.inactive;
-    let line_count = cfg.metric.lines.len();
     let bg = if cfg.hovered || dim_inactive {
         SURFACE0
     } else {
@@ -48,17 +47,15 @@ pub fn metric_module(cfg: MetricModuleConfig) -> Element<Msg> {
         None => Size::new(Length::Auto, BAR_HEIGHT.logical_px()),
     };
 
-    let mut content_group = Group::new().size(container_size).child(
-        Row::new()
-            .size(row_size)
-            .padding(Edges::symmetric(0.logical_px(), MODULE_PAD_H.logical_px()))
-            .align(Align::Center)
-            .child(lines_col),
-    );
-
-    if dim_inactive {
-        content_group = add_strikethrough(content_group, line_count);
-    }
+    let content_group = Group::new()
+        .size(container_size)
+        .child(
+            Row::new()
+                .size(row_size)
+                .padding(Edges::symmetric(0.logical_px(), MODULE_PAD_H.logical_px()))
+                .align(Align::Center)
+                .child(lines_col),
+        );
 
     let mut group = Group::new()
         .key(cfg.key)
@@ -77,6 +74,8 @@ pub fn metric_module(cfg: MetricModuleConfig) -> Element<Msg> {
     group.into()
 }
 
+/// Renders one icon + value row, drawing the strike-through across the row itself when the
+/// line is muted so only that row's state is struck (output and input stay independent).
 fn metric_row(line: MetricLine, fg: Color) -> Element<Msg> {
     let icon_cell = Group::new()
         .size(Size::px(METRIC_ICON_WIDTH.logical_px(), 10.logical_px()))
@@ -98,32 +97,29 @@ fn metric_row(line: MetricLine, fg: Color) -> Element<Msg> {
         .line_height(1.1)
         .color(fg);
 
-    Row::new()
+    let row = Row::new()
         .size(Size::new(Length::Auto, 10.logical_px()))
         .gap(METRIC_ICON_GAP.logical_px())
         .align(Align::Center)
         .child(icon_cell)
-        .child(value_el)
-        .into()
-}
+        .child(value_el);
 
-fn add_strikethrough(mut group: Group<Msg>, line_count: usize) -> Group<Msg> {
-    let ys: &[f32] = if line_count <= 1 {
-        &[50.0]
-    } else {
-        &[31.0, 69.0]
-    };
-    for &y_pct in ys {
-        group = group.child(
+    if !line.strikethrough {
+        return row.into();
+    }
+
+    Group::new()
+        .size(Size::new(Length::Auto, 10.logical_px()))
+        .child(row)
+        .child(
             Rect::new()
                 .position(Position::relative_to_parent(
                     Percent::new(50.0),
-                    Percent::new(y_pct),
+                    Percent::new(50.0),
                 ))
                 .anchor(ElementAnchor::Center)
-                .size(Size::new(Percent::new(72.0), 1.logical_px()))
+                .size(Size::new(Percent::new(92.0), 1.logical_px()))
                 .fill(SUBTEXT0),
-        );
-    }
-    group
+        )
+        .into()
 }

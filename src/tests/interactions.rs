@@ -449,3 +449,155 @@ fn bluetooth_device_menu_keeps_name_marquee_and_renders_colored_action_buttons()
         });
     assert!(name_visible, "device name must stay visible inside the menu card");
 }
+
+#[test]
+fn mixer_popup_bar_click_opens_right_click_mutes_and_tracks_set_volume() {
+    use waywi::audio::AudioStream;
+
+    let mut rt = synthetic_rt();
+    rt.enqueue(Msg::AudioUpdated(AudioSnapshot {
+        linear: 0.50,
+        default_sink: Some(AudioDevice {
+            id: 1,
+            name: String::from("alsa_output.pci-0000_00_1f.3"),
+            description: String::from("Built-in Audio Analog Stereo"),
+        }),
+        streams: vec![AudioStream {
+            id: 7,
+            name: String::from("Firefox"),
+            binary: None,
+            sink_id: Some(1),
+            linear: 0.40,
+            db: None,
+            muted: false,
+        }],
+        ..AudioSnapshot::default()
+    }));
+    rt.step().unwrap();
+    assert!(!rt.state().audio_ui.is_popup_visible());
+
+    // Left-click on the volume module opens the mixer popup anchored to the module.
+    rt.enqueue(Msg::MixerBarPointerDown(PointerEvent {
+        position: Point::new(1650.logical_px(), 12.logical_px()),
+        local_position: Point::ZERO,
+        button: Some(MouseButton::Left),
+        modifiers: Modifiers::empty(),
+    }));
+    rt.step().unwrap();
+    assert!(rt.state().audio_ui.popup_target);
+    assert!(rt.state().audio_ui.popup_left_x > 8.0);
+
+    // Right-click on the module toggles mute for the controlled target (sink).
+    rt.enqueue(Msg::MixerBarPointerDown(PointerEvent {
+        position: Point::new(1650.logical_px(), 12.logical_px()),
+        local_position: Point::ZERO,
+        button: Some(MouseButton::Right),
+        modifiers: Modifiers::empty(),
+    }));
+    rt.step().unwrap();
+    assert!(rt.state().audio.as_ref().unwrap().muted);
+    rt.enqueue(Msg::MixerBarPointerDown(PointerEvent {
+        position: Point::new(1650.logical_px(), 12.logical_px()),
+        local_position: Point::ZERO,
+        button: Some(MouseButton::Right),
+        modifiers: Modifiers::empty(),
+    }));
+    rt.step().unwrap();
+    assert!(!rt.state().audio.as_ref().unwrap().muted);
+
+    let scroll_on_master = |delta_y: f32, discrete_y: i32| {
+        Msg::MixerMasterScroll(ScrollEvent {
+            position: Point::new(1700.logical_px(), 60.logical_px()),
+            local_position: Point::ZERO,
+            delta_x: 0.0,
+            delta_y,
+            discrete_x: 0,
+            discrete_y,
+            modifiers: Modifiers::empty(),
+        })
+    };
+
+    // Scroll up on the master track raises the sink volume (same 0.01 step as the bar module).
+    rt.enqueue(scroll_on_master(-1.0, -1));
+    rt.step().unwrap();
+    let vol = rt.state().audio.as_ref().unwrap().linear;
+    assert!((vol - 0.51).abs() < 1e-4, "expected 0.51, got {vol}");
+
+    // Clicking the middle of the master track pins the volume at exactly 50%.
+    rt.enqueue(Msg::MixerMasterSeekClick(PointerEvent {
+        position: Point::new(1700.logical_px(), 60.logical_px()),
+        local_position: Point::new((crate::theme::MIXER_TRACK_WIDTH / 2.0).logical_px(), 3.logical_px()),
+        button: Some(MouseButton::Left),
+        modifiers: Modifiers::empty(),
+    }));
+    rt.step().unwrap();
+    let vol = rt.state().audio.as_ref().unwrap().linear;
+    assert!((vol - 0.50).abs() < 1e-4, "expected 0.50, got {vol}");
+
+    // Per-app stream: scroll adjusts and click pins row volume.
+    rt.enqueue(Msg::MixerStreamScroll {
+        id: 7,
+        sc: ScrollEvent {
+            position: Point::new(1700.logical_px(), 120.logical_px()),
+            local_position: Point::ZERO,
+            delta_x: 0.0,
+            delta_y: 1.0,
+            discrete_x: 0,
+            discrete_y: 1,
+            modifiers: Modifiers::empty(),
+        },
+    });
+    rt.step().unwrap();
+    let row_vol = rt.state().audio.as_ref().unwrap().stream_percent(7);
+    assert!((row_vol - 39.0).abs() < 1e-3, "expected 39%, got {row_vol}");
+
+    rt.enqueue(Msg::MixerStreamSeekClick {
+        id: 7,
+        ev: PointerEvent {
+            position: Point::new(1700.logical_px(), 120.logical_px()),
+            local_position: Point::new((crate::theme::MIXER_TRACK_WIDTH / 4.0).logical_px(), 3.logical_px()),
+            button: Some(MouseButton::Left),
+            modifiers: Modifiers::empty(),
+        },
+    });
+    rt.step().unwrap();
+    let row_vol = rt.state().audio.as_ref().unwrap().stream_percent(7);
+    assert!((row_vol - 25.0).abs() < 1e-3, "expected 25%, got {row_vol}");
+
+    // Let the open animation finish, then render the popup headless.
+    for _ in 0..20 {
+        rt.enqueue(Msg::MixerPopupAnimTick);
+        rt.step().unwrap();
+    }
+    let buf = rt
+        .rendered_buffer("bar-mixer-popup")
+        .expect("mixer popup renders headless");
+    let sz = rt.surface_logical_size("bar-mixer-popup").unwrap();
+    let width = sz.width.get().round() as usize;
+    let height = sz.height.get().round() as usize;
+    assert_eq!(buf.len(), width * height * 4);
+    maybe_dump_argb8888_ppm("mixer_popup", width as u32, height as u32, buf);
+
+    // MAUVE fill pixels prove the master fill and app-row tracks render.
+    let near = |px: &[u8; 4], rgb: [u8; 3], tol: i16| {
+        (i16::from(px[2]) - i16::from(rgb[0])).abs() <= tol
+            && (i16::from(px[1]) - i16::from(rgb[1])).abs() <= tol
+            && (i16::from(px[0]) - i16::from(rgb[2])).abs() <= tol
+            && px[3] == 255
+    };
+    assert!(
+        buf.as_chunks::<4>()
+            .0
+            .iter()
+            .any(|px| near(px, [203, 166, 247], 12)),
+        "mauve volume fill must render inside the popup"
+    );
+
+    // Closing collapses back to the bar only.
+    rt.enqueue(Msg::CloseMixerPopup);
+    for _ in 0..20 {
+        rt.enqueue(Msg::MixerPopupAnimTick);
+        rt.step().unwrap();
+    }
+    assert!(!rt.state().audio_ui.is_popup_visible());
+}

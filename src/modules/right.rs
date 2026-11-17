@@ -16,10 +16,9 @@ pub fn build_right_modules(state: &State) -> Row<Msg> {
         hovered: state.hovered == HoverTarget::Wireplumber,
         fixed_width: None,
         on_pointer_down: Some(|ev: PointerEvent| match ev.button {
-            Some(MouseButton::Right) => Msg::LaunchApp {
-                prog: "hyprpwcenter",
-                args: &[],
-            },
+            // Left opens the mixer popup, right toggles mute (inverted on purpose);
+            // middle-click keeps switching the sink/source control target.
+            Some(MouseButton::Left) | Some(MouseButton::Right) => Msg::MixerBarPointerDown(ev),
             _ => Msg::AudioPointerDown(ev),
         }),
         on_scroll: Some(Msg::AudioScroll),

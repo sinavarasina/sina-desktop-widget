@@ -52,12 +52,12 @@ impl State {
 
         let sink_active = self.audio_target == AudioControlTarget::Sink;
         let sink_line = if audio.muted {
-            MetricLine::new("\u{f075f}", "0%")
+            MetricLine::new("\u{f075f}", "0%").strikethrough()
         } else {
             MetricLine::new(sink_icon, format!("{sink_pct}%"))
         };
         let src_line = if audio.source_muted {
-            MetricLine::new("\u{f036d}", if sink_active { "0%" } else { "0%*" })
+            MetricLine::new("\u{f036d}", if sink_active { "0%" } else { "0%*" }).strikethrough()
         } else {
             MetricLine::new(
                 "\u{f036c}",

@@ -12,6 +12,7 @@ use waywi::prelude::*;
 use crate::app::state::{Msg, State};
 use crate::theme::BAR_HEIGHT;
 use crate::widgets::bluetooth_popup::build_bluetooth_popup_surface;
+use crate::widgets::mixer_popup::build_mixer_popup_surface;
 use crate::widgets::mpris_popup::build_mpris_popup_surface;
 use crate::widgets::notification_center::build_notification_center_surface;
 use crate::widgets::tooltip::build_tooltip_surface;
@@ -34,6 +35,9 @@ pub fn build_surfaces(state: &State) -> Surfaces<Msg> {
     }
     if state.bt_ui.is_popup_visible() {
         surfaces.push(build_bluetooth_popup_surface(state));
+    }
+    if state.audio_ui.is_popup_visible() {
+        surfaces.push(build_mixer_popup_surface(state));
     }
     surfaces
 }

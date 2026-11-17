@@ -8,8 +8,9 @@ use waywi::prelude::*;
 use waywi::system::LocalDateTime;
 
 use crate::app::state::{
-    AudioControlTarget, BluetoothUiState, HoverTarget, MprisState, NotificationStore, State,
-    TrayEntry, WindowScroller, resolve_tray_icon, upsert_tray_entry_into,
+    AudioControlTarget, AudioUiState, BluetoothUiState, HoverTarget, MprisState,
+    NotificationStore, State, TrayEntry, WindowScroller, resolve_tray_icon,
+    upsert_tray_entry_into,
 };
 use crate::theme::GENTOO_MAUVE_SVG;
 
@@ -61,6 +62,7 @@ pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
         blink_phase: false,
         audio,
         audio_target: AudioControlTarget::Sink,
+        audio_ui: AudioUiState::default(),
         cpu: None,
         gpu: None,
         memory: None,

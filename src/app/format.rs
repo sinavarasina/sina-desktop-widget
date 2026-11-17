@@ -6,11 +6,14 @@ mod gpu;
 mod network;
 mod system;
 
-/// One icon + text metric row rendered in separate layout columns so PUA icons never collide with digits.
+/// One icon + text metric row rendered in separate layout columns so PUA icons never collide with
+/// digits. `strikethrough` marks the individual row (e.g. muted sink/source) for its own
+/// strike-through without touching sibling rows of the same module.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MetricLine {
     pub icon: &'static str,
     pub text: String,
+    pub strikethrough: bool,
 }
 
 impl MetricLine {
@@ -19,7 +22,14 @@ impl MetricLine {
         Self {
             icon,
             text: text.into(),
+            strikethrough: false,
         }
+    }
+
+    #[must_use]
+    pub const fn strikethrough(mut self) -> Self {
+        self.strikethrough = true;
+        self
     }
 }
 

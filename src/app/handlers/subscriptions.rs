@@ -93,5 +93,19 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
             Msg::BtPopupAnimTick,
         ));
     }
+    if state.audio_ui.is_animating_popup() {
+        subs.push(Timer::every(
+            "mixer-popup-anim",
+            Duration::from_millis(16),
+            Msg::MixerPopupAnimTick,
+        ));
+    }
+    if state.audio_ui.popup_target {
+        subs.push(Timer::every(
+            "mixer-marquee",
+            Duration::from_millis(200),
+            Msg::MixerMarqueeTick,
+        ));
+    }
     subs
 }

@@ -7,7 +7,7 @@ use waywi::system::{
 
 use super::bluetooth::BtDeviceMenuAction;
 use super::mpris::MprisControlAction;
-use super::types::HoverTarget;
+use super::types::{AudioControlTarget, HoverTarget};
 #[cfg(test)]
 use super::types::TrayMenuPopup;
 
@@ -75,6 +75,29 @@ pub enum Msg {
     AudioUpdated(AudioSnapshot),
     AudioPointerDown(PointerEvent),
     AudioScroll(ScrollEvent),
+    MixerBarPointerDown(PointerEvent),
+    MixerPopupAnimTick,
+    MixerMarqueeTick,
+    CloseMixerPopup,
+    MixerSetTarget(AudioControlTarget),
+    MixerMasterScroll(ScrollEvent),
+    MixerMasterSeekClick(PointerEvent),
+    MixerStreamScroll {
+        id: u32,
+        sc: ScrollEvent,
+    },
+    MixerStreamSeekClick {
+        id: u32,
+        ev: PointerEvent,
+    },
+    MixerCaptureScroll {
+        id: u32,
+        sc: ScrollEvent,
+    },
+    MixerCaptureSeekClick {
+        id: u32,
+        ev: PointerEvent,
+    },
     CpuSampled(CpuSnapshot),
     GpuSampled(GpuSnapshot),
     MemorySampled(MemorySnapshot),

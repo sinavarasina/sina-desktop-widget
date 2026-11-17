@@ -43,6 +43,10 @@ pub const MPRIS_BAR_TEXT_WIDTH: f32 = 128.0;
 pub const MPRIS_POPUP_WIDTH: f32 = 310.0;
 pub const MPRIS_SEEK_TRACK_WIDTH: f32 = 216.0;
 
+pub const MIXER_POPUP_WIDTH: f32 = 310.0;
+/// Volume track width shared by the master bar and every per-app row.
+pub const MIXER_TRACK_WIDTH: f32 = 244.0;
+
 pub const GENTOO_MAUVE_SVG: &[u8] = include_bytes!("../assets/gentoo-mauve.svg");
 
 // Catppuccin Mocha palette from style.css

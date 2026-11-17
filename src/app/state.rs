@@ -10,6 +10,7 @@ use waywi::system::{
 };
 
 use super::asset_lru::PathAssetCache;
+pub use super::audio::AudioUiState;
 pub use super::bluetooth::BluetoothUiState;
 pub use super::mpris::MprisState;
 pub use super::msg::Msg;
@@ -39,6 +40,7 @@ pub struct State {
 
     pub audio: Option<AudioSnapshot>,
     pub audio_target: AudioControlTarget,
+    pub audio_ui: AudioUiState,
 
     pub cpu: Option<CpuSnapshot>,
     pub gpu: Option<GpuSnapshot>,

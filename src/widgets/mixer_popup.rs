@@ -1,0 +1,507 @@
+//! Minimalist per-app volume mixer popup (master + per-app playback/capture rows).
+
+use waywi::prelude::*;
+
+use crate::app::state::{AudioControlTarget, HoverTarget, Msg, State};
+use crate::theme::{
+    BAR_HEIGHT, CRUST, MANTLE, MAUVE, MIXER_POPUP_WIDTH, MIXER_TRACK_WIDTH, NOTIF_CENTER_TOP_MARGIN,
+    OVERLAY0, SUBTEXT1, SURFACE0, SURFACE1, TEXT, font_ui, font_ui_bold, font_ui_semibold,
+};
+use crate::widgets::text::marquee_slice;
+
+const MASTER_CARD_HEIGHT: f32 = 56.0;
+const APPS_HEADER_HEIGHT: f32 = 24.0;
+const ROW_HEIGHT: f32 = 36.0;
+const ROW_GAP: f32 = 4.0;
+const CARD_PAD_H: f32 = 10.0;
+const TEXT_COL_WIDTH: f32 = MIXER_TRACK_WIDTH;
+const NAME_CLIP_WIDTH: f32 = TEXT_COL_WIDTH - 34.0;
+const MASTER_NAME_WIDTH: f32 = 104.0;
+const ICON_BADGE_PX: f32 = 18.0;
+const ICON_PX: f32 = 14.0;
+
+pub fn build_mixer_popup_surface(state: &State) -> Surface<Msg> {
+    let p = state.audio_ui.popup_progress.clamp(0.0, 1.0);
+    let ease = 1.0 - (1.0 - p).powi(3);
+
+    let fallback_left = (state.bar_width - MIXER_POPUP_WIDTH - 8.0).max(8.0);
+    let raw_left = if state.audio_ui.popup_left_x > 0.0 {
+        state.audio_ui.popup_left_x
+    } else {
+        fallback_left
+    };
+    let left_x = raw_left.clamp(8.0, (state.bar_width - MIXER_POPUP_WIDTH - 8.0).max(8.0));
+
+    let max_total_height = (state.screen_height - NOTIF_CENTER_TOP_MARGIN - 16.0).max(200.0);
+    let max_body_height = (max_total_height - MASTER_CARD_HEIGHT - 6.0 - APPS_HEADER_HEIGHT - 14.0)
+        .max(ROW_HEIGHT);
+
+    let (rows, body_height) = build_app_rows(state, max_body_height);
+
+    let master_card = build_master_card(state);
+    let apps_card = build_apps_card(rows, body_height);
+
+    let full_height = MASTER_CARD_HEIGHT + 6.0 + APPS_HEADER_HEIGHT + body_height;
+    let animated_h = (full_height * ease).max(1.0);
+    let animated_y = (BAR_HEIGHT - 8.0) + (NOTIF_CENTER_TOP_MARGIN - (BAR_HEIGHT - 8.0)) * ease;
+
+    let popup_col = Column::new()
+        .size(Size::new(
+            MIXER_POPUP_WIDTH.logical_px(),
+            full_height.logical_px(),
+        ))
+        .gap(6.logical_px())
+        .child(master_card)
+        .child(apps_card);
+
+    let animated_popup = Clip::new(popup_col)
+        .key("mixer-popup-column")
+        .position(Position::absolute(left_x.logical_px(), animated_y.logical_px()))
+        .size(Size::new(
+            MIXER_POPUP_WIDTH.logical_px(),
+            animated_h.logical_px(),
+        ))
+        .on_pointer_down(|_| Msg::Noop);
+
+    let backdrop = Group::new()
+        .key("mixer-popup-backdrop")
+        .size(Size::fill())
+        .on_pointer_down(|_| Msg::CloseMixerPopup)
+        .child(animated_popup);
+
+    Surface::floating("bar-mixer-popup", Output::Primary)
+        .layer(Layer::Overlay)
+        .ignore_exclusive_zone()
+        .anchor(Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right)
+        .size(Size::fill())
+        .input_mode(InputMode::Full)
+        .keyboard_interactivity(KeyboardInteractivity::OnDemand)
+        .background(Color::TRANSPARENT)
+        .on_key(|ev| {
+            if ev.key == Key::Escape {
+                Some(Msg::CloseMixerPopup)
+            } else {
+                None
+            }
+        })
+        .child(backdrop)
+}
+
+/// Master card: `Master: <device>` with output/input toggles above the volume track.
+fn build_master_card(state: &State) -> Element<Msg> {
+    let out_active = state.audio_target == AudioControlTarget::Sink;
+
+    let device_name = match state.audio.as_ref() {
+        Some(audio) => match state.audio_target {
+            AudioControlTarget::Sink => audio
+                .default_sink
+                .as_ref()
+                .map(|d| {
+                    if d.description.is_empty() {
+                        d.name.as_str()
+                    } else {
+                        d.description.as_str()
+                    }
+                })
+                .unwrap_or("Default Sink"),
+            AudioControlTarget::Source => audio
+                .default_source
+                .as_ref()
+                .map(|d| {
+                    if d.description.is_empty() {
+                        d.name.as_str()
+                    } else {
+                        d.description.as_str()
+                    }
+                })
+                .unwrap_or("Default Source"),
+        },
+        None => "PipeWire",
+    };
+    let name_text = marquee_slice(device_name, (MASTER_NAME_WIDTH / 5.2) as usize, state.audio_ui.marquee_tick);
+
+    let muted = match state.audio.as_ref() {
+        Some(audio) => match state.audio_target {
+            AudioControlTarget::Sink => audio.muted,
+            AudioControlTarget::Source => audio.source_muted,
+        },
+        None => false,
+    };
+    let master_linear = match (state.audio.as_ref(), state.audio_target) {
+        (Some(audio), AudioControlTarget::Sink) => audio.linear,
+        (Some(audio), AudioControlTarget::Source) => audio.source_linear,
+        (None, _) => 0.0,
+    };
+    let pct = (master_linear * 100.0).clamp(0.0, 150.0).round() as u16;
+    let fill_w = MIXER_TRACK_WIDTH * master_linear.clamp(0.0, 1.0);
+
+    Group::new()
+        .key("mixer-master-card")
+        .size(Size::new(MIXER_POPUP_WIDTH.logical_px(), MASTER_CARD_HEIGHT.logical_px()))
+        .child(
+            Rect::new()
+                .size(Size::fill())
+                .fill(CRUST)
+                .corner_radius(0.logical_px())
+                .border(1.logical_px(), SURFACE1),
+        )
+        .child(
+            Column::new()
+                .size(Size::fill())
+                .padding(Edges::symmetric(6.logical_px(), CARD_PAD_H.logical_px()))
+                .gap(6.logical_px())
+                .align(Align::Center)
+                .child(
+                    Row::new()
+                        .size(Size::new(Length::Fill, Length::Auto))
+                        .gap(6.logical_px())
+                        .align(Align::Center)
+                        .child(
+                            Text::new("Master:")
+                                .font(font_ui_bold())
+                                .font_size(10.5.logical_px())
+                                .color(MAUVE),
+                        )
+                        .child(
+                            Clip::new(
+                                Text::new(name_text)
+                                    .font(font_ui_semibold())
+                                    .font_size(10.5.logical_px())
+                                    .color(TEXT),
+                            )
+                            .size(Size::px(MASTER_NAME_WIDTH.logical_px(), 14.logical_px())),
+                        )
+                        .child(target_btn("mixer-btn-output", "output", AudioControlTarget::Sink, out_active))
+                        .child(target_btn("mixer-btn-input", "input", AudioControlTarget::Source, !out_active)),
+                )
+                .child(
+                    Row::new()
+                        .size(Size::new(Length::Fill, Length::Auto))
+                        .gap(8.logical_px())
+                        .align(Align::Center)
+                        .child(
+                            Group::new()
+                                .key("mixer-master-track")
+                                .size(Size::px(MIXER_TRACK_WIDTH.logical_px(), 6.logical_px()))
+                                .on_hover(Msg::Hover(HoverTarget::MixerMaster))
+                                .on_leave(Msg::Leave(HoverTarget::MixerMaster))
+                                .on_pointer_down(Msg::MixerMasterSeekClick)
+                                .on_scroll(Msg::MixerMasterScroll)
+                                .child(Rect::new().size(Size::fill()).fill(SURFACE0))
+                                .child(
+                                    Rect::new()
+                                        .size(Size::px(fill_w.logical_px(), 6.logical_px()))
+                                        .fill(if muted { OVERLAY0 } else { MAUVE }),
+                                ),
+                        )
+                        .child(
+                            Text::new(if muted {
+                                String::from("muted")
+                            } else {
+                                format!("{pct}%")
+                            })
+                            .font(font_ui_semibold())
+                            .font_size(10.logical_px())
+                            .color(SUBTEXT1),
+                        ),
+                ),
+        )
+        .into()
+}
+
+/// Output/input pill toggle. Same geometry as the bluetooth `header_btn`:
+/// MANTLE background, hover paints SURFACE0, active state frames with MAUVE.
+fn target_btn(
+    key: &'static str,
+    label: &'static str,
+    target: AudioControlTarget,
+    active: bool,
+) -> Element<Msg> {
+    let hover_target = if active {
+        HoverTarget::MixerOutput
+    } else {
+        HoverTarget::MixerInput
+    };
+    Group::new()
+        .key(key)
+        .size(Size::auto())
+        .on_hover(Msg::Hover(hover_target))
+        .on_leave(Msg::Leave(hover_target))
+        .on_click(Msg::MixerSetTarget(target))
+        .child(
+            Rect::new()
+                .size(Size::fill())
+                .fill(MANTLE)
+                .corner_radius(0.logical_px())
+                .border(1.logical_px(), if active { MAUVE } else { SURFACE0 }),
+        )
+        .child(
+            Row::new()
+                .padding(Edges::symmetric(2.logical_px(), 6.logical_px()))
+                .align(Align::Center)
+                .child(
+                    Text::new(label)
+                        .font(font_ui_semibold())
+                        .font_size(10.logical_px())
+                        .color(if active { MAUVE } else { SUBTEXT1 }),
+                ),
+        )
+        .into()
+}
+
+fn build_apps_card(rows: Vec<Element<Msg>>, body_height: f32) -> Element<Msg> {
+    Group::new()
+        .key("mixer-apps-card")
+        .size(Size::new(Length::Fill, Length::Auto))
+        .child(
+            Rect::new()
+                .size(Size::fill())
+                .fill(CRUST)
+                .corner_radius(0.logical_px())
+                .border(1.logical_px(), SURFACE1),
+        )
+        .child(
+            Column::new()
+                .size(Size::new(Length::Fill, Length::Auto))
+                .child(
+                    Row::new()
+                        .size(Size::new(Length::Fill, APPS_HEADER_HEIGHT.logical_px()))
+                        .padding(Edges::symmetric(4.logical_px(), CARD_PAD_H.logical_px()))
+                        .gap(6.logical_px())
+                        .align(Align::Center)
+                        .child(
+                            Text::new("Per-apps:")
+                                .font(font_ui_bold())
+                                .font_size(10.5.logical_px())
+                                .color(MAUVE),
+                        ),
+                )
+                .child(
+                    Clip::new(
+                        Column::new()
+                            .size(Size::new(Length::Fill, Length::Auto))
+                            .padding(Edges::symmetric(2.logical_px(), 6.logical_px()))
+                            .gap(ROW_GAP.logical_px())
+                            .children(rows),
+                    )
+                    .size(Size::new(Length::Fill, body_height.logical_px()))
+                    .on_scroll(|_| Msg::Noop),
+                ),
+        )
+        .into()
+}
+
+struct AppRow {
+    id: u32,
+    name: String,
+    linear: f32,
+    muted: bool,
+    icon: Option<ImageAsset>,
+    capture: bool,
+}
+
+/// Rows follow the active master target: only playback streams are listed while the sink is
+/// controlled and only capture streams while the source is, so an app is never listed against
+/// the wrong direction (nor does scrolling one move the other).
+fn build_app_rows(state: &State, max_body_height: f32) -> (Vec<Element<Msg>>, f32) {
+    let mut app_rows: Vec<AppRow> = Vec::new();
+    if let Some(audio) = state.audio.as_ref() {
+        if state.audio_target == AudioControlTarget::Source {
+            for c in &audio.captures {
+                let name = c.binary.clone().unwrap_or_else(|| c.name.clone());
+                app_rows.push(AppRow {
+                    id: c.id,
+                    name,
+                    linear: c.linear,
+                    muted: c.muted,
+                    icon: state.audio_ui.capture_icons.get(&c.id).copied().flatten(),
+                    capture: true,
+                });
+            }
+        } else {
+            for s in &audio.streams {
+                let name = s.binary.clone().unwrap_or_else(|| s.name.clone());
+                app_rows.push(AppRow {
+                    id: s.id,
+                    name,
+                    linear: s.linear,
+                    muted: s.muted,
+                    icon: state.audio_ui.stream_icons.get(&s.id).copied().flatten(),
+                    capture: false,
+                });
+            }
+        }
+    }
+
+    if app_rows.is_empty() {
+        let height = ROW_HEIGHT;
+        let rows = vec![Row::new()
+            .size(Size::new(Length::Fill, ROW_HEIGHT.logical_px()))
+            .padding(Edges::symmetric(0.logical_px(), 8.logical_px()))
+            .align(Align::Center)
+            .child(
+                Text::new("No active apps")
+                    .font(font_ui())
+                    .font_size(11.logical_px())
+                    .color(OVERLAY0),
+            )
+            .into()];
+        return (rows, height);
+    }
+
+    let visible_slots = (((max_body_height - ROW_GAP) / (ROW_HEIGHT + ROW_GAP)).floor() as usize).max(1);
+    let start = state.audio_ui.scroll_index.min(app_rows.len().saturating_sub(1));
+    let shown: Vec<&AppRow> = app_rows.iter().skip(start).take(visible_slots).collect();
+    let count = shown.len();
+    let body_height = ((count as f32) * ROW_HEIGHT
+        + (count.saturating_sub(1) as f32) * ROW_GAP
+        + 14.0)
+        .min(max_body_height);
+
+    let rows = shown
+        .iter()
+        .map(|r| build_app_row(r, state.audio_ui.marquee_tick))
+        .collect();
+    (rows, body_height)
+}
+
+fn build_app_row(r: &AppRow, tick: u32) -> Element<Msg> {
+    let name_text = marquee_slice(&r.name, (NAME_CLIP_WIDTH / 5.6) as usize, tick);
+    let pct = (r.linear * 100.0).clamp(0.0, 150.0).round() as u16;
+    let ratio = r.linear.clamp(0.0, 1.0);
+    let fill_w = MIXER_TRACK_WIDTH * ratio;
+
+    // Square badge with a clipped, centered image: non-1:1 `Cover` sources would overflow a
+    // rounded (or unclipped) container, mirroring the mpris album art handling.
+    let icon: Element<Msg> = match r.icon {
+        Some(img) => Clip::new(
+            Image::new(img)
+                .size(Size::px(ICON_PX.logical_px(), ICON_PX.logical_px()))
+                .fit(ImageFit::Cover),
+        )
+        .size(Size::px(ICON_PX.logical_px(), ICON_PX.logical_px()))
+        .position(Position::RelativeToParent {
+            x: Percent::new(50.0),
+            y: Percent::new(50.0),
+            offset_x: 0.logical_px(),
+            offset_y: 0.logical_px(),
+        })
+        .anchor(ElementAnchor::Center)
+        .into(),
+        None => Text::new("\u{f001}")
+            .font(font_ui())
+            .font_size(10.logical_px())
+            .color(OVERLAY0)
+            .position(Position::relative_to_parent(
+                Percent::new(50.0),
+                Percent::new(50.0),
+            ))
+            .anchor(ElementAnchor::Center)
+            .into(),
+    };
+
+    let capture = r.capture;
+    let scroll = {
+        let id = r.id;
+        move |sc: ScrollEvent| {
+            if capture {
+                Msg::MixerCaptureScroll { id, sc }
+            } else {
+                Msg::MixerStreamScroll { id, sc }
+            }
+        }
+    };
+    let pointer = {
+        let id = r.id;
+        move |ev: PointerEvent| {
+            if capture {
+                Msg::MixerCaptureSeekClick { id, ev }
+            } else {
+                Msg::MixerStreamSeekClick { id, ev }
+            }
+        }
+    };
+
+    let key = if r.capture {
+        ("mixer-capture-row", r.id)
+    } else {
+        ("mixer-stream-row", r.id)
+    };
+
+    Group::new()
+        .key(key)
+        .size(Size::new(Length::Fill, ROW_HEIGHT.logical_px()))
+        .on_scroll(scroll)
+        .child(
+            Rect::new()
+                .size(Size::fill())
+                .fill(MANTLE)
+                .corner_radius(0.logical_px())
+                .border(1.logical_px(), SURFACE0),
+        )
+        .child(
+            Row::new()
+                .size(Size::fill())
+                .padding(Edges::symmetric(0.logical_px(), 8.logical_px()))
+                .gap(8.logical_px())
+                .align(Align::Center)
+                .child(
+                    Group::new()
+                        .size(Size::px(
+                            ICON_BADGE_PX.logical_px(),
+                            ICON_BADGE_PX.logical_px(),
+                        ))
+                        .child(
+                            Rect::new()
+                                .size(Size::fill())
+                                .fill(SURFACE1),
+                        )
+                        .child(icon),
+                )
+                .child(
+                    Column::new()
+                        .size(Size::new(Length::Fill, Length::Auto))
+                        .gap(3.logical_px())
+                        .child(
+                            Row::new()
+                                .size(Size::new(Length::Fill, Length::Auto))
+                                .align(Align::Center)
+                                .child(
+                                    Clip::new(
+                                        Text::new(name_text)
+                                            .font(font_ui_semibold())
+                                            .font_size(10.logical_px())
+                                            .color(TEXT),
+                                    )
+                                    .size(Size::px(
+                                        NAME_CLIP_WIDTH.logical_px(),
+                                        13.logical_px(),
+                                    )),
+                                )
+                                .child(
+                                    Text::new(if r.muted {
+                                        String::from("muted")
+                                    } else {
+                                        format!("{pct}%")
+                                    })
+                                    .font(font_ui_semibold())
+                                    .font_size(9.5.logical_px())
+                                    .color(if r.muted { OVERLAY0 } else { SUBTEXT1 }),
+                                ),
+                        )
+                        .child(
+                            Group::new()
+                                .size(Size::px(MIXER_TRACK_WIDTH.logical_px(), 5.logical_px()))
+                                .on_pointer_down(pointer)
+                                .on_scroll(scroll)
+                                .child(Rect::new().size(Size::fill()).fill(SURFACE0))
+                                .child(
+                                    Rect::new()
+                                        .size(Size::px(fill_w.logical_px(), 5.logical_px()))
+                                        .fill(if r.muted { OVERLAY0 } else { MAUVE }),
+                                ),
+                        ),
+                ),
+        )
+        .into()
+}
