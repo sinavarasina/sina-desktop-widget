@@ -322,3 +322,130 @@ fn tray_deduplicates_aliases_and_tray_menu_highlights_hovered_items() {
         after,
     );
 }
+
+#[test]
+fn bluetooth_device_menu_keeps_name_marquee_and_renders_colored_action_buttons() {
+    let mut rt = synthetic_rt();
+    rt.enqueue(Msg::BluetoothUpdated(BluetoothSnapshot {
+        adapters: vec![BluetoothAdapter {
+            object_path: String::from("/org/bluez/hci0"),
+            powered: true,
+            ..BluetoothAdapter::default()
+        }],
+        devices: vec![BluetoothDevice {
+            object_path: String::from("/org/bluez/hci0/dev_AA_BB_CC_DD_EE_FF"),
+            adapter_path: String::from("/org/bluez/hci0"),
+            alias: String::from("LG V60 DS ThinQ"),
+            paired: true,
+            ..BluetoothDevice::default()
+        }],
+    }));
+    rt.step().unwrap();
+
+    // Open the popup the same way a bar-icon left-click does, and let the
+    // open animation finish so the whole card is visible for rendering.
+    rt.enqueue(Msg::BtBarPointerDown(PointerEvent {
+        position: Point::new(1500.logical_px(), 12.logical_px()),
+        local_position: Point::ZERO,
+        button: Some(MouseButton::Left),
+        modifiers: Modifiers::empty(),
+    }));
+    rt.step().unwrap();
+    assert!(rt.state().bt_ui.popup_target);
+    for _ in 0..20 {
+        rt.enqueue(Msg::BtPopupAnimTick);
+        rt.step().unwrap();
+    }
+
+    // Right-click the device row: the context menu must open...
+    let dev_path = rt.state().bluetooth.devices[0].object_path.clone();
+    rt.enqueue(Msg::BtDevicePointerDown {
+        path: dev_path.clone(),
+        ev: PointerEvent {
+            position: Point::new(1400.logical_px(), 60.logical_px()),
+            local_position: Point::ZERO,
+            button: Some(MouseButton::Right),
+            modifiers: Modifiers::empty(),
+        },
+    });
+    rt.step().unwrap();
+    assert_eq!(rt.state().bt_ui.menu_path.as_deref(), Some(dev_path.as_str()));
+    rt.step().unwrap();
+
+    // ...and a second right-click on the menu card must collapse it back to the row.
+    rt.enqueue(Msg::BtDevicePointerDown {
+        path: dev_path.clone(),
+        ev: PointerEvent {
+            position: Point::new(1400.logical_px(), 60.logical_px()),
+            local_position: Point::ZERO,
+            button: Some(MouseButton::Right),
+            modifiers: Modifiers::empty(),
+        },
+    });
+    rt.step().unwrap();
+    assert_eq!(rt.state().bt_ui.menu_path, None);
+
+    // Re-open and verify the rendered card keeps the device name visible and paints
+    // the accent-framed action buttons: Connect (green) and Forget (red) are unique
+    // colors in the popup, so finding their pixels proves the buttons are on screen.
+    rt.enqueue(Msg::BtDevicePointerDown {
+        path: dev_path,
+        ev: PointerEvent {
+            position: Point::new(1400.logical_px(), 60.logical_px()),
+            local_position: Point::ZERO,
+            button: Some(MouseButton::Right),
+            modifiers: Modifiers::empty(),
+        },
+    });
+    rt.step().unwrap();
+    rt.step().unwrap();
+
+    let buf = rt
+        .rendered_buffer("bar-bluetooth-popup")
+        .expect("bluetooth popup renders headless");
+    let sz = rt.surface_logical_size("bar-bluetooth-popup").unwrap();
+    let width = sz.width.get().round() as usize;
+    let height = sz.height.get().round() as usize;
+    assert_eq!(buf.len(), width * height * 4);
+    maybe_dump_argb8888_ppm("bt_device_menu", width as u32, height as u32, buf);
+
+    let near = |px: &[u8; 4], rgb: [u8; 3], tol: i16| {
+        (i16::from(px[2]) - i16::from(rgb[0])).abs() <= tol
+            && (i16::from(px[1]) - i16::from(rgb[1])).abs() <= tol
+            && (i16::from(px[0]) - i16::from(rgb[2])).abs() <= tol
+            && px[3] == 255
+    };
+    let has_color = |rgb: [u8; 3]| {
+        buf.as_chunks::<4>()
+            .0
+            .iter()
+            .any(|px| near(px, rgb, 12))
+    };
+    assert!(
+        has_color([166, 227, 161]),
+        "green Connect/Pai button must render inside the popup"
+    );
+    assert!(
+        has_color([243, 139, 168]),
+        "red Forget button must render inside the popup"
+    );
+
+    // The menu card must keep the scrolling device name visible: scan the first card
+    // region for TEXT-colored pixels (no other popup text uses pure TEXT on MANTLE).
+    // Card geometry at full ease: popup y = BAR_HEIGHT - 8 + 18 = 34, header 34px,
+    // separator 1px, list padding 6px, so the first row spans y = 75..113.
+    let left_x = rt.state().bt_ui.popup_left_x.round() as usize;
+    let name_visible = buf
+        .as_chunks::<4>()
+        .0 // little-endian ARGB8888: [B, G, R, A]
+        .iter()
+        .enumerate()
+        .any(|(i, px)| {
+            let x = i % width;
+            let y = i / width;
+            (75..=112).contains(&y)
+                && (left_x + 10..left_x + 106).contains(&x)
+                && near(px, [205, 214, 244], 10)
+        });
+    assert!(name_visible, "device name must stay visible inside the menu card");
+}

@@ -7,7 +7,8 @@ use crate::app::state::{AudioControlTarget, Msg, State};
 
 use super::bluetooth::{
     handle_bluetooth_agent_event, handle_bt_agent_decision, handle_bt_bar_pointer,
-    handle_bt_device_pointer, handle_bt_popup_scroll, handle_bt_toggle_power, handle_bt_toggle_scan,
+    handle_bt_device_menu_action, handle_bt_device_pointer, handle_bt_popup_scroll,
+    handle_bt_toggle_discoverable, handle_bt_toggle_power, handle_bt_toggle_scan,
 };
 use super::events::{
     handle_audio_scroll, handle_hypr_event, handle_tray_click, handle_tray_event,
@@ -78,7 +79,11 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
         Msg::BtBarPointerDown(ev) => handle_bt_bar_pointer(state, ev),
         Msg::BtTogglePower => handle_bt_toggle_power(state, ctx),
         Msg::BtToggleScan => handle_bt_toggle_scan(state, ctx),
+        Msg::BtToggleDiscoverable => handle_bt_toggle_discoverable(state, ctx),
         Msg::BtDevicePointerDown { path, ev } => handle_bt_device_pointer(state, path, ev, ctx),
+        Msg::BtDeviceMenuAction { path, action } => {
+            handle_bt_device_menu_action(state, path, action, ctx);
+        }
         Msg::BtAgentDecision { request_id, accept } => {
             handle_bt_agent_decision(state, request_id, accept, ctx);
         }

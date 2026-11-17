@@ -2,11 +2,12 @@
 
 use waywi::prelude::*;
 
+use crate::app::bluetooth::BtDeviceMenuAction;
 use crate::app::state::{HoverTarget, Msg, State};
 use crate::widgets::text::marquee_slice;
 use crate::theme::{
-    BAR_HEIGHT, BLUE, CRUST, MANTLE, MAUVE, NOTIF_CENTER_TOP_MARGIN, OVERLAY0, RED, SUBTEXT1,
-    SURFACE0, SURFACE1, TEXT, font_ui, font_ui_bold, font_ui_semibold,
+    BAR_HEIGHT, BLUE, CRUST, GREEN, MANTLE, MAUVE, NOTIF_CENTER_TOP_MARGIN, OVERLAY0, RED,
+    SUBTEXT1, SURFACE0, SURFACE1, TEXT, font_ui, font_ui_bold, font_ui_semibold,
 };
 
 const BT_POPUP_WIDTH: f32 = 310.0;
@@ -62,7 +63,12 @@ pub fn build_bluetooth_popup_surface(state: &State) -> Surface<Msg> {
         );
     } else {
         for (idx, dev) in shown_devs.iter().enumerate() {
-            list_col = list_col.child(build_device_row(state, dev, start + idx));
+            let elem = if state.bt_ui.menu_path.as_deref() == Some(dev.object_path.as_str()) {
+                build_device_menu(state, dev, start + idx)
+            } else {
+                build_device_row(state, dev, start + idx)
+            };
+            list_col = list_col.child(elem);
         }
     }
 
@@ -153,6 +159,7 @@ fn build_header(state: &State) -> Element<Msg> {
     let adapter = state.bluetooth.adapters.first();
     let powered = adapter.is_some_and(|a| a.powered);
     let discovering = adapter.is_some_and(|a| a.discovering);
+    let discoverable = adapter.is_some_and(|a| a.discoverable);
 
     let power_btn = header_btn(
         "bt-btn-power",
@@ -160,6 +167,7 @@ fn build_header(state: &State) -> Element<Msg> {
         HoverTarget::BtPower,
         state.hovered == HoverTarget::BtPower,
         powered,
+        MAUVE,
         Msg::BtTogglePower,
     );
     let scan_btn = header_btn(
@@ -168,7 +176,17 @@ fn build_header(state: &State) -> Element<Msg> {
         HoverTarget::BtScan,
         state.hovered == HoverTarget::BtScan,
         discovering,
+        MAUVE,
         Msg::BtToggleScan,
+    );
+    let discoverable_btn = header_btn(
+        "bt-btn-discoverable",
+        if discoverable { "Visible" } else { "Hidden" },
+        HoverTarget::BtDiscoverable,
+        state.hovered == HoverTarget::BtDiscoverable,
+        discoverable,
+        MAUVE,
+        Msg::BtToggleDiscoverable,
     );
 
     Row::new()
@@ -184,19 +202,24 @@ fn build_header(state: &State) -> Element<Msg> {
         )
         .child(power_btn)
         .child(scan_btn)
+        .child(discoverable_btn)
         .into()
 }
 
+/// Compact pill button shared by the header toggles and the device context menu.
+/// Same geometry, fonts, and colors everywhere: hover paints `SURFACE0`, the active
+/// state uses the `accent` color for both border and text.
 fn header_btn(
     key: &'static str,
     label: &'static str,
     target: HoverTarget,
     hovered: bool,
     active: bool,
+    accent: Color,
     msg: Msg,
 ) -> Element<Msg> {
     let bg = if hovered { SURFACE0 } else { MANTLE };
-    let fg = if active { MAUVE } else { SUBTEXT1 };
+    let fg = if active { accent } else { SUBTEXT1 };
     Group::new()
         .key(key)
         .size(Size::auto())
@@ -208,7 +231,7 @@ fn header_btn(
                 .size(Size::fill())
                 .fill(bg)
                 .corner_radius(0.logical_px())
-                .border(1.logical_px(), if active { MAUVE } else { SURFACE0 }),
+                .border(1.logical_px(), if active { accent } else { SURFACE0 }),
         )
         .child(
             Row::new()
@@ -219,6 +242,44 @@ fn header_btn(
                         .font(font_ui_semibold())
                         .font_size(10.5.logical_px())
                         .color(fg),
+                ),
+        )
+        .into()
+}
+
+/// Context-menu pill button. Same geometry, fonts, and hover behavior as `header_btn`,
+/// but always framed in the caller's accent color (Connect green / Trust mauve / Forget red).
+fn menu_btn(
+    key: &'static str,
+    label: &'static str,
+    target: HoverTarget,
+    hovered: bool,
+    accent: Color,
+    msg: Msg,
+) -> Element<Msg> {
+    let bg = if hovered { SURFACE0 } else { MANTLE };
+    Group::new()
+        .key(key)
+        .size(Size::auto())
+        .on_hover(Msg::Hover(target))
+        .on_leave(Msg::Leave(target))
+        .on_click(msg)
+        .child(
+            Rect::new()
+                .size(Size::fill())
+                .fill(bg)
+                .corner_radius(0.logical_px())
+                .border(1.logical_px(), accent),
+        )
+        .child(
+            Row::new()
+                .padding(Edges::symmetric(2.logical_px(), 6.logical_px()))
+                .align(Align::Center)
+                .child(
+                    Text::new(label)
+                        .font(font_ui_semibold())
+                        .font_size(10.logical_px())
+                        .color(accent),
                 ),
         )
         .into()
@@ -277,11 +338,8 @@ fn prompt_btn(key: &'static str, label: &'static str, col: Color, msg: Msg) -> E
 
 fn build_device_row(state: &State, dev: &BluetoothDevice, idx: usize) -> Element<Msg> {
     let hovered = state.hovered == HoverTarget::BtDevice(idx);
-    let confirming = state.bt_ui.confirm_remove_path.as_deref() == Some(dev.object_path.as_str());
     let bg = if hovered { SURFACE0 } else { MANTLE };
-    let border_col = if confirming {
-        RED
-    } else if dev.connected {
+    let border_col = if dev.connected {
         BLUE
     } else if dev.paired {
         SURFACE1
@@ -296,11 +354,9 @@ fn build_device_row(state: &State, dev: &BluetoothDevice, idx: usize) -> Element
     } else {
         dev.address.as_str()
     };
-    let name_text = marquee_slice(raw_name, if confirming { 14 } else { 22 }, state.mpris.marquee_tick);
+    let name_text = marquee_slice(raw_name, 22, state.mpris.marquee_tick);
 
-    let status_text = if confirming {
-        String::from("Remove? (R:Yes / L:No)")
-    } else if dev.connected {
+    let status_text = if dev.connected {
         dev.battery_percentage
             .map_or_else(|| String::from("connected"), |b| format!("connected {b}%"))
     } else if dev.paired {
@@ -308,14 +364,7 @@ fn build_device_row(state: &State, dev: &BluetoothDevice, idx: usize) -> Element
     } else {
         String::from("pair")
     };
-    let status_col = if confirming {
-        RED
-    } else if dev.connected {
-        MAUVE
-    } else {
-        SUBTEXT1
-    };
-    let name_w = if confirming { 104.0 } else { 168.0 };
+    let status_col = if dev.connected { MAUVE } else { SUBTEXT1 };
 
     let path = dev.object_path.clone();
     Group::new()
@@ -327,6 +376,9 @@ fn build_device_row(state: &State, dev: &BluetoothDevice, idx: usize) -> Element
             path: path.clone(),
             ev,
         })
+        // Same WayWi scroll routing as the notification cards: the topmost hit-test node
+        // captures scroll without bubbling, so each row must carry the handler itself.
+        .on_scroll(Msg::BtPopupScroll)
         .child(
             Rect::new()
                 .size(Size::fill())
@@ -353,14 +405,131 @@ fn build_device_row(state: &State, dev: &BluetoothDevice, idx: usize) -> Element
                             .font_size(11.logical_px())
                             .color(TEXT),
                     )
-                    .size(Size::px(name_w.logical_px(), 16.logical_px())),
+                    .size(Size::px(168.logical_px(), 16.logical_px())),
                 )
                 .child(
                     Text::new(status_text)
                         .font(font_ui_semibold())
                         .font_size(10.logical_px())
                         .color(status_col),
+                )
+                .child(
+                    Text::new("\u{f00c}")
+                        .font(font_ui())
+                        .font_size(9.logical_px())
+                        .color(MAUVE)
+                        .visible(dev.trusted),
                 ),
+        )
+        .into()
+}
+
+/// Device context menu shown in place of the row (right-click): name stays visible with its
+/// marquee so the device is identifiable, plus Connect / Trust / Forget pill buttons using the
+/// same geometry and hover behavior as the header toggles, each with its own accent color.
+fn build_device_menu(state: &State, dev: &BluetoothDevice, idx: usize) -> Element<Msg> {
+    let connect_label: &'static str = if dev.connected {
+        "Disconnect"
+    } else if dev.paired {
+        "Connect"
+    } else {
+        "Pair"
+    };
+    let trust_label: &'static str = if dev.trusted { "Untrust" } else { "Trust" };
+    let raw_name = if !dev.alias.trim().is_empty() {
+        dev.alias.as_str()
+    } else if !dev.name.trim().is_empty() {
+        dev.name.as_str()
+    } else {
+        dev.address.as_str()
+    };
+    let name_text = marquee_slice(raw_name, 10, state.mpris.marquee_tick);
+
+    let path = dev.object_path.clone();
+    let trust_path = dev.object_path.clone();
+    let forget_path = dev.object_path.clone();
+    let toggle_path = dev.object_path.clone();
+    let border_col = if dev.connected { BLUE } else { SURFACE1 };
+
+    Group::new()
+        .key(("bt-dev-menu", idx))
+        .size(Size::new(Length::Fill, BT_ROW_HEIGHT.logical_px()))
+        .on_hover(Msg::Hover(HoverTarget::BtDevice(idx)))
+        .on_leave(Msg::Leave(HoverTarget::BtDevice(idx)))
+        // Forward right-click so a second right-click collapses the menu back to the
+        // device row (left-click on the card background does nothing).
+        .on_pointer_down(move |ev| {
+            if ev.button == Some(MouseButton::Right) {
+                Msg::BtDevicePointerDown {
+                    path: toggle_path.clone(),
+                    ev,
+                }
+            } else {
+                Msg::Noop
+            }
+        })
+        .on_scroll(Msg::BtPopupScroll)
+        .child(
+            Rect::new()
+                .size(Size::fill())
+                .fill(MANTLE)
+                .corner_radius(0.logical_px())
+                .border(1.logical_px(), border_col),
+        )
+        .child(
+            Row::new()
+                .size(Size::fill())
+                .padding(Edges::symmetric(0.logical_px(), 10.logical_px()))
+                .gap(4.logical_px())
+                .align(Align::Center)
+                .child(
+                    Text::new(if dev.connected { "\u{f00b1}" } else { "\u{f294}" })
+                        .font(font_ui())
+                        .font_size(12.logical_px())
+                        .color(if dev.connected { MAUVE } else { OVERLAY0 }),
+                )
+                .child(
+                    Clip::new(
+                        Text::new(name_text)
+                            .font(font_ui_semibold())
+                            .font_size(11.logical_px())
+                            .color(TEXT),
+                    )
+                    .size(Size::px(72.logical_px(), 16.logical_px())),
+                )
+                .child(menu_btn(
+                    "bt-menu-connect",
+                    connect_label,
+                    HoverTarget::BtMenuConnect,
+                    state.hovered == HoverTarget::BtMenuConnect,
+                    GREEN,
+                    Msg::BtDeviceMenuAction {
+                        path,
+                        action: BtDeviceMenuAction::ToggleConnect,
+                    },
+                ))
+                .child(menu_btn(
+                    "bt-menu-trust",
+                    trust_label,
+                    HoverTarget::BtMenuTrust,
+                    state.hovered == HoverTarget::BtMenuTrust,
+                    MAUVE,
+                    Msg::BtDeviceMenuAction {
+                        path: trust_path,
+                        action: BtDeviceMenuAction::ToggleTrust,
+                    },
+                ))
+                .child(menu_btn(
+                    "bt-menu-forget",
+                    "Forget",
+                    HoverTarget::BtMenuForget,
+                    state.hovered == HoverTarget::BtMenuForget,
+                    RED,
+                    Msg::BtDeviceMenuAction {
+                        path: forget_path,
+                        action: BtDeviceMenuAction::Forget,
+                    },
+                )),
         )
         .into()
 }

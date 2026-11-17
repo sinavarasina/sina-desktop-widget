@@ -4,6 +4,7 @@ use std::time::SystemTime;
 
 use waywi::prelude::*;
 
+use crate::app::bluetooth::BtDeviceMenuAction;
 use crate::app::state::State;
 
 use super::events::scroll_direction_y;
@@ -82,20 +83,29 @@ pub fn handle_bt_toggle_scan(state: &mut State, ctx: &EffectCtx<'_>) {
     }
 }
 
+pub fn handle_bt_toggle_discoverable(state: &mut State, ctx: &EffectCtx<'_>) {
+    let Some(adapter) = state.bluetooth.adapters.first() else {
+        return;
+    };
+    let path = adapter.object_path.clone();
+    let discoverable = adapter.discoverable;
+    if let Ok(dbus) = ctx.dbus() {
+        let _ = dbus.set_bluetooth_discoverable(&path, !discoverable);
+    }
+    if let Some(a) = state.bluetooth.adapters.first_mut() {
+        a.discoverable = !discoverable;
+    }
+}
+
 pub fn handle_bt_device_pointer(state: &mut State, path: String, ev: PointerEvent, ctx: &EffectCtx<'_>) {
     let Some(dev) = state.bluetooth.devices.iter().find(|d| d.object_path == path).cloned() else {
         return;
     };
-    let confirming_this = state.bt_ui.confirm_remove_path.as_deref() == Some(path.as_str());
+    let menu_open_for_this = state.bt_ui.menu_path.as_deref() == Some(path.as_str());
 
     match ev.button {
         Some(MouseButton::Left) => {
-            if confirming_this {
-                // Left-click cancels the pending remove confirmation.
-                state.bt_ui.confirm_remove_path = None;
-                return;
-            }
-            state.bt_ui.confirm_remove_path = None;
+            state.bt_ui.menu_path = None;
             if let Ok(dbus) = ctx.dbus() {
                 if dev.connected {
                     let _ = dbus.disconnect_bluetooth_device(&path);
@@ -107,19 +117,56 @@ pub fn handle_bt_device_pointer(state: &mut State, path: String, ev: PointerEven
             }
         }
         Some(MouseButton::Right) => {
-            if confirming_this {
-                state.bt_ui.confirm_remove_path = None;
-                if !dev.adapter_path.is_empty()
-                    && let Ok(dbus) = ctx.dbus()
-                {
-                    let _ = dbus.remove_bluetooth_device(&dev.adapter_path, &path);
-                    state.bluetooth.devices.retain(|d| d.object_path != path);
-                }
+            // Right-click toggles the device context menu (Connect / Trust / Forget).
+            state.bt_ui.menu_path = if menu_open_for_this {
+                None
             } else {
-                state.bt_ui.confirm_remove_path = Some(path);
-            }
+                Some(path)
+            };
         }
         _ => {}
+    }
+}
+
+pub fn handle_bt_device_menu_action(
+    state: &mut State,
+    path: String,
+    action: BtDeviceMenuAction,
+    ctx: &EffectCtx<'_>,
+) {
+    let Some(dev) = state.bluetooth.devices.iter().find(|d| d.object_path == path).cloned() else {
+        return;
+    };
+    state.bt_ui.menu_path = None;
+    let Ok(dbus) = ctx.dbus() else {
+        return;
+    };
+    match action {
+        BtDeviceMenuAction::ToggleConnect => {
+            if dev.connected {
+                let _ = dbus.disconnect_bluetooth_device(&path);
+            } else if dev.paired {
+                let _ = dbus.connect_bluetooth_device(&path);
+            } else {
+                let _ = dbus.pair_bluetooth_device(&path);
+            }
+        }
+        BtDeviceMenuAction::ToggleTrust => {
+            let next = !dev.trusted;
+            let _ = dbus.trust_bluetooth_device(&path, next);
+            if let Some(d) = state
+                .bluetooth
+                .devices
+                .iter_mut()
+                .find(|d| d.object_path == path)
+            {
+                d.trusted = next;
+            }
+        }
+        BtDeviceMenuAction::Forget => {
+            let _ = dbus.remove_bluetooth_device(&dev.adapter_path, &path);
+            state.bluetooth.devices.retain(|d| d.object_path != path);
+        }
     }
 }
 

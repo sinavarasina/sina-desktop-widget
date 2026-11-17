@@ -25,13 +25,21 @@ pub fn build_control_box(state: &State) -> Element<Msg> {
     let sub_text = marquee_slice(&sub_raw, 26, state.mpris.marquee_tick);
 
     let art_elem: Element<Msg> = if let Some(img) = state.mpris.art_asset {
-        Image::new(img)
-            .size(Size::px(
-                ART_POPUP_SIZE.logical_px(),
-                ART_POPUP_SIZE.logical_px(),
-            ))
-            .fit(ImageFit::Cover)
-            .into()
+        // ImageFit::Cover resolves to a rect larger than the box for non-1:1 art (centered
+        // overflow, unclipped); Clip keeps the spill inside the square frame.
+        Clip::new(
+            Image::new(img)
+                .size(Size::px(
+                    ART_POPUP_SIZE.logical_px(),
+                    ART_POPUP_SIZE.logical_px(),
+                ))
+                .fit(ImageFit::Cover),
+        )
+        .size(Size::px(
+            ART_POPUP_SIZE.logical_px(),
+            ART_POPUP_SIZE.logical_px(),
+        ))
+        .into()
     } else {
         Group::new()
             .size(Size::px(

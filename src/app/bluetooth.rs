@@ -13,13 +13,21 @@ pub struct PendingPairingPrompt {
     pub needs_passkey: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BtDeviceMenuAction {
+    ToggleConnect,
+    ToggleTrust,
+    Forget,
+}
+
 #[derive(Default)]
 pub struct BluetoothUiState {
     pub popup_target: bool,
     pub popup_progress: f32,
     pub popup_left_x: f32,
     pub scroll_index: usize,
-    pub confirm_remove_path: Option<String>,
+    /// Object path of the device whose context menu (Connect / Trust / Forget) is open.
+    pub menu_path: Option<String>,
     pub pending_prompt: Option<PendingPairingPrompt>,
 }
 
@@ -49,13 +57,13 @@ impl BluetoothUiState {
     pub fn toggle_popup(&mut self) {
         self.popup_target = !self.popup_target;
         if !self.popup_target {
-            self.confirm_remove_path = None;
+            self.menu_path = None;
         }
     }
 
     pub fn close_popup(&mut self) {
         self.popup_target = false;
-        self.confirm_remove_path = None;
+        self.menu_path = None;
     }
 
     pub fn apply_agent_event(&mut self, ev: BluetoothAgentEvent, snap: &BluetoothSnapshot) -> Option<PendingPairingPrompt> {

@@ -17,18 +17,27 @@ pub fn build_mpris(state: &State) -> Element<Msg> {
     let badge_bg = if hovered { SURFACE0 } else { CRUST };
 
     let album_inner: Element<Msg> = if let Some(img) = state.mpris.art_asset {
-        Image::new(img)
-            .size(Size::px(
-                MPRIS_ART_SIZE.logical_px(),
-                MPRIS_ART_SIZE.logical_px(),
-            ))
-            .fit(ImageFit::Cover)
-            .position(Position::relative_to_parent(
-                Percent::new(50.0),
-                Percent::new(50.0),
-            ))
-            .anchor(ElementAnchor::Center)
-            .into()
+        // Clip for the same reason as the popup art: non-1:1 Cover art overflows its box.
+        Clip::new(
+            Image::new(img)
+                .size(Size::px(
+                    MPRIS_ART_SIZE.logical_px(),
+                    MPRIS_ART_SIZE.logical_px(),
+                ))
+                .fit(ImageFit::Cover),
+        )
+        .position(Position::RelativeToParent {
+            x: Percent::new(50.0),
+            y: Percent::new(50.0),
+            offset_x: 0.logical_px(),
+            offset_y: 0.logical_px(),
+        })
+        .size(Size::px(
+            MPRIS_ART_SIZE.logical_px(),
+            MPRIS_ART_SIZE.logical_px(),
+        ))
+        .anchor(ElementAnchor::Center)
+        .into()
     } else {
         let icon_col = if state.mpris.has_active_session() {
             MAUVE

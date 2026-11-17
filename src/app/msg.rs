@@ -5,6 +5,7 @@ use waywi::system::{
     CpuSnapshot, DiskSnapshot, GpuSnapshot, MemorySnapshot, NetworkSnapshot, TimeSnapshot,
 };
 
+use super::bluetooth::BtDeviceMenuAction;
 use super::mpris::MprisControlAction;
 use super::types::HoverTarget;
 #[cfg(test)]
@@ -44,9 +45,14 @@ pub enum Msg {
     BtBarPointerDown(PointerEvent),
     BtTogglePower,
     BtToggleScan,
+    BtToggleDiscoverable,
     BtDevicePointerDown {
         path: String,
         ev: PointerEvent,
+    },
+    BtDeviceMenuAction {
+        path: String,
+        action: BtDeviceMenuAction,
     },
     BtAgentDecision {
         request_id: u64,

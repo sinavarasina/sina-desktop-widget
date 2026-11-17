@@ -48,6 +48,7 @@ pub const GENTOO_MAUVE_SVG: &[u8] = include_bytes!("../assets/gentoo-mauve.svg")
 // Catppuccin Mocha palette from style.css
 pub const MAUVE: Color = Color::rgb(203, 166, 247);
 pub const RED: Color = Color::rgb(243, 139, 168);
+pub const GREEN: Color = Color::rgb(166, 227, 161);
 pub const BLUE: Color = Color::rgb(137, 180, 250);
 pub const TEXT: Color = Color::rgb(205, 214, 244);
 pub const SUBTEXT1: Color = Color::rgb(186, 194, 222);
