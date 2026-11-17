@@ -4,7 +4,7 @@ use waywi::prelude::*;
 
 use crate::app::mpris::MprisControlAction;
 use crate::app::state::{HoverTarget, Msg, State};
-use crate::modules::mpris::{format_artist_album, marquee_slice};
+use crate::widgets::text::{format_artist_album, marquee_slice};
 use crate::theme::{
     CRUST, MANTLE, MAUVE, MPRIS_POPUP_WIDTH, SUBTEXT1, SURFACE0, SURFACE1, TEXT, font_ui,
     font_ui_bold,

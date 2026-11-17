@@ -1,6 +1,5 @@
 //! Left-bar notification pill (circular icons + X+ count + DND) and incoming ticker.
 
-mod icon;
 mod ticker;
 
 use waywi::prelude::*;
@@ -10,9 +9,9 @@ use crate::theme::{
     BAR_HEIGHT, MANTLE, MAUVE, NOTIF_ICON_SIZE, NOTIF_MAX_BAR_ICONS, RED, SUBTEXT1, SURFACE0,
     font_ui, font_ui_semibold,
 };
+use crate::widgets::notification_icon::build_notif_icon;
 use crate::widgets::separators::{SepShape, separator};
 
-pub use icon::build_notif_icon;
 use ticker::build_incoming_ticker;
 
 pub fn build_notification_segment(state: &State) -> Element<Msg> {

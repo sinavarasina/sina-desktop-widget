@@ -16,21 +16,34 @@ use header::{HEADER_HEIGHT, build_header};
 const CARD_GAP: f32 = 4.0;
 const LIST_PAD_Y: f32 = 12.0;
 
+/// How many notification cards fit in the list at the current screen height.
+#[must_use]
+pub fn visible_card_slots(screen_height: f32) -> usize {
+    let max_total_height = (screen_height - NOTIF_CENTER_TOP_MARGIN - 16.0).max(200.0);
+    let max_body_height = (max_total_height - HEADER_HEIGHT - 8.0).max(120.0);
+    (((max_body_height - LIST_PAD_Y + CARD_GAP) / (BASE_CARD_HEIGHT + CARD_GAP)).floor() as usize)
+        .max(1)
+}
+
+/// Highest valid `scroll_index`: the last full window of cards, so scrolling down always
+/// ends with the bottom of the list flush with the bottom of the view (no over-scroll).
+#[must_use]
+pub fn max_notif_scroll_index(item_count: usize, screen_height: f32) -> usize {
+    item_count.saturating_sub(visible_card_slots(screen_height))
+}
+
 pub fn build_notification_center_surface(state: &State) -> Surface<Msg> {
     let p = state.notifications.center_progress.clamp(0.0, 1.0);
     let ease = 1.0 - (1.0 - p).powi(3);
 
     let max_total_height = (state.screen_height - NOTIF_CENTER_TOP_MARGIN - 16.0).max(200.0);
     let max_body_height = (max_total_height - HEADER_HEIGHT - 8.0).max(120.0);
-    let visible_slots =
-        (((max_body_height - LIST_PAD_Y + CARD_GAP) / (BASE_CARD_HEIGHT + CARD_GAP)).floor()
-            as usize)
-            .max(1);
+    let visible_slots = visible_card_slots(state.screen_height);
 
     let start = state
         .notifications
         .scroll_index
-        .min(state.notifications.items.len());
+        .min(max_notif_scroll_index(state.notifications.items.len(), state.screen_height));
     let visible_slice: Vec<_> = state
         .notifications
         .items

@@ -5,9 +5,8 @@ use waywi::prelude::*;
 use crate::app::notifications::IncomingTicker;
 use crate::app::state::Msg;
 use crate::theme::{BAR_HEIGHT, NOTIF_ICON_SIZE, NOTIF_TICKER_WIDTH, SURFACE0, TEXT, font_ui};
+use crate::widgets::notification_icon::build_notif_icon;
 use crate::widgets::separators::{SepShape, separator};
-
-use super::icon::build_notif_icon;
 
 pub fn build_incoming_ticker(ticker: &IncomingTicker) -> Element<Msg> {
     let text_pos = Position::RelativeToParent {

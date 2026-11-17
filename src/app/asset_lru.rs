@@ -1,6 +1,6 @@
 //! Bounded LRU cache for decoded image assets keyed by string signatures.
 //!
-//! `waywi`'s `ImageAsset` is a cheap `Copy` handle into the shared decoded-asset
+//! `waywi`'s `ImageAsset` is a `Copy` handle into the shared decoded-asset
 //! store, so `get` returning a reference keeps lookups allocation-free. Inserting
 //! past `PATH_ASSET_CACHE_CAP` evicts the least-recently-used signature: the
 //! cache stays useful far beyond the steady-state working set (tray icons,

@@ -3,7 +3,7 @@
 use waywi::prelude::*;
 
 use crate::app::state::{HoverTarget, Msg, State};
-use crate::modules::mpris::marquee_slice;
+use crate::widgets::text::marquee_slice;
 use crate::theme::{
     BAR_HEIGHT, BLUE, CRUST, MANTLE, MAUVE, NOTIF_CENTER_TOP_MARGIN, OVERLAY0, RED, SUBTEXT1,
     SURFACE0, SURFACE1, TEXT, font_ui, font_ui_bold, font_ui_semibold,

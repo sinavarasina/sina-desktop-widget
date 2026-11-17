@@ -1,4 +1,5 @@
-//! Notification icon widget (image or fallback glyph).
+//! Notification icon element (image or fallback glyph), shared by the bar pill,
+//! the incoming ticker, and the notification center cards.
 
 use waywi::prelude::*;
 

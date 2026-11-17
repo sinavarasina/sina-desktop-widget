@@ -6,6 +6,7 @@ use crate::app::state::State;
 
 use super::bluetooth::handle_bt_agent_decision;
 use super::events::scroll_direction_y;
+use crate::widgets::notification_center::max_notif_scroll_index;
 
 pub fn handle_notification_event(
     state: &mut State,
@@ -65,7 +66,8 @@ pub fn handle_notif_center_scroll(state: &mut State, sc: ScrollEvent, ctx: &mut 
             .saturating_sub(step.unsigned_abs() as usize)
     };
     state.notifications.maybe_load_more_from_disk(next + 10);
-    let max_idx = state.notifications.items.len().saturating_sub(1);
+    let max_idx =
+        max_notif_scroll_index(state.notifications.items.len(), state.screen_height);
     state.notifications.scroll_index = next.min(max_idx);
     state.notifications.ensure_visible_icons(
         state.notifications.scroll_index,

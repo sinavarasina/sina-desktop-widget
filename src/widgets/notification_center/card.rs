@@ -4,12 +4,12 @@ use waywi::prelude::*;
 
 use crate::app::notifications::NotificationItem;
 use crate::app::state::{HoverTarget, Msg, State};
-use crate::modules::left::notifications::build_notif_icon;
-use crate::modules::mpris::marquee_slice;
 use crate::theme::{
     BLUE, MANTLE, NOTIF_CARD_TEXT_WIDTH, NOTIF_CENTER_ICON_SIZE, OVERLAY0, RED, SUBTEXT0,
     SUBTEXT1, SURFACE0, SURFACE1, TEXT, font_ui, font_ui_bold,
 };
+use crate::widgets::notification_icon::build_notif_icon;
+use crate::widgets::text::marquee_slice;
 
 const MAX_SUMMARY_COLS: usize = 28;
 const MAX_BODY_COLS: usize = 39;
@@ -90,6 +90,10 @@ pub fn build_notification_card(state: &State, item: &NotificationItem) -> Elemen
         .on_hover(Msg::Hover(HoverTarget::NotifCenterItem(id)))
         .on_leave(Msg::Leave(HoverTarget::NotifCenterItem(id)))
         .on_pointer_down(move |ev| Msg::NotifCenterCardPointerDown { id, ev })
+        // WayWi routes scroll to the single topmost hit-test node without bubbling; the card
+        // wins over the list Clip whenever the pointer is over it, so it must carry the
+        // scroll handler itself or scrolling over cards would do nothing.
+        .on_scroll(Msg::NotifCenterScroll)
         .child(
             Rect::new()
                 .size(Size::fill())
