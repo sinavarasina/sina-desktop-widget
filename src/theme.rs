@@ -47,6 +47,8 @@ pub const MIXER_POPUP_WIDTH: f32 = 310.0;
 /// Volume track width shared by the master bar and every per-app row.
 pub const MIXER_TRACK_WIDTH: f32 = 244.0;
 
+pub const DRUN_INPUT_MIN_W: f32 = 132.0;
+
 pub const GENTOO_MAUVE_SVG: &[u8] = include_bytes!("../assets/gentoo-mauve.svg");
 
 // Catppuccin Mocha palette from style.css

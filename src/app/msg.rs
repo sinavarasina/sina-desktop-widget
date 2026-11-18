@@ -6,6 +6,7 @@ use waywi::system::{
 };
 
 use super::bluetooth::BtDeviceMenuAction;
+use super::ipc::{IpcAction, IpcTarget};
 use super::mpris::MprisControlAction;
 use super::types::{AudioControlTarget, HoverTarget};
 #[cfg(test)]
@@ -13,13 +14,22 @@ use super::types::TrayMenuPopup;
 
 #[derive(Clone)]
 pub enum Msg {
-    LaunchApp {
-        prog: &'static str,
-        args: &'static [&'static str],
-    },
     SwitchWorkspace(WorkspaceId),
     HyprEvent(HyprlandEvent),
     ScrollTick,
+    ToggleDrun,
+    CloseDrun,
+    DrunKey(KeyEvent),
+    DrunIme(ImeEvent),
+    DrunLaunchIndex(usize),
+    DrunScroll(ScrollEvent),
+    DrunAnimTick,
+    DrunMarqueeTick,
+    IpcControl {
+        action: IpcAction,
+        target: IpcTarget,
+    },
+    DbusActionOutcome(DbusActionResult),
     NotificationEvent(Box<NotificationEvent>),
     NotifBarPointerDown(PointerEvent),
     NotifTickerTick,
@@ -117,4 +127,6 @@ pub enum Msg {
     TestSetWorkspaces(Vec<WorkspaceInfo>, i32),
     #[cfg(test)]
     TestSetTrayMenu(TrayMenuPopup),
+    #[cfg(test)]
+    TestSetDrunEntries(Vec<DesktopEntry>),
 }

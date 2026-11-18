@@ -85,7 +85,12 @@ pub fn build_bluetooth_popup_surface(state: &State) -> Surface<Msg> {
     } else {
         0.0
     };
-    let full_height = BT_HEADER_HEIGHT + 1.0 + prompt_height + body_height;
+    let err_height = if state.bt_ui.last_error.is_some() {
+        22.0
+    } else {
+        0.0
+    };
+    let full_height = BT_HEADER_HEIGHT + 1.0 + prompt_height + err_height + body_height;
     let animated_h = (full_height * ease).max(1.0);
     let animated_y = (BAR_HEIGHT - 8.0) + (NOTIF_CENTER_TOP_MARGIN - (BAR_HEIGHT - 8.0)) * ease;
 
@@ -100,6 +105,21 @@ pub fn build_bluetooth_popup_surface(state: &State) -> Surface<Msg> {
 
     if let Some(prompt) = &state.bt_ui.pending_prompt {
         inner_col = inner_col.child(build_prompt_banner(prompt.request_id, &prompt.label));
+    }
+    if let Some(err) = &state.bt_ui.last_error {
+        inner_col = inner_col.child(
+            Row::new()
+                .key("bt-err-banner")
+                .size(Size::new(Length::Fill, 22.logical_px()))
+                .padding(Edges::symmetric(0.logical_px(), 10.logical_px()))
+                .align(Align::Center)
+                .child(
+                    Text::new(marquee_slice(err, 36, 0))
+                        .font(font_ui())
+                        .font_size(10.logical_px())
+                        .color(RED),
+                ),
+        );
     }
 
     inner_col = inner_col.child(

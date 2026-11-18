@@ -10,6 +10,8 @@ mod tests;
 
 use waywi::prelude::*;
 
+use crate::app::ipc::CONTROL_SOCKET_NAME;
+
 struct SinaDesktopWidget;
 
 impl Application for SinaDesktopWidget {
@@ -34,6 +36,16 @@ impl Application for SinaDesktopWidget {
 }
 
 fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if !args.is_empty() {
+        let cmd = args.join(" ");
+        if let Err(err) = waywi::control::send_command(CONTROL_SOCKET_NAME, &cmd) {
+            eprintln!("sina-desktop-widget control error: {err}");
+            std::process::exit(1);
+        }
+        return;
+    }
+
     if let Err(err) = App::new()
         .name("sina-desktop-widget")
         .renderer(RendererPreference::Software)

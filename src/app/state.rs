@@ -12,6 +12,7 @@ use waywi::system::{
 use super::asset_lru::PathAssetCache;
 pub use super::audio::AudioUiState;
 pub use super::bluetooth::BluetoothUiState;
+pub use super::drun::DrunState;
 pub use super::mpris::MprisState;
 pub use super::msg::Msg;
 pub use super::notifications::NotificationStore;
@@ -31,6 +32,7 @@ pub struct State {
     pub workspaces: Vec<WorkspaceInfo>,
     pub active_ws_id: i32,
     pub scroller: WindowScroller,
+    pub drun: DrunState,
     pub notifications: NotificationStore,
     pub mpris: MprisState,
 

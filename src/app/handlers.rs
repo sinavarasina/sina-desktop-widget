@@ -2,8 +2,10 @@
 
 mod audio;
 mod bluetooth;
+mod drun;
 mod events;
 mod init;
+mod ipc;
 mod mpris;
 mod notifications;
 mod subscriptions;

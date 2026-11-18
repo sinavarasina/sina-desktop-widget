@@ -218,3 +218,12 @@ pub fn handle_bt_popup_scroll(state: &mut State, sc: ScrollEvent) {
     let max_idx = state.bluetooth.devices.len().saturating_sub(1);
     state.bt_ui.scroll_index = next.min(max_idx);
 }
+
+pub fn handle_dbus_action_result(state: &mut State, res: DbusActionResult) {
+    if matches!(
+        res.lane,
+        DbusActionLane::BluetoothDevice | DbusActionLane::BluetoothAdapter
+    ) {
+        state.bt_ui.last_error = res.error;
+    }
+}

@@ -35,6 +35,12 @@ impl<V> Default for LruCache<V> {
 }
 
 impl<V> LruCache<V> {
+    /// Returns the cached value for `sig` without mutating recency order (for `&State` view reads).
+    #[must_use]
+    pub fn peek(&self, sig: &str) -> Option<&V> {
+        self.map.get(sig)
+    }
+
     /// Returns the cached value for `sig`, refreshing its recency.
     pub fn get(&mut self, sig: &str) -> Option<&V> {
         self.touch(sig);

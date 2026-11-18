@@ -28,10 +28,7 @@ pub fn build_logo(state: &State) -> Element<Msg> {
         .on_leave(Msg::Leave(HoverTarget::Logo))
         .on_pointer_down(|ev| {
             if ev.button == Some(MouseButton::Left) {
-                Msg::LaunchApp {
-                    prog: "wofi",
-                    args: &["--show", "drun", "--allow-images"],
-                }
+                Msg::ToggleDrun
             } else {
                 Msg::Hover(HoverTarget::Logo)
             }

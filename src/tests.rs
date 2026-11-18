@@ -1,5 +1,6 @@
 //! Headless integration and formatting tests.
 
+mod drun_ipc;
 mod formatting;
 mod interactions;
 mod notifications;

@@ -35,6 +35,7 @@ pub enum HoverTarget {
     BtMenuConnect,
     BtMenuTrust,
     BtMenuForget,
+    DrunEntry(usize),
     MixerOutput,
     MixerInput,
     MixerMaster,

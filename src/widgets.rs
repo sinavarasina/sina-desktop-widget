@@ -2,6 +2,7 @@
 
 pub mod bluetooth_popup;
 pub mod calendar;
+pub mod drun_bar;
 pub mod metric;
 pub mod mixer_popup;
 pub mod mpris_popup;

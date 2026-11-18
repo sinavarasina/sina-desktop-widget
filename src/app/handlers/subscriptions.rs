@@ -4,14 +4,19 @@ use std::time::Duration;
 
 use waywi::prelude::*;
 
+use crate::app::ipc::{CONTROL_SOCKET_NAME, parse_ipc_command};
 use crate::app::state::{Msg, State};
 
 pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
     let mut subs = Subscriptions::new();
+    subs.push(Control::socket(CONTROL_SOCKET_NAME, |cmd| {
+        parse_ipc_command(&cmd)
+    }));
     subs.push(Hyprland::subscribe(Msg::HyprEvent));
     subs.push(Dbus::tray(|ev| Msg::TrayEvent(Box::new(ev))));
     subs.push(Dbus::notifications(|ev| Msg::NotificationEvent(Box::new(ev))));
     subs.push(Dbus::mpris(|ev| Msg::MprisEvent(Box::new(ev))));
+    subs.push(Dbus::action_results(Msg::DbusActionOutcome));
     subs.push(Audio::subscribe(Msg::AudioUpdated));
     subs.push(System::cpu().every(Duration::from_secs(1), Msg::CpuSampled));
     subs.push(System::gpu().every(Duration::from_secs(2), Msg::GpuSampled));
@@ -105,6 +110,20 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
             "mixer-marquee",
             Duration::from_millis(200),
             Msg::MixerMarqueeTick,
+        ));
+    }
+    if state.drun.is_animating() {
+        subs.push(Timer::every(
+            "drun-anim",
+            Duration::from_millis(16),
+            Msg::DrunAnimTick,
+        ));
+    }
+    if state.drun.target && !state.drun.match_indices.is_empty() {
+        subs.push(Timer::every(
+            "drun-marquee",
+            Duration::from_millis(200),
+            Msg::DrunMarqueeTick,
         ));
     }
     subs

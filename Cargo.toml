@@ -13,6 +13,8 @@ waywi = { version = "0.1.6", features = [
     "image-svg",
     "image-webp",
     "animation",
+    "ime",
+    "control-ipc",
     "hyprland-ipc",
     "dbus",
     "pipewire",

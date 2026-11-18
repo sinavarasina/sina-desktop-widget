@@ -38,18 +38,53 @@ pub fn separator<M: 'static>(
     fg: Color,
     bg: Color,
 ) -> Element<M> {
+    separator_sized(key, shape, fg, bg, BAR_HEIGHT)
+}
+
+/// Renders one separator with a custom logical height (for taller overlay strips such as `drun`).
+pub fn separator_sized<M: 'static>(
+    key: &'static str,
+    shape: SepShape,
+    fg: Color,
+    bg: Color,
+    height: f32,
+) -> Element<M> {
     Canvas::new(
-        Size::px(SEP_WIDTH.logical_px(), BAR_HEIGHT.logical_px()),
-        (key, shape, fg, bg),
-        move |p| draw_separator(p, shape, fg, bg),
+        Size::px(SEP_WIDTH.logical_px(), height.logical_px()),
+        (key, shape, fg, bg, height.to_bits()),
+        move |p| draw_separator(p, shape, fg, bg, height),
     )
     .key(key)
     .into()
 }
 
-fn draw_separator(p: &mut Painter<'_>, shape: SepShape, fg: Color, bg: Color) {
+/// Renders a seamless `/` diagonal transition between two semi-transparent backgrounds with a thin accent stroke.
+pub fn slanted_join<M: 'static>(
+    key: (&'static str, usize),
+    left_bg: Color,
+    right_bg: Color,
+    stroke: Color,
+) -> Element<M> {
+    Canvas::new(
+        Size::px(SEP_WIDTH.logical_px(), BAR_HEIGHT.logical_px()),
+        (key, left_bg, right_bg, stroke),
+        move |p| {
+            let w = SEP_WIDTH;
+            let h = BAR_HEIGHT;
+            fill_poly(p, left_bg, &[(-0.3, 0.0), (w + 0.3, 0.0), (-0.3, h)]);
+            fill_poly(p, right_bg, &[(w + 0.3, 0.0), (w + 0.3, h), (-0.3, h)]);
+            let mut pb = PathBuilder::new();
+            pb.move_to(0.6.logical_px(), (h - 0.4).logical_px())
+                .line_to((w - 0.6).logical_px(), 0.4.logical_px());
+            p.stroke_path(&pb, 1.1.logical_px(), stroke);
+        },
+    )
+    .key(key)
+    .into()
+}
+
+fn draw_separator(p: &mut Painter<'_>, shape: SepShape, fg: Color, bg: Color, h: f32) {
     let w = SEP_WIDTH;
-    let h = BAR_HEIGHT;
     let mid_y = h * 0.5;
 
     if bg.a > 0 {

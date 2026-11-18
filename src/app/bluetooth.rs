@@ -29,6 +29,7 @@ pub struct BluetoothUiState {
     /// Object path of the device whose context menu (Connect / Trust / Forget) is open.
     pub menu_path: Option<String>,
     pub pending_prompt: Option<PendingPairingPrompt>,
+    pub last_error: Option<String>,
 }
 
 impl BluetoothUiState {
@@ -56,6 +57,7 @@ impl BluetoothUiState {
 
     pub fn toggle_popup(&mut self) {
         self.popup_target = !self.popup_target;
+        self.last_error = None;
         if !self.popup_target {
             self.menu_path = None;
         }
@@ -64,6 +66,7 @@ impl BluetoothUiState {
     pub fn close_popup(&mut self) {
         self.popup_target = false;
         self.menu_path = None;
+        self.last_error = None;
     }
 
     pub fn apply_agent_event(&mut self, ev: BluetoothAgentEvent, snap: &BluetoothSnapshot) -> Option<PendingPairingPrompt> {

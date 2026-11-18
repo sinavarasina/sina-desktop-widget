@@ -14,11 +14,17 @@ use super::bluetooth::{
     handle_bluetooth_agent_event, handle_bt_agent_decision, handle_bt_bar_pointer,
     handle_bt_device_menu_action, handle_bt_device_pointer, handle_bt_popup_scroll,
     handle_bt_toggle_discoverable, handle_bt_toggle_power, handle_bt_toggle_scan,
+    handle_dbus_action_result,
+};
+use super::drun::{
+    handle_drun_ime, handle_drun_key, handle_drun_launch_index, handle_drun_scroll,
+    handle_toggle_drun,
 };
 use super::events::{
     handle_audio_scroll, handle_hypr_event, handle_tray_click, handle_tray_event,
     scroll_direction_y,
 };
+use super::ipc::handle_ipc_control;
 use super::mpris::{
     handle_mpris_action, handle_mpris_bar_pointer, handle_mpris_event, handle_mpris_scroll,
     handle_mpris_seek_click,
@@ -30,9 +36,6 @@ use super::notifications::{
 
 pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Result<()> {
     match msg {
-        Msg::LaunchApp { prog, args } => {
-            let _ = spawn_detached(prog, args);
-        }
         Msg::SpawnBtop => {
             let _ = spawn_detached("footclient", &["btop"]);
         }
@@ -52,6 +55,18 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
         }
         Msg::HyprEvent(ev) => handle_hypr_event(state, ev, ctx),
         Msg::ScrollTick => state.scroller.advance(),
+        Msg::ToggleDrun => handle_toggle_drun(state, ctx),
+        Msg::CloseDrun => state.drun.close(),
+        Msg::DrunKey(ev) => handle_drun_key(state, ev, ctx),
+        Msg::DrunIme(ev) => handle_drun_ime(state, ev, ctx),
+        Msg::DrunLaunchIndex(idx) => handle_drun_launch_index(state, idx),
+        Msg::DrunScroll(sc) => handle_drun_scroll(state, sc, ctx),
+        Msg::DrunAnimTick => state.drun.step_animation(),
+        Msg::DrunMarqueeTick => {
+            state.drun.marquee_tick = state.drun.marquee_tick.wrapping_add(1);
+        }
+        Msg::IpcControl { action, target } => handle_ipc_control(state, action, target, ctx),
+        Msg::DbusActionOutcome(res) => handle_dbus_action_result(state, res),
         Msg::NotificationEvent(ev) => handle_notification_event(state, *ev, ctx),
         Msg::NotifBarPointerDown(ev) => handle_notif_bar_pointer(state, ev, ctx),
         Msg::NotifTickerTick => state.notifications.step_ticker(),
@@ -196,6 +211,12 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
         #[cfg(test)]
         Msg::TestSetTrayMenu(menu) => {
             state.tray_menu = Some(menu);
+        }
+        #[cfg(test)]
+        Msg::TestSetDrunEntries(entries) => {
+            state.drun.entries = entries;
+            state.drun.scanned = true;
+            state.drun.refresh_matches();
         }
     }
     Ok(())

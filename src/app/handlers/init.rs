@@ -8,7 +8,7 @@ use waywi::prelude::*;
 use waywi::system::LocalDateTime;
 
 use crate::app::state::{
-    AudioControlTarget, AudioUiState, BluetoothUiState, HoverTarget, MprisState,
+    AudioControlTarget, AudioUiState, BluetoothUiState, DrunState, HoverTarget, MprisState,
     NotificationStore, State, TrayEntry, WindowScroller, resolve_tray_icon,
     upsert_tray_entry_into,
 };
@@ -55,6 +55,7 @@ pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
         workspaces,
         active_ws_id,
         scroller,
+        drun: DrunState::default(),
         notifications,
         mpris,
         tray_items,
