@@ -1,56 +1,81 @@
 //! Overlay Notification Center on the left side of the screen.
 
-mod card;
+pub mod card;
 mod header;
 
 use waywi::prelude::*;
 
+use crate::app::notifications::NotificationItem;
 use crate::app::state::{Msg, State};
 use crate::theme::{
     BAR_HEIGHT, CRUST, NOTIF_CENTER_TOP_MARGIN, NOTIF_CENTER_WIDTH, OVERLAY0, SURFACE1, font_ui,
 };
 
-use card::{BASE_CARD_HEIGHT, build_notification_card};
+use card::{build_notification_card, card_height};
 use header::{HEADER_HEIGHT, build_header};
 
 const CARD_GAP: f32 = 4.0;
 const LIST_PAD_Y: f32 = 12.0;
 
-/// How many notification cards fit in the list at the current screen height.
 #[must_use]
-pub fn visible_card_slots(screen_height: f32) -> usize {
+fn max_list_body_height(screen_height: f32) -> f32 {
     let max_total_height = (screen_height - NOTIF_CENTER_TOP_MARGIN - 16.0).max(200.0);
-    let max_body_height = (max_total_height - HEADER_HEIGHT - 8.0).max(120.0);
-    (((max_body_height - LIST_PAD_Y + CARD_GAP) / (BASE_CARD_HEIGHT + CARD_GAP)).floor() as usize)
-        .max(1)
+    (max_total_height - HEADER_HEIGHT - 8.0).max(120.0)
 }
 
-/// Highest valid `scroll_index`: the last full window of cards, so scrolling down always
-/// ends with the bottom of the list flush with the bottom of the view (no over-scroll).
+/// Highest valid `scroll_index`: the start of the last window of variable-height cards that
+/// fits in `screen_height` without leaving empty space at the bottom.
 #[must_use]
-pub fn max_notif_scroll_index(item_count: usize, screen_height: f32) -> usize {
-    item_count.saturating_sub(visible_card_slots(screen_height))
+pub fn max_notif_scroll_index(items: &[NotificationItem], screen_height: f32) -> usize {
+    if items.is_empty() {
+        return 0;
+    }
+    let avail = (max_list_body_height(screen_height) - LIST_PAD_Y - 2.0).max(1.0);
+    let mut used = 0.0_f32;
+    let mut start = items.len();
+    for (idx, item) in items.iter().enumerate().rev() {
+        let h = card_height(item);
+        let extra = if idx + 1 < items.len() { CARD_GAP } else { 0.0 };
+        if idx < items.len() - 1 && used + h + extra > avail {
+            break;
+        }
+        used += h + extra;
+        start = idx;
+    }
+    start
+}
+
+fn collect_visible_cards(items: &[NotificationItem], start: usize, screen_height: f32) -> (&[NotificationItem], f32) {
+    if items.is_empty() || start >= items.len() {
+        return (&[], 60.0);
+    }
+    let max_body = max_list_body_height(screen_height);
+    let avail = (max_body - LIST_PAD_Y - 2.0).max(1.0);
+    let mut used = 0.0_f32;
+    let mut end = start;
+    for (offset, item) in items[start..].iter().enumerate() {
+        let h = card_height(item);
+        let gap = if offset > 0 { CARD_GAP } else { 0.0 };
+        if offset > 0 && used + gap + h > avail {
+            break;
+        }
+        used += gap + h;
+        end = start + offset + 1;
+    }
+    let body_height = (used + LIST_PAD_Y + 2.0).min(max_body);
+    (&items[start..end], body_height)
 }
 
 pub fn build_notification_center_surface(state: &State) -> Surface<Msg> {
     let p = state.notifications.center_progress.clamp(0.0, 1.0);
     let ease = 1.0 - (1.0 - p).powi(3);
 
-    let max_total_height = (state.screen_height - NOTIF_CENTER_TOP_MARGIN - 16.0).max(200.0);
-    let max_body_height = (max_total_height - HEADER_HEIGHT - 8.0).max(120.0);
-    let visible_slots = visible_card_slots(state.screen_height);
-
     let start = state
         .notifications
         .scroll_index
-        .min(max_notif_scroll_index(state.notifications.items.len(), state.screen_height));
-    let visible_slice: Vec<_> = state
-        .notifications
-        .items
-        .iter()
-        .skip(start)
-        .take(visible_slots)
-        .collect();
+        .min(max_notif_scroll_index(&state.notifications.items, state.screen_height));
+    let (visible_slice, body_height) =
+        collect_visible_cards(&state.notifications.items, start, state.screen_height);
 
     let mut list_col = Column::new()
         .size(Size::new(Length::Fill, Length::Auto))
@@ -71,18 +96,10 @@ pub fn build_notification_center_surface(state: &State) -> Surface<Msg> {
                 ),
         );
     } else {
-        for item in &visible_slice {
+        for item in visible_slice {
             list_col = list_col.child(build_notification_card(state, item));
         }
     }
-
-    let body_height = if visible_slice.is_empty() {
-        60.0
-    } else {
-        let cards_h = (visible_slice.len() as f32) * BASE_CARD_HEIGHT;
-        let gaps = visible_slice.len().saturating_sub(1) as f32 * CARD_GAP;
-        (cards_h + gaps + LIST_PAD_Y + 2.0).min(max_body_height)
-    };
 
     let scrollable_body = Clip::new(list_col)
         .size(Size::new(Length::Fill, body_height.logical_px()))

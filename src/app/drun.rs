@@ -52,16 +52,20 @@ impl DrunState {
         }
     }
 
+    pub fn ensure_scanned(&mut self) {
+        if !self.scanned {
+            self.entries = scan_desktop_entries();
+            self.scanned = true;
+        }
+    }
+
     pub fn open(&mut self, ctx: &mut EffectCtx<'_>) {
         self.target = true;
         self.input.clear();
         self.selected = 0;
         self.scroll_start = 0;
         self.marquee_tick = 0;
-        if !self.scanned {
-            self.entries = scan_desktop_entries();
-            self.scanned = true;
-        }
+        self.ensure_scanned();
         self.refresh_matches();
         self.remeasure_input(ctx);
     }

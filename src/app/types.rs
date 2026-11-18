@@ -18,6 +18,7 @@ pub enum HoverTarget {
     WindowScroll,
     Notifications,
     NotifCenterItem(u32),
+    NotifAction { id: u32, action_idx: usize },
     NotifCenterDnd,
     NotifCenterClear,
     MprisBar,
@@ -48,6 +49,7 @@ pub enum HoverTarget {
     Network,
     ExpandSign,
     Gpu,
+    Temp,
     Disk,
     Bluetooth,
     Clock,
@@ -58,7 +60,7 @@ impl HoverTarget {
     pub const fn is_drawer(self) -> bool {
         matches!(
             self,
-            Self::ExpandSign | Self::Gpu | Self::Disk | Self::Bluetooth
+            Self::ExpandSign | Self::Gpu | Self::Temp | Self::Disk | Self::Bluetooth
         )
     }
 
@@ -67,7 +69,9 @@ impl HoverTarget {
         let clock_shift = if clock_alt { 148.0 } else { 0.0 };
         match self {
             Self::Clock => 8.0,
-            Self::Gpu | Self::Disk | Self::Bluetooth | Self::ExpandSign => 78.0 + clock_shift,
+            Self::Gpu | Self::Temp | Self::Disk | Self::Bluetooth | Self::ExpandSign => {
+                78.0 + clock_shift
+            }
             Self::Network => 145.0 + clock_shift,
             Self::Memory => 205.0 + clock_shift,
             Self::Cpu => 255.0 + clock_shift,

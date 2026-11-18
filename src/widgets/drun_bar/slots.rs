@@ -25,10 +25,9 @@ fn slot_bg(is_active: bool) -> Color {
 pub fn build_hidden_count_pill(
     key_prefix: &'static str,
     left_sep_key: &'static str,
-    right_sep_key: &'static str,
     count: usize,
     left_shape: SepShape,
-    right_shape: SepShape,
+    right_sep: Option<(&'static str, SepShape)>,
 ) -> Row<Msg> {
     let fg = if count > 0 { TEXT } else { OVERLAY0 };
     let font = if count > 0 {
@@ -37,7 +36,7 @@ pub fn build_hidden_count_pill(
         font_ui()
     };
 
-    Row::new()
+    let mut row = Row::new()
         .key(key_prefix)
         .size(Size::new(Length::Auto, BAR_HEIGHT.logical_px()))
         .align(Align::Center)
@@ -63,13 +62,18 @@ pub fn build_hidden_count_pill(
                         ))
                         .anchor(ElementAnchor::Center),
                 ),
-        )
-        .child(separator(
+        );
+
+    if let Some((right_sep_key, right_shape)) = right_sep {
+        row = row.child(separator(
             right_sep_key,
             right_shape,
             CRUST,
             Color::TRANSPARENT,
-        ))
+        ));
+    }
+
+    row
 }
 
 pub fn build_results_section(state: &State, total_w: f32) -> Element<Msg> {

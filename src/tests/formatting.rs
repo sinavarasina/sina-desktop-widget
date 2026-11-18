@@ -223,3 +223,51 @@ fn native_waywi_datetime_units_and_calendar_work_accurately() {
     assert!(dt.year >= 2023);
     assert!(!dt.format_hm(TimeFormat::H12).is_empty());
 }
+
+#[test]
+fn temp_module_and_cpu_tooltip_format_cpu_and_gpu_thermals() {
+    use waywi::system::hardware::ThermalSensor;
+
+    let mut rt = synthetic_rt();
+    // Flush initial live System::sensors/gpu subscription ticks before injecting test snapshots.
+    rt.step().unwrap();
+    rt.enqueue(Msg::SensorsSampled(vec![ThermalSensor {
+        hwmon_name: String::from("k10temp"),
+        label: String::from("Tctl"),
+        celsius: 58.0,
+        critical_celsius: Some(95.0),
+    }]));
+    rt.enqueue(Msg::GpuSampled(GpuSnapshot {
+        gpus: vec![GpuDeviceSnapshot {
+            card_name: String::from("card0"),
+            vendor: GpuVendor::Amd,
+            pci_vendor_id: None,
+            pci_device_id: None,
+            driver: None,
+            model_name: None,
+            utilization_percent: None,
+            vram_used: None,
+            vram_total: None,
+            gtt_used: None,
+            gtt_total: None,
+            core_clock_mhz: Some(800),
+            memory_clock_mhz: None,
+            temperature_celsius: Some(47.0),
+            hotspot_celsius: Some(54.0),
+            power_watts: Some(25.0),
+            fan_rpm: None,
+        }],
+        timestamp: Instant::now(),
+    }));
+    rt.step().unwrap();
+
+    let temp = rt.state().temp_metric();
+    assert_eq!(temp.lines[0].text, "58°C");
+    assert_eq!(temp.lines[1].text, "47°C");
+    assert!(temp.tooltip.contains("CPU Temp: 58°C"));
+    assert!(temp.tooltip.contains("GPU Temp: 47°C"));
+    assert!(temp.tooltip.contains("GPU Hotspot: 54°C"));
+
+    let (_, cpu_tip) = rt.state().cpu_display();
+    assert!(cpu_tip.contains("Temp: 58°C"));
+}

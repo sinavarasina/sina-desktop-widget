@@ -3,10 +3,13 @@
 use waywi::prelude::*;
 
 use crate::app::state::State;
+use crate::widgets::notification_center::card::action_max_scroll_x;
+use crate::widgets::notification_center::max_notif_scroll_index;
 
 use super::bluetooth::handle_bt_agent_decision;
 use super::events::scroll_direction_y;
-use crate::widgets::notification_center::max_notif_scroll_index;
+
+const ACTION_SCROLL_STEP_PX: f32 = 32.0;
 
 pub fn handle_notification_event(
     state: &mut State,
@@ -66,8 +69,7 @@ pub fn handle_notif_center_scroll(state: &mut State, sc: ScrollEvent, ctx: &mut 
             .saturating_sub(step.unsigned_abs() as usize)
     };
     state.notifications.maybe_load_more_from_disk(next + 10);
-    let max_idx =
-        max_notif_scroll_index(state.notifications.items.len(), state.screen_height);
+    let max_idx = max_notif_scroll_index(&state.notifications.items, state.screen_height);
     state.notifications.scroll_index = next.min(max_idx);
     state.notifications.ensure_visible_icons(
         state.notifications.scroll_index,
@@ -98,6 +100,49 @@ pub fn handle_notif_card_pointer(state: &mut State, id: u32, ev: PointerEvent, c
         }
         _ => {}
     }
+}
+
+pub fn handle_notif_action_click(
+    state: &mut State,
+    id: u32,
+    action_key: &str,
+    ctx: &EffectCtx<'_>,
+) {
+    if state.notifications.dismiss(id) {
+        invoke_or_route_action(state, id, action_key, ctx);
+    }
+}
+
+pub fn handle_notif_action_scroll(state: &mut State, id: u32, sc: ScrollEvent) {
+    let delta_x = if sc.discrete_x != 0 {
+        (sc.discrete_x as f32) * ACTION_SCROLL_STEP_PX
+    } else if sc.delta_x.abs() > 0.01 {
+        sc.delta_x * 2.5
+    } else {
+        let step_y = scroll_direction_y(sc);
+        if step_y == 0 {
+            return;
+        }
+        (step_y as f32) * ACTION_SCROLL_STEP_PX
+    };
+
+    let Some(item) = state.notifications.items.iter().find(|i| i.stored.id == id) else {
+        return;
+    };
+    let max_scroll = action_max_scroll_x(item);
+    if max_scroll <= 0.0 {
+        state.notifications.action_scroll_x.remove(&id);
+        return;
+    }
+
+    let current = state
+        .notifications
+        .action_scroll_x
+        .get(&id)
+        .copied()
+        .unwrap_or(0.0);
+    let next = (current + delta_x).clamp(0.0, max_scroll);
+    state.notifications.action_scroll_x.insert(id, next);
 }
 
 fn invoke_or_route_action(state: &mut State, id: u32, action_key: &str, ctx: &EffectCtx<'_>) {

@@ -212,3 +212,88 @@ fn notification_image_data_persists_across_restart_and_clear_all_removes_icon_fi
     assert_eq!(rt.state().notifications.total_count, 0);
     assert!(!std::path::Path::new(&cached_path).exists());
 }
+
+#[test]
+fn notification_center_shows_multi_actions_with_variable_height_and_horizontal_scroll() {
+    use crate::app::state::HoverTarget;
+    use crate::widgets::notification_center::card::{
+        ACTION_CARD_HEIGHT, BASE_CARD_HEIGHT, action_max_scroll_x, card_height,
+    };
+
+    let mut rt = synthetic_rt();
+
+    let mut single_action = sample_notif(201, "Single", "One default action");
+    single_action.actions = vec![("default".into(), "Activate".into())];
+
+    let mut multi_action = sample_notif(202, "Build", "Finished compiling package");
+    multi_action.actions = vec![
+        ("open".into(), "Open Output Directory".into()),
+        ("logs".into(), "Inspect Full Logs".into()),
+        ("retry".into(), "Rebuild Target".into()),
+        ("share".into(), "Copy Link".into()),
+    ];
+
+    rt.enqueue(Msg::NotificationEvent(Box::new(
+        NotificationEvent::Received(Box::new(single_action)),
+    )));
+    rt.enqueue(Msg::NotificationEvent(Box::new(
+        NotificationEvent::Received(Box::new(multi_action)),
+    )));
+    rt.step().unwrap();
+
+    let multi_item = &rt.state().notifications.items[0];
+    let single_item = &rt.state().notifications.items[1];
+    assert_eq!(card_height(single_item), BASE_CARD_HEIGHT);
+    assert_eq!(card_height(multi_item), ACTION_CARD_HEIGHT);
+    assert!(action_max_scroll_x(multi_item) > 0.0);
+
+    // Open Notification Center and render both variable-height cards.
+    rt.enqueue(Msg::NotifBarPointerDown(PointerEvent {
+        position: Point::new(400.logical_px(), 12.logical_px()),
+        local_position: Point::new(8.logical_px(), 12.logical_px()),
+        button: Some(MouseButton::Left),
+        modifiers: Modifiers::empty(),
+    }));
+    for _ in 0..16 {
+        rt.enqueue(Msg::NotifCenterAnimTick);
+        rt.step().unwrap();
+    }
+    assert!(rt.rendered_buffer("bar-notification-center").is_some());
+
+    // Hover and horizontally scroll action buttons via mouse wheel.
+    rt.enqueue(Msg::Hover(HoverTarget::NotifAction {
+        id: 202,
+        action_idx: 0,
+    }));
+    rt.enqueue(Msg::NotifActionScroll {
+        id: 202,
+        sc: ScrollEvent {
+            position: Point::new(100.logical_px(), 110.logical_px()),
+            local_position: Point::ZERO,
+            delta_x: 0.0,
+            delta_y: 1.0,
+            discrete_x: 0,
+            discrete_y: 1,
+            modifiers: Modifiers::empty(),
+        },
+    });
+    rt.step().unwrap();
+    assert!(
+        rt.state()
+            .notifications
+            .action_scroll_x
+            .get(&202)
+            .copied()
+            .unwrap_or(0.0)
+            > 0.0
+    );
+
+    // Clicking an action button dismisses the notification and cleans up its scroll offset.
+    rt.enqueue(Msg::NotifCenterActionClick {
+        id: 202,
+        action_key: String::from("logs"),
+    });
+    rt.step().unwrap();
+    assert_eq!(rt.state().notifications.items.len(), 1);
+    assert!(!rt.state().notifications.action_scroll_x.contains_key(&202));
+}

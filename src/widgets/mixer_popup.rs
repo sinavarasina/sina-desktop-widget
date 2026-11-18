@@ -18,7 +18,7 @@ const TEXT_COL_WIDTH: f32 = MIXER_TRACK_WIDTH;
 const NAME_CLIP_WIDTH: f32 = TEXT_COL_WIDTH - 34.0;
 const MASTER_NAME_WIDTH: f32 = 104.0;
 const ICON_BADGE_PX: f32 = 18.0;
-const ICON_PX: f32 = 14.0;
+const ICON_PX: f32 = 16.0;
 
 pub fn build_mixer_popup_surface(state: &State) -> Surface<Msg> {
     let p = state.audio_ui.popup_progress.clamp(0.0, 1.0);
@@ -171,8 +171,22 @@ fn build_master_card(state: &State) -> Element<Msg> {
                             )
                             .size(Size::px(MASTER_NAME_WIDTH.logical_px(), 14.logical_px())),
                         )
-                        .child(target_btn("mixer-btn-output", "output", AudioControlTarget::Sink, out_active))
-                        .child(target_btn("mixer-btn-input", "input", AudioControlTarget::Source, !out_active)),
+                        .child(target_btn(
+                            "mixer-btn-output",
+                            "output",
+                            AudioControlTarget::Sink,
+                            HoverTarget::MixerOutput,
+                            state.hovered == HoverTarget::MixerOutput,
+                            out_active,
+                        ))
+                        .child(target_btn(
+                            "mixer-btn-input",
+                            "input",
+                            AudioControlTarget::Source,
+                            HoverTarget::MixerInput,
+                            state.hovered == HoverTarget::MixerInput,
+                            !out_active,
+                        )),
                 )
                 .child(
                     Row::new()
@@ -209,18 +223,29 @@ fn build_master_card(state: &State) -> Element<Msg> {
         .into()
 }
 
-/// Output/input pill toggle. Same geometry as the bluetooth `header_btn`:
-/// MANTLE background, hover paints SURFACE0, active state frames with MAUVE.
+/// Output/input pill toggle matching the bluetooth popup button style and hover feedback.
 fn target_btn(
     key: &'static str,
     label: &'static str,
     target: AudioControlTarget,
+    hover_target: HoverTarget,
+    hovered: bool,
     active: bool,
 ) -> Element<Msg> {
-    let hover_target = if active {
-        HoverTarget::MixerOutput
+    let bg = if hovered { SURFACE0 } else { MANTLE };
+    let border = if active {
+        MAUVE
+    } else if hovered {
+        SURFACE1
     } else {
-        HoverTarget::MixerInput
+        SURFACE0
+    };
+    let fg = if active {
+        MAUVE
+    } else if hovered {
+        TEXT
+    } else {
+        SUBTEXT1
     };
     Group::new()
         .key(key)
@@ -231,9 +256,9 @@ fn target_btn(
         .child(
             Rect::new()
                 .size(Size::fill())
-                .fill(MANTLE)
+                .fill(bg)
                 .corner_radius(0.logical_px())
-                .border(1.logical_px(), if active { MAUVE } else { SURFACE0 }),
+                .border(1.logical_px(), border),
         )
         .child(
             Row::new()
@@ -243,7 +268,7 @@ fn target_btn(
                     Text::new(label)
                         .font(font_ui_semibold())
                         .font_size(10.logical_px())
-                        .color(if active { MAUVE } else { SUBTEXT1 }),
+                        .color(fg),
                 ),
         )
         .into()
@@ -371,23 +396,16 @@ fn build_app_row(r: &AppRow, tick: u32) -> Element<Msg> {
     let ratio = r.linear.clamp(0.0, 1.0);
     let fill_w = MIXER_TRACK_WIDTH * ratio;
 
-    // Square badge with a clipped, centered image: non-1:1 `Cover` sources would overflow a
-    // rounded (or unclipped) container, mirroring the mpris album art handling.
     let icon: Element<Msg> = match r.icon {
-        Some(img) => Clip::new(
-            Image::new(img)
-                .size(Size::px(ICON_PX.logical_px(), ICON_PX.logical_px()))
-                .fit(ImageFit::Cover),
-        )
-        .size(Size::px(ICON_PX.logical_px(), ICON_PX.logical_px()))
-        .position(Position::RelativeToParent {
-            x: Percent::new(50.0),
-            y: Percent::new(50.0),
-            offset_x: 0.logical_px(),
-            offset_y: 0.logical_px(),
-        })
-        .anchor(ElementAnchor::Center)
-        .into(),
+        Some(img) => Image::new(img)
+            .size(Size::px(ICON_PX.logical_px(), ICON_PX.logical_px()))
+            .fit(ImageFit::Contain)
+            .position(Position::relative_to_parent(
+                Percent::new(50.0),
+                Percent::new(50.0),
+            ))
+            .anchor(ElementAnchor::Center)
+            .into(),
         None => Text::new("\u{f001}")
             .font(font_ui())
             .font_size(10.logical_px())
@@ -451,11 +469,6 @@ fn build_app_row(r: &AppRow, tick: u32) -> Element<Msg> {
                             ICON_BADGE_PX.logical_px(),
                             ICON_BADGE_PX.logical_px(),
                         ))
-                        .child(
-                            Rect::new()
-                                .size(Size::fill())
-                                .fill(SURFACE1),
-                        )
                         .child(icon),
                 )
                 .child(

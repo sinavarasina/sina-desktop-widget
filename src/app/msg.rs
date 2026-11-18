@@ -41,6 +41,14 @@ pub enum Msg {
         id: u32,
         ev: PointerEvent,
     },
+    NotifCenterActionClick {
+        id: u32,
+        action_key: String,
+    },
+    NotifActionScroll {
+        id: u32,
+        sc: ScrollEvent,
+    },
     NotifCenterClearAll,
     NotifCenterToggleDnd,
     MprisEvent(Box<MprisEvent>),
@@ -110,6 +118,7 @@ pub enum Msg {
     },
     CpuSampled(CpuSnapshot),
     GpuSampled(GpuSnapshot),
+    SensorsSampled(Vec<waywi::system::hardware::ThermalSensor>),
     MemorySampled(MemorySnapshot),
     DiskSampled(DiskSnapshot),
     NetworkSampled(NetworkSnapshot),

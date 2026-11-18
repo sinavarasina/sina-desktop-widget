@@ -18,6 +18,7 @@ pub fn build_tooltip_surface(state: &State) -> Option<Surface<Msg>> {
         HoverTarget::Memory => state.memory_metric().tooltip,
         HoverTarget::Network => state.network_metric().tooltip,
         HoverTarget::Gpu => state.gpu_metric().tooltip,
+        HoverTarget::Temp => state.temp_metric().tooltip,
         HoverTarget::Disk => state.disk_metric().tooltip,
         HoverTarget::Bluetooth => state.bluetooth_metric().tooltip,
         HoverTarget::TrayItem(idx) => {

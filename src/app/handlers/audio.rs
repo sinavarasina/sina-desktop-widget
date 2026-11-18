@@ -1,7 +1,6 @@
 //! Audio input handlers: mixer popup toggle, master volume, and per-app streams.
 
-use std::collections::HashMap;
-use std::path::Path;
+mod icons;
 
 use waywi::prelude::*;
 
@@ -9,6 +8,7 @@ use crate::app::state::{AudioControlTarget, State};
 use crate::theme::{MIXER_TRACK_WIDTH, SEP_WIDTH};
 
 use super::events::scroll_direction_y;
+use icons::refresh_stream_icons;
 
 /// Per-app scroll step, matched to the master track and bar module step.
 const VOLUME_SCROLL_STEP: f32 = 0.01;
@@ -189,80 +189,4 @@ fn capture_linear(state: &State, id: u32) -> Option<f32> {
 
 fn adjust_step(current: f32, step: i32) -> f32 {
     (current + (step as f32) * VOLUME_SCROLL_STEP).clamp(0.0, 1.5)
-}
-
-/// Resolves desktop icons for every playback/capture stream, keyed by id.
-/// Falls back to the binary name, then the stream name (case-insensitively), then the generic
-/// executable glyph.
-fn refresh_stream_icons(state: &mut State, ctx: &mut EffectCtx<'_>) {
-    let Some(audio) = state.audio.clone() else {
-        return;
-    };
-
-    let mut streams = HashMap::new();
-    for s in &audio.streams {
-        let icon = resolve_app_icon(state, s.binary.as_deref(), &s.name, ctx);
-        streams.insert(s.id, icon);
-    }
-    state.audio_ui.stream_icons = streams;
-
-    let mut captures = HashMap::new();
-    for c in &audio.captures {
-        let icon = resolve_app_icon(state, c.binary.as_deref(), &c.name, ctx);
-        captures.insert(c.id, icon);
-    }
-    state.audio_ui.capture_icons = captures;
-}
-
-/// Plain waywi path: XDG icon theme lookup over `[binary, stream name]` case variants, falling
-/// back to the generic executable glyph; resolved files go through the path-asset cache.
-fn resolve_app_icon(
-    state: &mut State,
-    binary: Option<&str>,
-    stream_name: &str,
-    ctx: &mut EffectCtx<'_>,
-) -> Option<ImageAsset> {
-    const GENERIC: &str = "application-x-executable";
-
-    let mut candidates: Vec<String> = Vec::new();
-    for candidate in [binary, Some(stream_name)] {
-        let Some(c) = candidate.map(str::trim).filter(|s| !s.is_empty()) else {
-            continue;
-        };
-        if !candidates.iter().any(|seen| seen == c) {
-            candidates.push(c.to_owned());
-        }
-        // Icon names are case-sensitive; `Firefox` must not hide a `firefox.png`.
-        let lower = c.to_lowercase();
-        if lower != c && !candidates.contains(&lower) {
-            candidates.push(lower);
-        }
-    }
-    candidates.push(GENERIC.to_owned());
-
-    for candidate in &candidates {
-        if let Some(path) = state.icon_lookup.resolve(candidate, 24)
-            && let Some(asset) = load_app_icon_asset(state, &path, ctx)
-        {
-            return Some(asset);
-        }
-    }
-    None
-}
-
-/// Loads a resolved icon path through the path-asset cache keyed by its signature.
-fn load_app_icon_asset(
-    state: &mut State,
-    path: &Path,
-    ctx: &mut EffectCtx<'_>,
-) -> Option<ImageAsset> {
-    let sig = format!("audio-app:{}", path.display());
-    if let Some(&cached) = state.path_asset_cache.get(&sig) {
-        return Some(cached);
-    }
-    if let Ok(asset) = ctx.load_image_sized(path, 24) {
-        state.path_asset_cache.insert(sig, asset);
-        return Some(asset);
-    }
-    None
 }

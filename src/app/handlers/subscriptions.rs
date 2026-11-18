@@ -20,6 +20,7 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
     subs.push(Audio::subscribe(Msg::AudioUpdated));
     subs.push(System::cpu().every(Duration::from_secs(1), Msg::CpuSampled));
     subs.push(System::gpu().every(Duration::from_secs(2), Msg::GpuSampled));
+    subs.push(System::sensors().every(Duration::from_secs(2), Msg::SensorsSampled));
     subs.push(System::memory().every(Duration::from_secs(1), Msg::MemorySampled));
     subs.push(System::network().every(Duration::from_secs(1), Msg::NetworkSampled));
     subs.push(System::disk().every(Duration::from_secs(30), Msg::DiskSampled));

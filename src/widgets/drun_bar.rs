@@ -23,7 +23,7 @@ pub fn build_drun_surface(state: &State) -> Surface<Msg> {
 
     let input_w = state.drun.input_box_width(state.bar_width);
     let left_total_w = RUNNER_PILL_W + COUNT_PILL_W + 4.0 * SEP_WIDTH + input_w;
-    let right_total_w = COUNT_PILL_W + 2.0 * SEP_WIDTH;
+    let right_total_w = COUNT_PILL_W + SEP_WIDTH;
     let results_w = (state.bar_width - left_total_w - right_total_w).max(80.0);
 
     let total_matches = state.drun.match_indices.len();
@@ -36,19 +36,17 @@ pub fn build_drun_surface(state: &State) -> Surface<Msg> {
     let left_count_pill = build_hidden_count_pill(
         "drun-left-cnt",
         "sep-drun-lc-l",
-        "sep-drun-lc-r",
         left_hidden,
         SepShape::CurveL,
-        SepShape::SlashR,
+        Some(("sep-drun-lc-r", SepShape::SlashR)),
     );
     let results_section = build_results_section(state, results_w);
     let right_count_pill = build_hidden_count_pill(
         "drun-right-cnt",
         "sep-drun-rc-l",
-        "sep-drun-rc-r",
         right_hidden,
         SepShape::SlashLInv,
-        SepShape::SlashRInv,
+        None,
     );
 
     let strip = Row::new()

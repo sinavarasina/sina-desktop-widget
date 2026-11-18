@@ -466,6 +466,8 @@ fn mixer_popup_bar_click_opens_right_click_mutes_and_tracks_set_volume() {
             id: 7,
             name: String::from("Firefox"),
             binary: None,
+            icon_name: None,
+            app_id: None,
             sink_id: Some(1),
             linear: 0.40,
             db: None,

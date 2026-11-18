@@ -4,6 +4,7 @@ pub mod icons;
 pub mod storage;
 pub mod ticker;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::UNIX_EPOCH;
 
@@ -35,6 +36,7 @@ pub struct NotificationStore {
     pub center_progress: f32,
     pub marquee_tick: u32,
     pub scroll_index: usize,
+    pub action_scroll_x: HashMap<u32, f32>,
     pub active_ticker: Option<IncomingTicker>,
     store_path: PathBuf,
     disk_overflow: Vec<StoredNotification>,
@@ -94,6 +96,7 @@ impl NotificationStore {
             center_progress: 0.0,
             marquee_tick: 0,
             scroll_index: 0,
+            action_scroll_x: HashMap::new(),
             active_ticker: None,
             store_path: path,
             disk_overflow: overflow,
@@ -251,6 +254,7 @@ impl NotificationStore {
         let after = self.items.len() + self.disk_overflow.len();
         let changed = after != self.total_count;
         self.total_count = after;
+        self.action_scroll_x.remove(&id);
         if self.scroll_index >= self.items.len() && self.scroll_index > 0 {
             self.scroll_index = self.items.len().saturating_sub(1);
         }
@@ -335,6 +339,7 @@ impl NotificationStore {
         self.disk_overflow.clear();
         self.total_count = 0;
         self.scroll_index = 0;
+        self.action_scroll_x.clear();
         clear_icon_cache(&self.store_path);
         self.persist();
     }

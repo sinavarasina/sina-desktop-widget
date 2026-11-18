@@ -17,6 +17,7 @@ pub use super::mpris::MprisState;
 pub use super::msg::Msg;
 pub use super::notifications::NotificationStore;
 pub use super::scroller::WindowScroller;
+pub use super::telemetry::CpuPowerTracker;
 pub use super::tray_cache::{resolve_tray_icon, upsert_tray_entry_into};
 pub use super::types::{AudioControlTarget, HoverTarget, TrayEntry, TrayMenuPopup};
 
@@ -45,6 +46,9 @@ pub struct State {
     pub audio_ui: AudioUiState,
 
     pub cpu: Option<CpuSnapshot>,
+    pub cpu_temp_celsius: Option<f32>,
+    pub cpu_power_watts: Option<f32>,
+    pub cpu_power_tracker: CpuPowerTracker,
     pub gpu: Option<GpuSnapshot>,
     pub memory: Option<MemorySnapshot>,
 

@@ -5,7 +5,7 @@ use waywi::prelude::*;
 use crate::app::state::{HoverTarget, Msg, State};
 use crate::theme::{
     BAR_HEIGHT, BT_EXPANDED_WIDTH, DISK_EXPANDED_WIDTH, DRAWER_REVEALED_WIDTH, EXPAND_SIGN_WIDTH,
-    GPU_EXPANDED_WIDTH, MANTLE, MODULE_PAD_H, SUBTEXT0, font_ui,
+    GPU_EXPANDED_WIDTH, MANTLE, MODULE_PAD_H, SUBTEXT0, TEMP_EXPANDED_WIDTH, font_ui,
 };
 use crate::widgets::metric::{MetricModuleConfig, metric_module};
 
@@ -64,6 +64,22 @@ pub fn build_expandable_mon(state: &State) -> Element<Msg> {
             on_scroll: None,
         });
 
+        let temp_el = metric_module(MetricModuleConfig {
+            key: "mod-temp",
+            metric: state.temp_metric(),
+            target: HoverTarget::Temp,
+            hovered: state.hovered == HoverTarget::Temp,
+            fixed_width: Some(TEMP_EXPANDED_WIDTH),
+            on_pointer_down: Some(|ev| {
+                if ev.button == Some(MouseButton::Right) {
+                    Msg::SpawnBtop
+                } else {
+                    Msg::Hover(HoverTarget::Temp)
+                }
+            }),
+            on_scroll: None,
+        });
+
         let disk_el = metric_module(MetricModuleConfig {
             key: "mod-disk",
             metric: state.disk_metric(),
@@ -97,6 +113,7 @@ pub fn build_expandable_mon(state: &State) -> Element<Msg> {
             ))
             .align(Align::Center)
             .child(gpu_el)
+            .child(temp_el)
             .child(disk_el)
             .child(bt_el);
 

@@ -30,8 +30,8 @@ use super::mpris::{
     handle_mpris_seek_click,
 };
 use super::notifications::{
-    handle_notif_bar_pointer, handle_notif_card_pointer, handle_notif_center_scroll,
-    handle_notification_event,
+    handle_notif_action_click, handle_notif_action_scroll, handle_notif_bar_pointer,
+    handle_notif_card_pointer, handle_notif_center_scroll, handle_notification_event,
 };
 
 pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Result<()> {
@@ -78,6 +78,12 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
         Msg::NotifCenterScroll(sc) => handle_notif_center_scroll(state, sc, ctx),
         Msg::NotifCenterCardPointerDown { id, ev } => {
             handle_notif_card_pointer(state, id, ev, ctx);
+        }
+        Msg::NotifCenterActionClick { id, action_key } => {
+            handle_notif_action_click(state, id, &action_key, ctx);
+        }
+        Msg::NotifActionScroll { id, sc } => {
+            handle_notif_action_scroll(state, id, sc);
         }
         Msg::NotifCenterClearAll => {
             state.notifications.clear_all();
@@ -165,10 +171,17 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
             handle_mixer_capture_seek_click(state, id, ev, ctx);
         }
         Msg::CpuSampled(snap) => {
+            let now = snap.timestamp;
             state.cpu = Some(snap);
+            if let Some(watts) = state.cpu_power_tracker.sample_now(now) {
+                state.cpu_power_watts = Some(watts);
+            }
         }
         Msg::GpuSampled(snap) => {
             state.gpu = Some(snap);
+        }
+        Msg::SensorsSampled(sensors) => {
+            state.cpu_temp_celsius = crate::app::telemetry::pick_cpu_temperature(&sensors);
         }
         Msg::MemorySampled(snap) => {
             state.memory = Some(snap);

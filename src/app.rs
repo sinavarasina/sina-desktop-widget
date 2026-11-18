@@ -12,6 +12,7 @@ pub mod msg;
 pub mod notifications;
 pub mod scroller;
 pub mod state;
+pub mod telemetry;
 pub mod tray_cache;
 pub mod types;
 
