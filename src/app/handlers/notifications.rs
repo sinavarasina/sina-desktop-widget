@@ -46,7 +46,7 @@ pub fn handle_notif_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &mut E
             }
         }
         Some(MouseButton::Right) => {
-            state.notifications.toggle_dnd();
+            state.notifications.toggle_dnd(ctx);
         }
         _ => {}
     }
@@ -95,9 +95,11 @@ pub fn handle_notif_card_pointer(
             }
         }
         Some(MouseButton::Left) => {
-            if let Some((notif_id, action_key)) = state.notifications.take_action_and_dismiss(id) {
+            if let Some((notif_id, action_key, keep_resident)) =
+                state.notifications.take_action_and_maybe_dismiss(id)
+            {
                 if let Some(key) = action_key {
-                    invoke_or_route_action(state, notif_id, &key, ctx);
+                    invoke_or_route_action(state, notif_id, &key, keep_resident, ctx);
                 } else if let Ok(dbus) = ctx.dbus() {
                     let _ = dbus.close_notification(notif_id, NotificationCloseReason::Dismissed);
                 }
@@ -113,8 +115,9 @@ pub fn handle_notif_action_click(
     action_key: &str,
     ctx: &EffectCtx<'_>,
 ) {
-    if state.notifications.dismiss(id) {
-        invoke_or_route_action(state, id, action_key, ctx);
+    let keep_resident = state.notifications.is_resident(id);
+    if keep_resident || state.notifications.dismiss(id) {
+        invoke_or_route_action(state, id, action_key, keep_resident, ctx);
     }
 }
 
@@ -150,7 +153,13 @@ pub fn handle_notif_action_scroll(state: &mut State, id: u32, sc: ScrollEvent) {
     state.notifications.action_scroll_x.insert(id, next);
 }
 
-fn invoke_or_route_action(state: &mut State, id: u32, action_key: &str, ctx: &EffectCtx<'_>) {
+fn invoke_or_route_action(
+    state: &mut State,
+    id: u32,
+    action_key: &str,
+    keep_resident: bool,
+    ctx: &EffectCtx<'_>,
+) {
     if let Some(req_str) = action_key.strip_prefix("bt-accept:")
         && let Ok(req_id) = req_str.parse::<u64>()
     {
@@ -165,6 +174,8 @@ fn invoke_or_route_action(state: &mut State, id: u32, action_key: &str, ctx: &Ef
     }
     if let Ok(dbus) = ctx.dbus() {
         let _ = dbus.invoke_notification_action(id, action_key);
-        let _ = dbus.close_notification(id, NotificationCloseReason::Dismissed);
+        if !keep_resident {
+            let _ = dbus.close_notification(id, NotificationCloseReason::Dismissed);
+        }
     }
 }

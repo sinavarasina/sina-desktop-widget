@@ -1,6 +1,7 @@
 //! Notification center state, RAM-bounded lazy cache, and incoming ticker animation.
 
 pub mod icons;
+pub mod sound;
 pub mod storage;
 pub mod ticker;
 
@@ -14,6 +15,7 @@ use waywi::prelude::*;
 use crate::app::asset_lru::PathAssetCache;
 
 use icons::resolve_notification_icon;
+pub use sound::{NotificationSoundPlan, play_notification_sound, resolve_notification_sound};
 use storage::{
     MAX_DISK_NOTIFICATIONS, MAX_RAM_NOTIFICATIONS, PersistedStore, StoredNotification,
     clear_icon_cache, default_store_path, load_store_from_disk, save_cached_icon,
@@ -38,6 +40,7 @@ pub struct NotificationStore {
     pub scroll_index: usize,
     pub action_scroll_x: HashMap<u32, f32>,
     pub active_ticker: Option<IncomingTicker>,
+    pub last_sound_plan: NotificationSoundPlan,
     store_path: PathBuf,
     disk_overflow: Vec<StoredNotification>,
 }
@@ -78,6 +81,7 @@ impl NotificationStore {
             scroll_index: 0,
             action_scroll_x: HashMap::new(),
             active_ticker: None,
+            last_sound_plan: NotificationSoundPlan::Silent,
             store_path: path,
             disk_overflow: overflow,
         }
@@ -90,10 +94,18 @@ impl NotificationStore {
         path_cache: &mut PathAssetCache,
         ctx: &mut EffectCtx<'_>,
     ) {
-        let cached_icon_path = notif
-            .image_data
-            .as_ref()
-            .and_then(|raw| save_cached_icon(&self.store_path, raw));
+        let sound_plan = resolve_notification_sound(&notif, self.dnd);
+        play_notification_sound(&sound_plan, ctx);
+        self.last_sound_plan = sound_plan;
+
+        let cached_icon_path = if notif.transient {
+            None
+        } else {
+            notif
+                .image_data
+                .as_ref()
+                .and_then(|raw| save_cached_icon(&self.store_path, raw))
+        };
 
         let icon = resolve_notification_icon(
             &notif.app_icon,
@@ -115,6 +127,11 @@ impl NotificationStore {
             ));
         }
 
+        // Per XDG Desktop Notifications v1.2, transient notifications bypass persistence/history.
+        if notif.transient {
+            return;
+        }
+
         let epoch = notif
             .received_at
             .duration_since(UNIX_EPOCH)
@@ -131,6 +148,7 @@ impl NotificationStore {
             body: notif.body,
             actions: notif.actions,
             urgency: notif.urgency as u8,
+            resident: notif.resident,
             received_epoch_secs: epoch,
             read: false,
         };
@@ -301,14 +319,23 @@ impl NotificationStore {
         self.marquee_tick = self.marquee_tick.wrapping_add(1);
     }
 
-    pub fn take_action_and_dismiss(&mut self, id: u32) -> Option<(u32, Option<String>)> {
-        let action_key = self
-            .items
+    #[must_use]
+    pub fn is_resident(&self, id: u32) -> bool {
+        self.items
             .iter()
             .find(|i| i.stored.id == id)
-            .and_then(|i| i.stored.actions.first().map(|(k, _)| k.clone()));
+            .is_some_and(|i| i.stored.resident)
+    }
+
+    pub fn take_action_and_maybe_dismiss(&mut self, id: u32) -> Option<(u32, Option<String>, bool)> {
+        let item = self.items.iter().find(|i| i.stored.id == id)?;
+        let action_key = item.stored.actions.first().map(|(k, _)| k.clone());
+        let resident = item.stored.resident;
+        if resident && action_key.is_some() {
+            return Some((id, action_key, true));
+        }
         if self.dismiss(id) {
-            Some((id, action_key))
+            Some((id, action_key, false))
         } else {
             None
         }
@@ -324,10 +351,11 @@ impl NotificationStore {
         self.persist();
     }
 
-    pub fn toggle_dnd(&mut self) {
+    pub fn toggle_dnd(&mut self, ctx: &EffectCtx<'_>) {
         self.dnd = !self.dnd;
         if self.dnd {
             self.active_ticker = None;
+            ctx.stop_sounds();
         }
         self.persist();
     }

@@ -94,7 +94,7 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
             state.notifications.clear_all();
         }
         Msg::NotifCenterToggleDnd => {
-            state.notifications.toggle_dnd();
+            state.notifications.toggle_dnd(ctx);
         }
         Msg::MprisEvent(ev) => handle_mpris_event(state, *ev, ctx),
         Msg::MprisBarPointerDown(ev) => handle_mpris_bar_pointer(state, ev, ctx),

@@ -71,7 +71,7 @@ pub fn handle_ipc_control(
         IpcTarget::Dnd => {
             let want_on = resolve_next(state.notifications.dnd, action);
             if want_on != state.notifications.dnd {
-                state.notifications.toggle_dnd();
+                state.notifications.toggle_dnd(ctx);
             }
         }
         IpcTarget::Volume => {

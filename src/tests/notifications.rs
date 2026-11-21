@@ -19,11 +19,9 @@ fn sample_notif(id: u32, summary: &str, body: &str) -> DesktopNotification {
         body: body.to_owned(),
         actions: vec![(String::from("default"), String::from("Open"))],
         urgency: NotificationUrgency::Normal,
-        desktop_entry: None,
-        image_path: None,
-        image_data: None,
         expire_timeout_ms: 5000,
         received_at: SystemTime::now(),
+        ..DesktopNotification::default()
     }
 }
 
@@ -296,4 +294,109 @@ fn notification_center_shows_multi_actions_with_variable_height_and_horizontal_s
     rt.step().unwrap();
     assert_eq!(rt.state().notifications.items.len(), 1);
     assert!(!rt.state().notifications.action_scroll_x.contains_key(&202));
+}
+
+#[test]
+fn notification_sound_dnd_and_xdg_v1_2_hints_behave_properly() {
+    use crate::app::notifications::NotificationSoundPlan;
+
+    let mut rt = synthetic_rt();
+
+    // 1. Normal IM notification with DND OFF resolves to XDG instant-message sound.
+    let mut im = sample_notif(301, "Chat", "Hello!");
+    im.category = Some(String::from("im.received"));
+    rt.enqueue(Msg::NotificationEvent(Box::new(
+        NotificationEvent::Received(Box::new(im)),
+    )));
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state().notifications.last_sound_plan,
+        NotificationSoundPlan::ThemeName {
+            primary: "message-new-instant",
+            fallback_theme: Some("message"),
+            fallback_preset: SoundPreset::Notification,
+        }
+    );
+
+    // 2. Explicit `sound_file` overrides default sound when DND is OFF.
+    let mut with_file = sample_notif(302, "Alarm", "Wake up");
+    with_file.sound_file = Some(String::from("/usr/share/sounds/ding.oga"));
+    rt.enqueue(Msg::NotificationEvent(Box::new(
+        NotificationEvent::Received(Box::new(with_file)),
+    )));
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state().notifications.last_sound_plan,
+        NotificationSoundPlan::File(String::from("/usr/share/sounds/ding.oga"))
+    );
+
+    // 3. `suppress_sound = true` silences sound even when DND is OFF.
+    let mut suppressed = sample_notif(303, "Quiet", "No chime");
+    suppressed.sound_name = Some(String::from("bell"));
+    suppressed.suppress_sound = true;
+    rt.enqueue(Msg::NotificationEvent(Box::new(
+        NotificationEvent::Received(Box::new(suppressed)),
+    )));
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state().notifications.last_sound_plan,
+        NotificationSoundPlan::Silent
+    );
+
+    // 4. `transient = true` shows ticker when DND is OFF but bypasses history persistence.
+    let count_before = rt.state().notifications.total_count;
+    let mut trans = sample_notif(304, "Volume", "75%");
+    trans.transient = true;
+    trans.urgency = NotificationUrgency::Low;
+    rt.enqueue(Msg::NotificationEvent(Box::new(
+        NotificationEvent::Received(Box::new(trans)),
+    )));
+    rt.step().unwrap();
+    assert_eq!(rt.state().notifications.total_count, count_before);
+    assert_eq!(
+        rt.state().notifications.last_sound_plan,
+        NotificationSoundPlan::Silent
+    );
+    assert!(rt.state().notifications.active_ticker.is_some());
+
+    // 5. `resident = true` keeps notification in history when its action is clicked.
+    let mut res = sample_notif(305, "Music", "Controls");
+    res.resident = true;
+    rt.enqueue(Msg::NotificationEvent(Box::new(
+        NotificationEvent::Received(Box::new(res)),
+    )));
+    rt.step().unwrap();
+    rt.enqueue(Msg::NotifCenterActionClick {
+        id: 305,
+        action_key: String::from("default"),
+    });
+    rt.step().unwrap();
+    assert!(
+        rt.state()
+            .notifications
+            .items
+            .iter()
+            .any(|i| i.stored.id == 305),
+        "resident notification must remain open after action click"
+    );
+
+    // 6. Enabling DND clears active ticker and silences ALL incoming notifications
+    //    (even Critical notifications with explicit sound_file).
+    rt.enqueue(Msg::NotifCenterToggleDnd);
+    rt.step().unwrap();
+    assert!(rt.state().notifications.dnd);
+    assert!(rt.state().notifications.active_ticker.is_none());
+
+    let mut crit = sample_notif(306, "Critical", "Silenced by DND");
+    crit.urgency = NotificationUrgency::Critical;
+    crit.sound_file = Some(String::from("/usr/share/sounds/alarm.oga"));
+    rt.enqueue(Msg::NotificationEvent(Box::new(
+        NotificationEvent::Received(Box::new(crit)),
+    )));
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state().notifications.last_sound_plan,
+        NotificationSoundPlan::Silent
+    );
+    assert!(rt.state().notifications.active_ticker.is_none());
 }

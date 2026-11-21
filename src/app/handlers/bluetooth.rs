@@ -35,11 +35,9 @@ pub fn handle_bluetooth_agent_event(
                 ),
             ],
             urgency: NotificationUrgency::Critical,
-            desktop_entry: None,
-            image_path: None,
-            image_data: None,
             expire_timeout_ms: 0,
             received_at: SystemTime::now(),
+            ..DesktopNotification::default()
         };
         state.notifications.push_incoming(
             notif,

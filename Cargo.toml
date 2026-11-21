@@ -18,6 +18,7 @@ waywi = { version = "0.1.8", features = [
     "hyprland-ipc",
     "dbus",
     "pipewire",
+    "audio-playback",
 ] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

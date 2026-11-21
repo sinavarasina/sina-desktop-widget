@@ -23,6 +23,8 @@ pub struct StoredNotification {
     pub body: String,
     pub actions: Vec<(String, String)>,
     pub urgency: u8,
+    #[serde(default)]
+    pub resident: bool,
     pub received_epoch_secs: u64,
     pub read: bool,
 }

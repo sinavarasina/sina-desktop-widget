@@ -14,9 +14,12 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
     }));
     subs.push(Hyprland::subscribe(Msg::HyprEvent));
     subs.push(Dbus::tray(|ev| Msg::TrayEvent(Box::new(ev))));
-    subs.push(Dbus::notifications(|ev| {
-        Msg::NotificationEvent(Box::new(ev))
-    }));
+    subs.push(Dbus::notifications_with_capabilities(
+        NotificationCapabilities::default()
+            | NotificationCapabilities::PERSISTENCE
+            | NotificationCapabilities::SOUND,
+        |ev| Msg::NotificationEvent(Box::new(ev)),
+    ));
     subs.push(Dbus::mpris(|ev| Msg::MprisEvent(Box::new(ev))));
     subs.push(Dbus::action_results(Msg::DbusActionOutcome));
     subs.push(Audio::subscribe(Msg::AudioUpdated));
