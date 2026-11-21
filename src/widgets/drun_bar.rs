@@ -123,6 +123,7 @@ fn build_runner_pill() -> Element<Msg> {
             Text::new(">_")
                 .font(font_ui_semibold())
                 .font_size(11.logical_px())
+                .optical_bounds(true)
                 .color(MAUVE)
                 .position(Position::relative_to_parent(
                     Percent::new(50.0),

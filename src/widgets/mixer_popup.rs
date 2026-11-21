@@ -425,6 +425,7 @@ fn build_app_row(r: &AppRow, tick: u32) -> Element<Msg> {
         None => Text::new("\u{f001}")
             .font(font_ui())
             .font_size(10.logical_px())
+            .optical_bounds(true)
             .color(OVERLAY0)
             .position(Position::relative_to_parent(
                 Percent::new(50.0),

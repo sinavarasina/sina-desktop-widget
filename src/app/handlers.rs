@@ -9,6 +9,7 @@ mod init;
 mod ipc;
 mod mpris;
 mod notifications;
+mod quick_menu;
 mod subscriptions;
 mod update;
 

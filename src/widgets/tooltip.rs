@@ -4,14 +4,9 @@ use waywi::prelude::*;
 
 use crate::app::state::{HoverTarget, Msg, State};
 use crate::theme::{CRUST, POPUP_TOP_MARGIN, SURFACE1, TEXT, font_ui};
-use crate::widgets::calendar::build_calendar_tooltip_surface;
 
-/// Builds the floating hover tooltip or calendar surface for the currently hovered target.
+/// Builds the floating hover tooltip surface for the currently hovered target.
 pub fn build_tooltip_surface(state: &State) -> Option<Surface<Msg>> {
-    if state.hovered == HoverTarget::Clock {
-        return Some(build_calendar_tooltip_surface(state));
-    }
-
     let (body, left_anchor_margin) = match state.hovered {
         HoverTarget::SysInfo => (
             state

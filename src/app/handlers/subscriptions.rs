@@ -12,6 +12,20 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
     subs.push(Control::socket(CONTROL_SOCKET_NAME, |cmd| {
         parse_ipc_command(&cmd)
     }));
+
+    // Stage 1 (pre-hydration): keep the first event-loop pass completely free of D-Bus worker
+    // spawns and synchronous `System::*` probes so both `desktop-wallpaper` and `bar` receive
+    // their Wayland `configure` and paint Frame 1 immediately.
+    if !state.startup_hydrated {
+        subs.push(Timer::once(
+            "startup-hydrate",
+            Duration::from_millis(50),
+            Msg::StartupHydrate,
+        ));
+        #[cfg(not(test))]
+        return subs;
+    }
+
     subs.push(Hyprland::subscribe(Msg::HyprEvent));
     subs.push(Dbus::tray(|ev| Msg::TrayEvent(Box::new(ev))));
     subs.push(Dbus::notifications_with_capabilities(
@@ -37,14 +51,8 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
         Msg::BluetoothAgentEvent(Box::new(ev))
     }));
     subs.push(Dbus::udisks(Msg::UDisksUpdated));
+    subs.push(Dbus::logind(Msg::LogindEvent));
 
-    if !state.startup_hydrated {
-        subs.push(Timer::once(
-            "startup-hydrate",
-            Duration::from_millis(1),
-            Msg::StartupHydrate,
-        ));
-    }
     if state.scroller.needs_scroll() {
         subs.push(Timer::every(
             "window-scroll-tick",
@@ -72,6 +80,54 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
             Duration::from_millis(125),
             Msg::DrawerTimeoutCheck,
         ));
+    }
+    if state.is_animating_clock_menu() {
+        subs.push(Timer::every(
+            "clock-menu-anim",
+            Duration::from_millis(16),
+            Msg::ClockMenuTick,
+        ));
+    }
+    if state.clock_menu_leave_deadline.is_some() {
+        subs.push(Timer::once(
+            "clock-menu-leave-grace",
+            Duration::from_millis(145),
+            Msg::ClockMenuTimeoutCheck,
+        ));
+    }
+    if state.quick_menu.is_animating_popup() {
+        subs.push(Timer::every(
+            "quick-menu-anim",
+            Duration::from_millis(16),
+            Msg::QuickMenuAnimTick,
+        ));
+    }
+    if state.quick_menu.pending_power.is_some() {
+        subs.push(Timer::every(
+            "power-countdown",
+            Duration::from_secs(1),
+            Msg::QuickMenuPowerTick,
+        ));
+    }
+    if state.desktop_sprite.is_fading() {
+        subs.push(Timer::every(
+            "desktop-sprite-fade",
+            Duration::from_millis(16),
+            Msg::DesktopSpriteFadeTick,
+        ));
+    } else if state.desktop_sprite.is_visible() {
+        subs.push(Timer::once(
+            ("desktop-sprite-blink", state.desktop_sprite.blink as u8),
+            state.desktop_sprite.blink.duration(),
+            Msg::DesktopSpriteBlinkTick,
+        ));
+        if let Some((nonce, step, dur)) = state.desktop_sprite.mouth_timer() {
+            subs.push(Timer::once(
+                ("desktop-sprite-mouth", nonce, step),
+                dur,
+                Msg::DesktopSpriteMouthTick,
+            ));
+        }
     }
     if state.has_attention_tray() {
         subs.push(Timer::every(

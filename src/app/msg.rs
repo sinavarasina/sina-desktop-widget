@@ -9,6 +9,7 @@ use super::bluetooth::BtDeviceMenuAction;
 use super::disk::DiskMenuAction;
 use super::ipc::{IpcAction, IpcTarget};
 use super::mpris::MprisControlAction;
+use super::quick_menu::PowerAction;
 #[cfg(test)]
 use super::types::TrayMenuPopup;
 use super::types::{AudioControlTarget, HoverTarget};
@@ -153,6 +154,22 @@ pub enum Msg {
     TimeTick(TimeSnapshot),
     ClockPointerDown(PointerEvent),
     ClockScroll(ScrollEvent),
+    CloseCalendar,
+    ClockMenuClick,
+    ClockMenuTick,
+    ClockMenuTimeoutCheck,
+    LogindEvent(LogindEvent),
+    QuickMenuAnimTick,
+    CloseQuickMenu,
+    QuickMenuTogglePower,
+    QuickMenuPowerAction(PowerAction),
+    QuickMenuPowerTick,
+    QuickMenuCancelPower,
+    QuickMenuSpriteClick,
+    QuickMenuSpriteReactEnd,
+    DesktopSpriteFadeTick,
+    DesktopSpriteBlinkTick,
+    DesktopSpriteMouthTick,
     Hover(HoverTarget),
     HoverAnchorX(f32),
     Leave(HoverTarget),
@@ -165,4 +182,8 @@ pub enum Msg {
     TestSetTrayMenu(TrayMenuPopup),
     #[cfg(test)]
     TestSetDrunEntries(Vec<DesktopEntry>),
+    #[cfg(test)]
+    TestLoadWallpaper,
+    #[cfg(test)]
+    TestLoadDesktopSprite,
 }

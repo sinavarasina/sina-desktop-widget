@@ -81,6 +81,7 @@ fn metric_row(line: MetricLine, fg: Color) -> Element<Msg> {
             Text::new(line.icon)
                 .font(font_ui_semibold())
                 .font_size(8.logical_px())
+                .optical_bounds(true)
                 .color(fg)
                 .position(Position::relative_to_parent(
                     Percent::new(50.0),

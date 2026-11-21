@@ -20,6 +20,7 @@ pub fn build_notif_icon(asset: Option<ImageAsset>, dnd: bool, size: f32) -> Elem
                 Text::new(if dnd { "\u{f009b}" } else { "\u{f009a}" })
                     .font(font_ui())
                     .font_size(glyph_px.logical_px())
+                    .optical_bounds(true)
                     .color(if dnd { RED } else { OVERLAY0 })
                     .position(Position::relative_to_parent(
                         Percent::new(50.0),

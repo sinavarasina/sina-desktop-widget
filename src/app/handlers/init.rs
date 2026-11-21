@@ -10,14 +10,26 @@ use waywi::system::os::{read_hostname, read_os_info, read_uptime};
 
 use crate::app::asset_lru::PathAssetCache;
 use crate::app::state::{
-    AudioControlTarget, AudioUiState, BluetoothUiState, DiskUiState, DrunState, ForegroundBooster,
-    HoverTarget, MprisState, NotificationStore, State, SysInfoState, WindowInfoState,
-    WindowScroller,
+    AudioControlTarget, AudioUiState, BluetoothUiState, DesktopSpriteState, DiskUiState,
+    DrunState, ForegroundBooster, HoverTarget, MprisState, NotificationStore, QuickMenuState,
+    State, SysInfoState, WindowInfoState, WindowScroller,
 };
-use crate::theme::GENTOO_MAUVE_SVG;
+use crate::theme::{GENTOO_MAUVE_SVG, WALLPAPER_PNG};
+
+/// Decodes the embedded wallpaper PNG and marks it `AssetRetention::ReclaimAfterPresent` so
+/// its ~33 MiB RGBA8 pixel buffer is immediately reclaimed after presenting to the compositor.
+pub fn load_embedded_wallpaper(ctx: &mut EffectCtx<'_>) -> Option<ImageAsset> {
+    let wp = ctx.load_image_bytes(WALLPAPER_PNG).ok()?;
+    let _ = ctx.set_asset_retention(wp, AssetRetention::ReclaimAfterPresent);
+    Some(wp)
+}
 
 pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
     let logo_asset = ctx.load_image_bytes_sized(GENTOO_MAUVE_SVG, 64).ok();
+    #[cfg(not(test))]
+    let wallpaper_asset = load_embedded_wallpaper(ctx);
+    #[cfg(test)]
+    let wallpaper_asset = None;
     let icon_lookup = XdgIconLookup::new();
     let path_asset_cache = PathAssetCache::default();
 
@@ -45,6 +57,8 @@ pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
 
     Ok(State {
         logo_asset,
+        wallpaper_asset,
+        desktop_sprite: DesktopSpriteState::default(),
         icon_lookup,
         path_asset_cache,
         bar_width,
@@ -84,8 +98,13 @@ pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
         bt_ui: BluetoothUiState::default(),
         now: LocalDateTime::from_system_time(SystemTime::now()),
         clock_alt: false,
+        calendar_open: false,
         cal_year_mode: false,
         cal_month_offset: 0,
+        clock_menu_target: false,
+        clock_menu_progress: 0.0,
+        clock_menu_leave_deadline: None,
+        quick_menu: QuickMenuState::default(),
         hovered: HoverTarget::None,
         hover_anchor_x: None,
         startup_hydrated: false,

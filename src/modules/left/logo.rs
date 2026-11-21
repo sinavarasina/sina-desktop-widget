@@ -17,6 +17,7 @@ pub fn build_logo(state: &State) -> Element<Msg> {
         Text::new("\u{f30d}")
             .font(font_ui())
             .font_size(14.logical_px())
+            .optical_bounds(true)
             .color(MAUVE)
             .into()
     };

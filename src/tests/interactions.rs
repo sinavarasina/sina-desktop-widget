@@ -124,16 +124,29 @@ fn audio_scroll_up_increases_and_down_decreases() {
 fn clock_interactions_toggle_alt_format_calendar_mode_and_scroll_month() {
     let mut rt = synthetic_rt();
     assert!(!rt.state().clock_alt);
+    // Hovering Clock does NOT open the calendar anymore; it reveals the Clock Menu button instead.
     assert!(rt.pointer_move_surface_point("bar", 1895.0, 12.0));
     rt.step().unwrap();
     assert_eq!(rt.state().hovered, HoverTarget::Clock);
-    assert_eq!(rt.surface_count(), 2, "floating calendar tooltip opens");
+    assert!(rt.state().clock_menu_target);
+    assert!(!rt.state().calendar_open);
+    assert_eq!(
+        rt.surface_count(),
+        1,
+        "hovering clock must not open calendar automatically"
+    );
+
+    // Middle-click on Clock opens the calendar popup.
+    assert!(rt.pointer_down_surface_point("bar", 1895.0, 12.0, MouseButton::Middle));
+    rt.step().unwrap();
+    assert!(rt.state().calendar_open);
+    assert_eq!(rt.surface_count(), 2, "calendar popup opens on middle-click");
 
     let month_size = rt
-        .surface_logical_size("bar-tooltip")
+        .surface_logical_size("bar-calendar-popup")
         .expect("month calendar size");
     assert!(month_size.width.get() < 320.0 && month_size.height.get() < 260.0);
-    if let Some(buf) = rt.rendered_buffer("bar-tooltip") {
+    if let Some(buf) = rt.rendered_buffer("bar-calendar-popup") {
         maybe_dump_argb8888_ppm(
             "calendar_month",
             month_size.width.get().round() as u32,
@@ -150,10 +163,10 @@ fn clock_interactions_toggle_alt_format_calendar_mode_and_scroll_month() {
     rt.step().unwrap();
     assert!(rt.state().cal_year_mode);
     let year_size = rt
-        .surface_logical_size("bar-tooltip")
+        .surface_logical_size("bar-calendar-popup")
         .expect("year calendar size");
     assert!(year_size.width.get() > 550.0 && year_size.height.get() > 450.0);
-    if let Some(buf) = rt.rendered_buffer("bar-tooltip") {
+    if let Some(buf) = rt.rendered_buffer("bar-calendar-popup") {
         maybe_dump_argb8888_ppm(
             "calendar_year",
             year_size.width.get().round() as u32,
@@ -167,7 +180,7 @@ fn clock_interactions_toggle_alt_format_calendar_mode_and_scroll_month() {
     rt.step().unwrap();
     assert!(!rt.state().cal_year_mode);
     let shrunk_size = rt
-        .surface_logical_size("bar-tooltip")
+        .surface_logical_size("bar-calendar-popup")
         .expect("shrunk month size");
     assert!((shrunk_size.width.get() - month_size.width.get()).abs() < 2.0);
     assert!((shrunk_size.height.get() - month_size.height.get()).abs() < 2.0);
@@ -184,9 +197,112 @@ fn clock_interactions_toggle_alt_format_calendar_mode_and_scroll_month() {
     rt.step().unwrap();
     assert_eq!(rt.state().cal_month_offset, 1);
 
-    assert!(rt.pointer_leave_surface("bar"));
+    // Middle-clicking Clock again closes the calendar popup.
+    assert!(rt.pointer_down_surface_point("bar", 1895.0, 12.0, MouseButton::Middle));
     rt.step().unwrap();
-    assert_eq!(rt.surface_count(), 1, "tooltip closes on leave");
+    assert!(!rt.state().calendar_open);
+    assert_eq!(rt.surface_count(), 1, "calendar closes on second middle-click");
+}
+
+#[test]
+fn clock_hover_reveals_menu_and_opens_quick_status_with_sprite_and_power_strip() {
+    let mut rt = synthetic_rt();
+    // Sprite assets stay lazy (not decoded) until the Quick Status popup is opened.
+    assert!(rt.state().quick_menu.sprite_assets.is_none());
+
+    // Hovering Clock animates the Powerline menu button open.
+    assert!(rt.pointer_move_surface_point("bar", 1895.0, 12.0));
+    rt.step().unwrap();
+    assert!(rt.state().clock_menu_target);
+    for _ in 0..16 {
+        rt.enqueue(Msg::ClockMenuTick);
+    }
+    rt.step().unwrap();
+    assert!((rt.state().clock_menu_progress - 1.0).abs() < 1e-4);
+
+    // Populate real logind capabilities and click the Clock Menu button.
+    rt.enqueue(Msg::LogindEvent(LogindEvent::Snapshot(LogindSnapshot {
+        power_capabilities: LogindPowerCapabilities {
+            power_off: PowerActionSupport::Yes,
+            reboot: PowerActionSupport::Yes,
+            reboot_to_firmware_setup: PowerActionSupport::Challenge,
+            suspend: PowerActionSupport::Yes,
+            hibernate: PowerActionSupport::NotAvailable,
+            hybrid_sleep: PowerActionSupport::NotAvailable,
+            suspend_then_hibernate: PowerActionSupport::NotAvailable,
+            soft_reboot: PowerActionSupport::Yes,
+            halt: PowerActionSupport::No,
+        },
+        ..LogindSnapshot::default()
+    })));
+    rt.enqueue(Msg::ClockMenuClick);
+    for _ in 0..16 {
+        rt.enqueue(Msg::QuickMenuAnimTick);
+    }
+    rt.step().unwrap();
+
+    assert!(rt.state().quick_menu.is_popup_visible());
+    assert!(
+        rt.state().quick_menu.sprite_assets.is_some(),
+        "Yuki Nagato layered sprite must lazily decode on first open"
+    );
+    assert!(rt.rendered_buffer("bar-quick-menu").is_some());
+
+    // Clicking the sprite toggles gaze and starts a one-shot mouth reaction.
+    rt.enqueue(Msg::QuickMenuSpriteClick);
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state().quick_menu.gaze,
+        crate::app::quick_menu::YukiGaze::SideGlanceViewer
+    );
+    assert!(rt.state().quick_menu.mouth_reacting);
+    rt.enqueue(Msg::QuickMenuSpriteReactEnd);
+    rt.step().unwrap();
+    assert!(!rt.state().quick_menu.mouth_reacting);
+
+    // Toggling the Power icon opens the minimalist icon-only power strip.
+    rt.enqueue(Msg::QuickMenuTogglePower);
+    rt.step().unwrap();
+    assert!(rt.state().quick_menu.power_menu_open);
+    assert_eq!(rt.state().quick_menu.supported_power_actions().len(), 6);
+    assert!(rt.rendered_buffer("bar-quick-menu").is_some());
+
+    // Clicking any power action starts a 3-second cancelable countdown instead of running immediately.
+    rt.enqueue(Msg::QuickMenuPowerAction(
+        crate::app::quick_menu::PowerAction::Reboot,
+    ));
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state().quick_menu.pending_power,
+        Some(crate::app::quick_menu::PendingPowerAction {
+            action: crate::app::quick_menu::PowerAction::Reboot,
+            seconds_left: 3,
+        })
+    );
+    assert!(rt.rendered_buffer("bar-quick-menu").is_some());
+
+    rt.enqueue(Msg::QuickMenuPowerTick);
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state()
+            .quick_menu
+            .pending_power
+            .map(|p| p.seconds_left),
+        Some(2)
+    );
+
+    // Clicking Cancel aborts the scheduled power action safely.
+    rt.enqueue(Msg::QuickMenuCancelPower);
+    rt.step().unwrap();
+    assert!(rt.state().quick_menu.pending_power.is_none());
+
+    // Closing collapses the popup cleanly.
+    rt.enqueue(Msg::CloseQuickMenu);
+    for _ in 0..16 {
+        rt.enqueue(Msg::QuickMenuAnimTick);
+    }
+    rt.step().unwrap();
+    assert!(!rt.state().quick_menu.is_popup_visible());
 }
 
 #[test]

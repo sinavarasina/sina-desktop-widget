@@ -29,7 +29,7 @@ use super::events::{
     handle_audio_scroll, handle_hypr_event, handle_tray_click, handle_tray_event,
     scroll_direction_y,
 };
-use super::ipc::handle_ipc_control;
+use super::ipc::{close_other_overlays, handle_ipc_control};
 use super::mpris::{
     handle_mpris_action, handle_mpris_bar_pointer, handle_mpris_event, handle_mpris_scroll,
     handle_mpris_seek_click,
@@ -38,6 +38,10 @@ use super::notifications::{
     handle_notif_action_click, handle_notif_action_scroll, handle_notif_bar_pointer,
     handle_notif_card_pointer, handle_notif_center_scroll, handle_notification_event,
 };
+use super::quick_menu::{
+    handle_clock_menu_click, handle_logind_event, handle_power_action, handle_power_countdown_tick,
+    handle_quick_menu_toggle_power,
+};
 
 pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Result<()> {
     match msg {
@@ -45,6 +49,7 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
             let _ = spawn_detached("footclient", &["btop"]);
         }
         Msg::SwitchWorkspace(id) => {
+            let prev_ws = state.active_ws_id;
             if let Ok(hc) = ctx.hyprland() {
                 let _ = hc.switch_workspace(id);
                 if let Ok(list) = hc.workspaces() {
@@ -56,6 +61,9 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
                     w.focused = w.id == id;
                 }
                 state.active_ws_id = id.get();
+            }
+            if prev_ws != state.active_ws_id {
+                state.desktop_sprite.rotate_instant(ctx);
             }
         }
         Msg::HyprEvent(ev) => handle_hypr_event(state, ev, ctx),
@@ -222,6 +230,8 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
         Msg::StartupHydrate => {
             if !state.startup_hydrated {
                 state.startup_hydrated = true;
+                #[cfg(not(test))]
+                state.desktop_sprite.ensure_loaded(ctx);
                 state.notifications.ensure_visible_icons(
                     0,
                     crate::theme::NOTIF_MAX_BAR_ICONS,
@@ -267,9 +277,18 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
                 .sysinfo
                 .tick_second(state.cpu.as_ref(), state.memory.as_ref());
             state.window_info.tick_second(state.booster.short_badge());
+            state.desktop_sprite.tick_second();
         }
         Msg::ClockPointerDown(ev) => match ev.button {
             Some(MouseButton::Left) => state.clock_alt = !state.clock_alt,
+            Some(MouseButton::Middle) => {
+                if state.calendar_open {
+                    state.calendar_open = false;
+                } else {
+                    close_other_overlays(state, Some("calendar"));
+                    state.calendar_open = true;
+                }
+            }
             Some(MouseButton::Right) => state.cal_year_mode = !state.cal_year_mode,
             _ => {}
         },
@@ -279,6 +298,36 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
                 state.cal_month_offset = (state.cal_month_offset - step).clamp(-120, 120);
             }
         }
+        Msg::CloseCalendar => {
+            state.calendar_open = false;
+        }
+        Msg::ClockMenuClick => handle_clock_menu_click(state, ctx),
+        Msg::ClockMenuTick => state.step_clock_menu_animation(),
+        Msg::ClockMenuTimeoutCheck => state.expire_clock_menu_leave(),
+        Msg::LogindEvent(ev) => handle_logind_event(state, ev),
+        Msg::QuickMenuAnimTick => {
+            state.quick_menu.step_popup_animation();
+            if !state.quick_menu.is_popup_visible() {
+                state.quick_menu.evict_sprite_pixels(ctx);
+            }
+        }
+        Msg::CloseQuickMenu => {
+            state.quick_menu.close_popup();
+            if !state.hovered.is_clock_group() {
+                state.clock_menu_target = false;
+            }
+        }
+        Msg::QuickMenuTogglePower => handle_quick_menu_toggle_power(state, ctx),
+        Msg::QuickMenuPowerAction(action) => handle_power_action(state, action),
+        Msg::QuickMenuPowerTick => handle_power_countdown_tick(state, ctx),
+        Msg::QuickMenuCancelPower => state.quick_menu.cancel_power_countdown(),
+        Msg::QuickMenuSpriteClick => state.quick_menu.interact_sprite(),
+        Msg::QuickMenuSpriteReactEnd => {
+            state.quick_menu.mouth_reacting = false;
+        }
+        Msg::DesktopSpriteFadeTick => state.desktop_sprite.step_fade(ctx),
+        Msg::DesktopSpriteBlinkTick => state.desktop_sprite.step_blink(),
+        Msg::DesktopSpriteMouthTick => state.desktop_sprite.step_mouth(),
         Msg::Hover(target) => state.update_hover(target, true),
         Msg::HoverAnchorX(x) => {
             if state
@@ -305,6 +354,16 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
             state.drun.entries = entries;
             state.drun.scanned = true;
             state.drun.refresh_matches();
+        }
+        #[cfg(test)]
+        Msg::TestLoadWallpaper => {
+            if state.wallpaper_asset.is_none() {
+                state.wallpaper_asset = super::init::load_embedded_wallpaper(ctx);
+            }
+        }
+        #[cfg(test)]
+        Msg::TestLoadDesktopSprite => {
+            state.desktop_sprite.ensure_loaded(ctx);
         }
     }
     Ok(())

@@ -43,7 +43,16 @@ pub fn build_calendar_tooltip_surface(state: &State) -> Surface<Msg> {
         .child(grid_rows);
 
     let card = Group::new()
+        .key("calendar-popup-card")
         .size(Size::auto())
+        .on_pointer_down(|ev| {
+            if ev.button == Some(MouseButton::Right) {
+                Msg::ClockPointerDown(ev)
+            } else {
+                Msg::Noop
+            }
+        })
+        .on_scroll(Msg::ClockScroll)
         .child(
             Rect::new()
                 .size(Size::fill())
@@ -53,7 +62,7 @@ pub fn build_calendar_tooltip_surface(state: &State) -> Surface<Msg> {
         )
         .child(content);
 
-    Surface::floating("bar-tooltip", Output::Primary)
+    Surface::floating("bar-calendar-popup", Output::Primary)
         .layer(Layer::Overlay)
         .ignore_exclusive_zone()
         .anchor(Anchor::Top | Anchor::Right)
@@ -62,9 +71,16 @@ pub fn build_calendar_tooltip_surface(state: &State) -> Surface<Msg> {
             8.logical_px(),
         ))
         .size(Size::auto())
-        .input_mode(InputMode::PassThrough)
-        .keyboard_interactivity(KeyboardInteractivity::None)
+        .input_mode(InputMode::Full)
+        .keyboard_interactivity(KeyboardInteractivity::OnDemand)
         .background(Color::TRANSPARENT)
+        .on_key(|ev| {
+            if ev.key == Key::Escape {
+                Some(Msg::CloseCalendar)
+            } else {
+                None
+            }
+        })
         .child(card)
 }
 

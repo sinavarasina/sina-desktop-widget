@@ -4,7 +4,7 @@ use waywi::prelude::*;
 
 use crate::app::state::{HoverTarget, Msg, State};
 use crate::modules::{clock, drawer, mpris, tray};
-use crate::theme::{BAR_HEIGHT, CRUST, MANTLE, SURFACE0};
+use crate::theme::{BAR_HEIGHT, MANTLE, SURFACE0};
 use crate::widgets::metric::{MetricModuleConfig, metric_module};
 use crate::widgets::separators::{SepShape, separator};
 
@@ -95,11 +95,5 @@ pub fn build_right_modules(state: &State) -> Row<Msg> {
             SURFACE0,
             Color::TRANSPARENT,
         ))
-        .child(separator(
-            "sep-r-4",
-            SepShape::ArrowL,
-            CRUST,
-            Color::TRANSPARENT,
-        ))
-        .child(clock::build_clock(state))
+        .child(clock::build_clock_group(state))
 }

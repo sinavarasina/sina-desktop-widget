@@ -20,6 +20,8 @@ pub enum IpcTarget {
     Bluetooth,
     Disk,
     Mpris,
+    QuickMenu,
+    Calendar,
     All,
 }
 
@@ -52,6 +54,8 @@ pub fn parse_ipc_command(raw: &str) -> Option<Msg> {
         "bluetooth" | "bt" => IpcTarget::Bluetooth,
         "disk" | "disks" | "udisks" | "storage" => IpcTarget::Disk,
         "mpris" | "media" | "player" => IpcTarget::Mpris,
+        "quick" | "quickmenu" | "menu" | "power" => IpcTarget::QuickMenu,
+        "calendar" | "cal" => IpcTarget::Calendar,
         "all" => IpcTarget::All,
         _ => return None,
     };

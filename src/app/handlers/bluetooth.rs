@@ -266,6 +266,8 @@ pub fn handle_dbus_action_result(state: &mut State, res: DbusActionResult) {
         {
             state.apply_disk_mounts(mounts);
         }
+    } else if res.target.starts_with("/org/freedesktop/login1") {
+        state.quick_menu.power_error = res.error.map(|e| clean_dbus_error(&e));
     }
 }
 

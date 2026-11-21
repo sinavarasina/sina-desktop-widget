@@ -245,6 +245,7 @@ fn build_app_slot(
                 Text::new("\u{f135}")
                     .font(font_ui())
                     .font_size(11.logical_px())
+                    .optical_bounds(true)
                     .color(if is_selected { MAUVE } else { OVERLAY0 })
                     .position(Position::relative_to_parent(
                         Percent::new(50.0),

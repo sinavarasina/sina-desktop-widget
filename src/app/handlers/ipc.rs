@@ -6,6 +6,7 @@ use crate::app::ipc::{IpcAction, IpcTarget};
 use crate::app::state::State;
 
 use super::drun::resolve_visible_drun_icons;
+use super::quick_menu::refresh_power_capabilities_if_empty;
 
 /// Closes all overlay popups except the named `keep` slot so overlays never collide.
 pub fn close_other_overlays(state: &mut State, keep: Option<&str>) {
@@ -26,6 +27,15 @@ pub fn close_other_overlays(state: &mut State, keep: Option<&str>) {
     }
     if keep != Some("volume") {
         state.audio_ui.close_popup();
+    }
+    if keep != Some("calendar") {
+        state.calendar_open = false;
+    }
+    if keep != Some("quick_menu") {
+        state.quick_menu.close_popup();
+        if !state.hovered.is_clock_group() {
+            state.clock_menu_target = false;
+        }
     }
 }
 
@@ -123,6 +133,30 @@ pub fn handle_ipc_control(
                 state.mpris.toggle_popup();
             } else {
                 state.mpris.close_popup();
+            }
+        }
+        IpcTarget::QuickMenu => {
+            let next = resolve_next(state.quick_menu.popup_target, action);
+            if next {
+                close_other_overlays(state, Some("quick_menu"));
+                refresh_power_capabilities_if_empty(state, ctx);
+                state.quick_menu.open_popup(ctx);
+                state.clock_menu_target = true;
+                state.clock_menu_leave_deadline = None;
+            } else {
+                state.quick_menu.close_popup();
+                if !state.hovered.is_clock_group() {
+                    state.clock_menu_target = false;
+                }
+            }
+        }
+        IpcTarget::Calendar => {
+            let next = resolve_next(state.calendar_open, action);
+            if next {
+                close_other_overlays(state, Some("calendar"));
+                state.calendar_open = true;
+            } else {
+                state.calendar_open = false;
             }
         }
     }

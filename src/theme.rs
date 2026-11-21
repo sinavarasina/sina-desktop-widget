@@ -52,6 +52,8 @@ pub const MIXER_TRACK_WIDTH: f32 = 244.0;
 pub const DRUN_INPUT_MIN_W: f32 = 132.0;
 
 pub const GENTOO_MAUVE_SVG: &[u8] = include_bytes!("../assets/logo/gentoo-mauve.svg");
+pub const WALLPAPER_PNG: &[u8] =
+    include_bytes!("../assets/wallpaper/gentoo-wallpaper-base-dark.png");
 
 // Catppuccin Mocha palette from style.css
 pub const MAUVE: Color = Color::rgb(203, 166, 247);

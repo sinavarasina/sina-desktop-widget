@@ -442,6 +442,7 @@ fn build_device_row(state: &State, dev: &BluetoothDevice, idx: usize) -> Element
                     })
                     .font(font_ui())
                     .font_size(12.logical_px())
+                    .optical_bounds(true)
                     .color(if dev.connected { MAUVE } else { OVERLAY0 }),
                 )
                 .child(
@@ -463,6 +464,7 @@ fn build_device_row(state: &State, dev: &BluetoothDevice, idx: usize) -> Element
                     Text::new("\u{f00c}")
                         .font(font_ui())
                         .font_size(9.logical_px())
+                        .optical_bounds(true)
                         .color(MAUVE)
                         .visible(dev.trusted),
                 ),
@@ -539,6 +541,7 @@ fn build_device_menu(state: &State, dev: &BluetoothDevice, idx: usize) -> Elemen
                     })
                     .font(font_ui())
                     .font_size(12.logical_px())
+                    .optical_bounds(true)
                     .color(if dev.connected { MAUVE } else { OVERLAY0 }),
                 )
                 .child(

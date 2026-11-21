@@ -12,16 +12,26 @@ use waywi::prelude::*;
 use crate::app::state::{Msg, State};
 use crate::theme::BAR_HEIGHT;
 use crate::widgets::bluetooth_popup::build_bluetooth_popup_surface;
+use crate::widgets::calendar::build_calendar_tooltip_surface;
+use crate::widgets::desktop_sprite::build_desktop_sprite_surface;
 use crate::widgets::disk_popup::build_disk_popup_surface;
 use crate::widgets::drun_bar::build_drun_surface;
 use crate::widgets::mixer_popup::build_mixer_popup_surface;
 use crate::widgets::mpris_popup::build_mpris_popup_surface;
 use crate::widgets::notification_center::build_notification_center_surface;
+use crate::widgets::quick_menu::build_quick_menu_surface;
 use crate::widgets::tooltip::build_tooltip_surface;
 use crate::widgets::tray_menu::build_tray_menu_surface;
+use crate::widgets::wallpaper::build_wallpaper_surface;
 
 pub fn build_surfaces(state: &State) -> Surfaces<Msg> {
     let mut surfaces = Surfaces::new();
+    if let Some(wp) = state.wallpaper_asset {
+        surfaces.push(build_wallpaper_surface(wp));
+    }
+    if let Some(sprite) = build_desktop_sprite_surface(state) {
+        surfaces.push(sprite);
+    }
     surfaces.push(build_main_panel(state));
     if let Some(tip) = build_tooltip_surface(state) {
         surfaces.push(tip);
@@ -43,6 +53,12 @@ pub fn build_surfaces(state: &State) -> Surfaces<Msg> {
     }
     if state.audio_ui.is_popup_visible() {
         surfaces.push(build_mixer_popup_surface(state));
+    }
+    if state.calendar_open {
+        surfaces.push(build_calendar_tooltip_surface(state));
+    }
+    if state.quick_menu.is_popup_visible() {
+        surfaces.push(build_quick_menu_surface(state));
     }
     if state.drun.is_visible() {
         surfaces.push(build_drun_surface(state));

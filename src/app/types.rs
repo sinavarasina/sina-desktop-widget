@@ -2,6 +2,8 @@
 
 use waywi::prelude::*;
 
+use super::quick_menu::PowerAction;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AudioControlTarget {
     #[default]
@@ -64,7 +66,12 @@ pub enum HoverTarget {
     Temp,
     Disk,
     Bluetooth,
+    ClockMenu,
     Clock,
+    QuickPowerToggle,
+    QuickPowerAction(PowerAction),
+    QuickPowerCancel,
+    QuickSprite,
 }
 
 impl HoverTarget {
@@ -74,6 +81,11 @@ impl HoverTarget {
             self,
             Self::ExpandSign | Self::Gpu | Self::Temp | Self::Disk | Self::Bluetooth
         )
+    }
+
+    #[must_use]
+    pub const fn is_clock_group(self) -> bool {
+        matches!(self, Self::Clock | Self::ClockMenu)
     }
 
     #[must_use]

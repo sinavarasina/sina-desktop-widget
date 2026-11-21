@@ -13,11 +13,13 @@ use super::asset_lru::PathAssetCache;
 pub use super::audio::AudioUiState;
 pub use super::bluetooth::BluetoothUiState;
 pub use super::booster::ForegroundBooster;
+pub use super::desktop_sprite::DesktopSpriteState;
 pub use super::disk::DiskUiState;
 pub use super::drun::DrunState;
 pub use super::mpris::MprisState;
 pub use super::msg::Msg;
 pub use super::notifications::NotificationStore;
+pub use super::quick_menu::QuickMenuState;
 pub use super::scroller::WindowScroller;
 pub use super::sysinfo::SysInfoState;
 pub use super::telemetry::CpuPowerTracker;
@@ -30,6 +32,8 @@ pub const DRAWER_ANIM_STEP: f32 = 16.0 / 300.0;
 
 pub struct State {
     pub logo_asset: Option<ImageAsset>,
+    pub wallpaper_asset: Option<ImageAsset>,
+    pub desktop_sprite: DesktopSpriteState,
     pub icon_lookup: XdgIconLookup,
     pub path_asset_cache: PathAssetCache,
     pub bar_width: f32,
@@ -77,8 +81,13 @@ pub struct State {
 
     pub now: LocalDateTime,
     pub clock_alt: bool,
+    pub calendar_open: bool,
     pub cal_year_mode: bool,
     pub cal_month_offset: i32,
+    pub clock_menu_target: bool,
+    pub clock_menu_progress: f32,
+    pub clock_menu_leave_deadline: Option<Instant>,
+    pub quick_menu: QuickMenuState,
 
     pub hovered: HoverTarget,
     pub hover_anchor_x: Option<f32>,
@@ -103,6 +112,12 @@ impl State {
     }
 
     #[must_use]
+    pub fn is_animating_clock_menu(&self) -> bool {
+        let target = if self.clock_menu_target { 1.0 } else { 0.0 };
+        (self.clock_menu_progress - target).abs() > 0.001
+    }
+
+    #[must_use]
     pub const fn is_animating_reels(&self) -> bool {
         self.sysinfo.is_animating() || self.window_info.is_animating()
     }
@@ -120,12 +135,23 @@ impl State {
                 self.drawer_target = false;
                 self.drawer_leave_deadline = None;
             }
+            if target.is_clock_group() {
+                self.clock_menu_target = true;
+                self.clock_menu_leave_deadline = None;
+            } else if !self.quick_menu.popup_target {
+                self.clock_menu_target = false;
+                self.clock_menu_leave_deadline = None;
+            }
         } else if self.hovered == target {
             self.hovered = HoverTarget::None;
             self.hover_anchor_x = None;
             if target.is_drawer() {
                 // Brief grace avoids flicker when sliding between `expand_sign`, `disk`, and `bluetooth`.
                 self.drawer_leave_deadline = Some(Instant::now() + Duration::from_millis(120));
+            }
+            if target.is_clock_group() && !self.quick_menu.popup_target {
+                // Brief grace avoids flicker when sliding from `Clock` into `ClockMenu`.
+                self.clock_menu_leave_deadline = Some(Instant::now() + Duration::from_millis(140));
             }
         }
     }
@@ -145,6 +171,29 @@ impl State {
         self.drawer_leave_deadline = None;
         if !self.hovered.is_drawer() {
             self.drawer_target = false;
+        }
+    }
+
+    pub fn step_clock_menu_animation(&mut self) {
+        const CLOCK_MENU_STEP: f32 = 16.0 / 180.0;
+        let target = if self.clock_menu_target {
+            1.0_f32
+        } else {
+            0.0_f32
+        };
+        if (self.clock_menu_progress - target).abs() <= CLOCK_MENU_STEP {
+            self.clock_menu_progress = target;
+        } else if self.clock_menu_progress < target {
+            self.clock_menu_progress = (self.clock_menu_progress + CLOCK_MENU_STEP).min(1.0);
+        } else {
+            self.clock_menu_progress = (self.clock_menu_progress - CLOCK_MENU_STEP).max(0.0);
+        }
+    }
+
+    pub fn expire_clock_menu_leave(&mut self) {
+        self.clock_menu_leave_deadline = None;
+        if !self.hovered.is_clock_group() && !self.quick_menu.popup_target {
+            self.clock_menu_target = false;
         }
     }
 

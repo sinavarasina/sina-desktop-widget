@@ -18,12 +18,16 @@ pub fn handle_notification_event(
 ) {
     match ev {
         NotificationEvent::Received(notif) => {
+            let dnd = state.notifications.dnd;
             state.notifications.push_incoming(
                 *notif,
                 &mut state.icon_lookup,
                 &mut state.path_asset_cache,
                 ctx,
             );
+            if !dnd {
+                state.desktop_sprite.trigger_mouth_react();
+            }
         }
         NotificationEvent::ClosedByCaller { id } => {
             state.notifications.dismiss(id);

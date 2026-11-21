@@ -47,14 +47,12 @@ pub fn build_mpris(state: &State) -> Element<Msg> {
         Text::new("\u{f001}")
             .font(font_ui())
             .font_size(11.logical_px())
-            .line_height(1.0)
+            .optical_bounds(true)
             .color(icon_col)
-            .position(Position::RelativeToParent {
-                x: Percent::new(50.0),
-                y: Percent::new(50.0),
-                offset_x: (-1.0).logical_px(),
-                offset_y: 0.logical_px(),
-            })
+            .position(Position::relative_to_parent(
+                Percent::new(50.0),
+                Percent::new(50.0),
+            ))
             .anchor(ElementAnchor::Center)
             .into()
     };

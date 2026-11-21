@@ -71,6 +71,7 @@ pub fn build_notification_segment(state: &State) -> Element<Msg> {
             Text::new("\u{f009b}")
                 .font(font_ui())
                 .font_size(12.logical_px())
+                .optical_bounds(true)
                 .color(RED),
         );
     }

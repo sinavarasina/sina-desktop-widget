@@ -258,6 +258,7 @@ fn build_system_card(state: &State, sys_blocks: &[&UDisksBlockDevice]) -> (Eleme
                     Text::new("\u{f071}")
                         .font(font_ui())
                         .font_size(10.5.logical_px())
+                        .optical_bounds(true)
                         .color(RED),
                 )
                 .child(
@@ -295,20 +296,50 @@ fn build_header(
 ) -> Element<Msg> {
     let mounted_cnt = user_blocks.iter().filter(|b| b.is_mounted()).count();
 
-    let refresh_btn = header_btn(
-        "disk-refresh-btn",
-        "\u{f021} Refresh",
-        HoverTarget::DiskRefresh,
-        state.hovered == HoverTarget::DiskRefresh,
-        false,
-        MAUVE,
-        Msg::DiskRefresh,
-    );
+    let refresh_hovered = state.hovered == HoverTarget::DiskRefresh;
+    let refresh_btn = Group::new()
+        .key("disk-refresh-btn")
+        .size(Size::px(24.logical_px(), 24.logical_px()))
+        .position(Position::relative_to_parent(
+            Percent::new(100.0),
+            Percent::new(50.0),
+        ))
+        .anchor(ElementAnchor::CenterRight)
+        .on_hover(Msg::Hover(HoverTarget::DiskRefresh))
+        .on_leave(Msg::Leave(HoverTarget::DiskRefresh))
+        .on_click(Msg::DiskRefresh)
+        .child(
+            Rect::new()
+                .size(Size::fill())
+                .fill(if refresh_hovered { SURFACE0 } else { MANTLE })
+                .corner_radius(0.logical_px())
+                .border(
+                    1.logical_px(),
+                    if refresh_hovered { MAUVE } else { SURFACE1 },
+                ),
+        )
+        .child(
+            Text::new("\u{f021}")
+                .font(font_ui())
+                .font_size(11.logical_px())
+                .optical_bounds(true)
+                .color(if refresh_hovered { MAUVE } else { SUBTEXT1 })
+                .position(Position::relative_to_parent(
+                    Percent::new(50.0),
+                    Percent::new(50.0),
+                ))
+                .anchor(ElementAnchor::Center),
+        );
 
-    let mut row = Row::new()
-        .size(Size::new(Length::Fill, DISK_HEADER_HEIGHT.logical_px()))
+    let mut left_row = Row::new()
+        .size(Size::new(Length::Auto, DISK_HEADER_HEIGHT.logical_px()))
         .gap(8.logical_px())
         .align(Align::Center)
+        .position(Position::relative_to_parent(
+            Percent::new(0.0),
+            Percent::new(50.0),
+        ))
+        .anchor(ElementAnchor::CenterLeft)
         .child(
             Text::new(format!(
                 "\u{f0a0} Disks ({mounted_cnt}/{})",
@@ -320,13 +351,9 @@ fn build_header(
         );
 
     if sys_count > 0 {
-        row = row.child(header_btn(
+        left_row = left_row.child(header_btn(
             "disk-sys-toggle-btn",
-            if state.disk_ui.show_system {
-                "System On"
-            } else {
-                "System"
-            },
+            "System",
             HoverTarget::DiskSystemToggle,
             state.hovered == HoverTarget::DiskSystemToggle,
             state.disk_ui.show_system,
@@ -335,7 +362,11 @@ fn build_header(
         ));
     }
 
-    row.child(refresh_btn).into()
+    Group::new()
+        .size(Size::new(Length::Fill, DISK_HEADER_HEIGHT.logical_px()))
+        .child(left_row)
+        .child(refresh_btn)
+        .into()
 }
 
 fn build_unlock_bar(state: &State) -> Element<Msg> {
@@ -380,6 +411,7 @@ fn build_unlock_bar(state: &State) -> Element<Msg> {
                     Text::new("\u{f023}")
                         .font(font_ui())
                         .font_size(11.logical_px())
+                        .optical_bounds(true)
                         .color(MAUVE),
                 )
                 .child(
@@ -606,6 +638,7 @@ fn build_device_row(state: &State, block: &UDisksBlockDevice, idx: usize) -> Ele
                     Text::new(icon)
                         .font(font_ui())
                         .font_size(12.logical_px())
+                        .optical_bounds(true)
                         .color(if block.is_mounted() || is_removable {
                             MAUVE
                         } else {

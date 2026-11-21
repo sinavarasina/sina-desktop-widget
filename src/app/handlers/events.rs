@@ -44,7 +44,7 @@ fn refresh_active_client(state: &mut State, ctx: &EffectCtx<'_>) {
     }
 }
 
-pub fn handle_hypr_event(state: &mut State, ev: HyprlandEvent, ctx: &EffectCtx<'_>) {
+pub fn handle_hypr_event(state: &mut State, ev: HyprlandEvent, ctx: &mut EffectCtx<'_>) {
     match ev {
         HyprlandEvent::ActiveWindow { class, title } => {
             state.scroller.set_window(class, title);
@@ -75,7 +75,11 @@ pub fn handle_hypr_event(state: &mut State, ev: HyprlandEvent, ctx: &EffectCtx<'
         | HyprlandEvent::FocusedMonitorV2 {
             workspace_id: id, ..
         } => {
+            let prev_ws = state.active_ws_id;
             state.active_ws_id = id.get();
+            if prev_ws != state.active_ws_id {
+                state.desktop_sprite.rotate_instant(ctx);
+            }
             if let Ok(hc) = ctx.hyprland() {
                 if let Ok(list) = hc.workspaces() {
                     state.workspaces = list;
