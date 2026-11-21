@@ -16,6 +16,11 @@ use super::bluetooth::{
     handle_bt_toggle_discoverable, handle_bt_toggle_power, handle_bt_toggle_scan,
     handle_dbus_action_result,
 };
+use super::disk::{
+    handle_disk_bar_pointer, handle_disk_device_menu_action, handle_disk_device_pointer,
+    handle_disk_popup_scroll, handle_disk_refresh, handle_disk_unlock_ime, handle_disk_unlock_key,
+    handle_disk_unlock_submit, handle_udisks_updated,
+};
 use super::drun::{
     handle_drun_ime, handle_drun_key, handle_drun_launch_index, handle_drun_scroll,
     handle_toggle_drun,
@@ -115,7 +120,27 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
         }
         Msg::BtPopupScroll(sc) => handle_bt_popup_scroll(state, sc),
         Msg::BtPopupAnimTick => state.bt_ui.step_popup_animation(),
+        Msg::BtPendingTick => state.bt_ui.advance_pending_tick(),
         Msg::CloseBtPopup => state.bt_ui.close_popup(),
+        Msg::UDisksUpdated(snap) => handle_udisks_updated(state, snap),
+        Msg::DiskBarPointerDown(ev) => handle_disk_bar_pointer(state, ev, ctx),
+        Msg::DiskRefresh => handle_disk_refresh(state, ctx),
+        Msg::DiskToggleSystem => state.disk_ui.toggle_show_system(),
+        Msg::DiskDevicePointerDown { path, ev } => {
+            handle_disk_device_pointer(state, path, ev, ctx);
+        }
+        Msg::DiskDeviceMenuAction { path, action } => {
+            handle_disk_device_menu_action(state, path, action, ctx);
+        }
+        Msg::DiskUnlockKey(ev) => handle_disk_unlock_key(state, ev, ctx),
+        Msg::DiskUnlockIme(ev) => handle_disk_unlock_ime(state, ev, ctx),
+        Msg::DiskUnlockSubmit => handle_disk_unlock_submit(state, ctx),
+        Msg::DiskUnlockCancel => state.disk_ui.close_unlock_prompt(),
+        Msg::DiskPopupScroll(sc) => handle_disk_popup_scroll(state, sc),
+        Msg::DiskPopupAnimTick => state.disk_ui.step_popup_animation(),
+        Msg::DiskPendingTick => state.disk_ui.advance_pending_tick(),
+        Msg::DiskMarqueeTick => state.disk_ui.advance_marquee(),
+        Msg::CloseDiskPopup => state.disk_ui.close_popup(),
         Msg::Noop => {}
         Msg::TrayEvent(ev) => handle_tray_event(state, *ev, ctx),
         Msg::TrayClick { index, ev } => handle_tray_click(state, index, ev, ctx),
@@ -183,6 +208,43 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
         Msg::SensorsSampled(sensors) => {
             state.cpu_temp_celsius = crate::app::telemetry::pick_cpu_temperature(&sensors);
         }
+        Msg::UptimeSampled(snap) => {
+            state.sysinfo.uptime = Some(snap);
+        }
+        Msg::ReelAnimTick => {
+            state
+                .sysinfo
+                .step_animation(state.cpu.as_ref(), state.memory.as_ref());
+            state
+                .window_info
+                .step_animation(state.booster.short_badge());
+        }
+        Msg::StartupHydrate => {
+            if !state.startup_hydrated {
+                state.startup_hydrated = true;
+                state.notifications.ensure_visible_icons(
+                    0,
+                    crate::theme::NOTIF_MAX_BAR_ICONS,
+                    &mut state.icon_lookup,
+                    &mut state.path_asset_cache,
+                    ctx,
+                );
+                if state
+                    .window_info
+                    .client
+                    .as_ref()
+                    .is_some_and(|c| c.content_type.is_none())
+                {
+                    state.drun.ensure_scanned();
+                    state.window_info.refresh_category(&state.drun.entries);
+                }
+                state.booster.on_focus_change(
+                    state.window_info.cgroup.as_ref(),
+                    state.memory.as_ref(),
+                    ctx,
+                );
+            }
+        }
         Msg::MemorySampled(snap) => {
             state.memory = Some(snap);
         }
@@ -196,10 +258,15 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
             state.nm = Some(snap);
         }
         Msg::BluetoothUpdated(snap) => {
+            state.bt_ui.clear_settled_pending(&snap);
             state.bluetooth = snap;
         }
         Msg::TimeTick(snap) => {
             state.update_clock_from_system(snap.wall_clock);
+            state
+                .sysinfo
+                .tick_second(state.cpu.as_ref(), state.memory.as_ref());
+            state.window_info.tick_second(state.booster.short_badge());
         }
         Msg::ClockPointerDown(ev) => match ev.button {
             Some(MouseButton::Left) => state.clock_alt = !state.clock_alt,
@@ -213,6 +280,14 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
             }
         }
         Msg::Hover(target) => state.update_hover(target, true),
+        Msg::HoverAnchorX(x) => {
+            if state
+                .hover_anchor_x
+                .is_none_or(|prev| (prev - x).abs() > 0.5)
+            {
+                state.hover_anchor_x = Some(x);
+            }
+        }
         Msg::Leave(target) => state.update_hover(target, false),
         Msg::DrawerTick => state.step_drawer_animation(),
         Msg::DrawerTimeoutCheck => state.expire_drawer_leave(),

@@ -4,11 +4,11 @@ use waywi::prelude::*;
 
 use crate::app::mpris::MprisControlAction;
 use crate::app::state::{HoverTarget, Msg, State};
-use crate::widgets::text::{format_artist_album, marquee_slice};
 use crate::theme::{
     CRUST, MANTLE, MAUVE, MPRIS_POPUP_WIDTH, SUBTEXT1, SURFACE0, SURFACE1, TEXT, font_ui,
     font_ui_bold,
 };
+use crate::widgets::text::{format_artist_album, marquee_slice};
 
 const ART_POPUP_SIZE: f32 = 52.0;
 const META_TEXT_WIDTH: f32 = 232.0;

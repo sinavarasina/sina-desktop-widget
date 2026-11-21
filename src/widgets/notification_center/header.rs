@@ -3,9 +3,7 @@
 use waywi::prelude::*;
 
 use crate::app::state::{HoverTarget, Msg, State};
-use crate::theme::{
-    MANTLE, MAUVE, RED, SUBTEXT1, SURFACE0, font_ui_bold, font_ui_semibold,
-};
+use crate::theme::{MANTLE, MAUVE, RED, SUBTEXT1, SURFACE0, font_ui_bold, font_ui_semibold};
 
 pub const HEADER_HEIGHT: f32 = 34.0;
 
@@ -86,10 +84,13 @@ pub fn build_header(state: &State) -> Element<Msg> {
         .align(Align::Center)
         .gap(8.logical_px())
         .child(
-            Text::new(format!("Notifications ({})", state.notifications.total_count))
-                .font(font_ui_bold())
-                .font_size(12.logical_px())
-                .color(MAUVE),
+            Text::new(format!(
+                "Notifications ({})",
+                state.notifications.total_count
+            ))
+            .font(font_ui_bold())
+            .font_size(12.logical_px())
+            .color(MAUVE),
         )
         .child(dnd_btn)
         .child(clear_btn)

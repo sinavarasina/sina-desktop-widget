@@ -2,6 +2,7 @@
 
 mod audio;
 mod bluetooth;
+mod disk;
 mod drun;
 mod events;
 mod init;

@@ -136,19 +136,110 @@ impl State {
 
     #[must_use]
     pub fn disk_metric(&self) -> ModuleMetric {
-        ModuleMetric {
-            lines: vec![
-                MetricLine::new("\u{f0a0}", format!("{:>5.1}G Used", self.disk_used_gb)),
-                MetricLine::new("\u{f0a0}", format!("{:>5.1}G Free", self.disk_free_gb)),
-            ],
-            tooltip: format!(
+        let selected_mount = self
+            .disk_mounts
+            .get(self.disk_ui.selected_mount_idx)
+            .or_else(|| {
+                self.disk_mounts
+                    .iter()
+                    .find(|m| m.mount_point.as_os_str() == "/")
+            })
+            .or_else(|| self.disk_mounts.first());
+
+        let selected_path = selected_mount
+            .map(|m| m.mount_point.to_string_lossy().into_owned())
+            .unwrap_or_else(|| String::from("/"));
+
+        let line1 = if selected_path == "/" || self.disk_mounts.len() <= 1 {
+            format!("{:>5.1}G Used", self.disk_used_gb)
+        } else {
+            let short = selected_mount
+                .and_then(|m| m.mount_point.file_name())
+                .map(|s| s.to_string_lossy())
+                .unwrap_or(std::borrow::Cow::Borrowed(&selected_path));
+            let short_trunc: String = short.chars().take(5).collect();
+            format!("{:>5.1}G /{short_trunc}", self.disk_used_gb)
+        };
+        let line2 = format!("{:>5.1}G Free", self.disk_free_gb);
+
+        let mut tip = if let Some(m) = selected_mount {
+            format!(
+                "Path: {} ({} · {})\nTotal: {:.1} GB\nUsed: {:.1} GB ({:.0}%)\nFree: {:.1} GB ({:.0}%)",
+                selected_path,
+                m.device,
+                m.fs_type,
+                self.disk_total_gb,
+                self.disk_used_gb,
+                self.disk_pct_used,
+                self.disk_free_gb,
+                self.disk_pct_free
+            )
+        } else {
+            format!(
                 "Path: /\nTotal: {:.1} GB\nUsed: {:.1} GB ({:.0}%)\nFree: {:.1} GB ({:.0}%)",
                 self.disk_total_gb,
                 self.disk_used_gb,
                 self.disk_pct_used,
                 self.disk_free_gb,
                 self.disk_pct_free
-            ),
+            )
+        };
+
+        if self.disk_mounts.len() > 1 {
+            tip.push_str("\n\nMounted Filesystems:");
+            for (idx, m) in self.disk_mounts.iter().enumerate() {
+                let marker = if idx == self.disk_ui.selected_mount_idx {
+                    "\u{25b8}"
+                } else {
+                    " "
+                };
+                const GB: f64 = 1_000_000_000.0;
+                let used = m.used.as_bytes() as f64 / GB;
+                let total = m.total.as_bytes() as f64 / GB;
+                let pct = m.usage_percent();
+                tip.push_str(&format!(
+                    "\n{marker} {} ({}) {:.1}/{:.1}GB ({pct:.0}%)",
+                    m.mount_point.display(),
+                    m.fs_type,
+                    used,
+                    total
+                ));
+            }
+        }
+
+        let removable = self.udisks.removable_volumes();
+        if !removable.is_empty() {
+            tip.push_str("\n\nRemovable / UDisks2:");
+            for b in removable {
+                let status = if let Some(op) = self.disk_ui.pending_ops.get(&b.object_path) {
+                    format!("{op}{}", self.disk_ui.pending_dots())
+                } else if b.is_mounted() {
+                    format!("mounted @ {}", b.mount_points.join(", "))
+                } else if b.is_encrypted && !b.is_unlocked() {
+                    String::from("locked (LUKS)")
+                } else {
+                    String::from("unmounted")
+                };
+                let size_gb = b.size_bytes as f64 / 1_000_000_000.0;
+                tip.push_str(&format!(
+                    "\n• {} ({:.1}GB {}) — {status}",
+                    b.display_label(),
+                    size_gb,
+                    if b.id_type.is_empty() {
+                        b.device.as_str()
+                    } else {
+                        b.id_type.as_str()
+                    }
+                ));
+            }
+        }
+
+        ModuleMetric {
+            lines: vec![
+                MetricLine::new("\u{f0a0}", line1),
+                MetricLine::new("\u{f0a0}", line2),
+            ],
+            tooltip: tip,
             inactive: false,
         }
     }

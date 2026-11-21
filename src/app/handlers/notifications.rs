@@ -80,7 +80,12 @@ pub fn handle_notif_center_scroll(state: &mut State, sc: ScrollEvent, ctx: &mut 
     );
 }
 
-pub fn handle_notif_card_pointer(state: &mut State, id: u32, ev: PointerEvent, ctx: &EffectCtx<'_>) {
+pub fn handle_notif_card_pointer(
+    state: &mut State,
+    id: u32,
+    ev: PointerEvent,
+    ctx: &EffectCtx<'_>,
+) {
     match ev.button {
         Some(MouseButton::Right) => {
             if state.notifications.dismiss(id)

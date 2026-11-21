@@ -6,11 +6,12 @@ use waywi::system::{
 };
 
 use super::bluetooth::BtDeviceMenuAction;
+use super::disk::DiskMenuAction;
 use super::ipc::{IpcAction, IpcTarget};
 use super::mpris::MprisControlAction;
-use super::types::{AudioControlTarget, HoverTarget};
 #[cfg(test)]
 use super::types::TrayMenuPopup;
+use super::types::{AudioControlTarget, HoverTarget};
 
 #[derive(Clone)]
 pub enum Msg {
@@ -78,7 +79,29 @@ pub enum Msg {
     },
     BtPopupScroll(ScrollEvent),
     BtPopupAnimTick,
+    BtPendingTick,
     CloseBtPopup,
+    UDisksUpdated(UDisksSnapshot),
+    DiskBarPointerDown(PointerEvent),
+    DiskRefresh,
+    DiskToggleSystem,
+    DiskDevicePointerDown {
+        path: String,
+        ev: PointerEvent,
+    },
+    DiskDeviceMenuAction {
+        path: String,
+        action: DiskMenuAction,
+    },
+    DiskUnlockKey(KeyEvent),
+    DiskUnlockIme(ImeEvent),
+    DiskUnlockSubmit,
+    DiskUnlockCancel,
+    DiskPopupScroll(ScrollEvent),
+    DiskPopupAnimTick,
+    DiskPendingTick,
+    DiskMarqueeTick,
+    CloseDiskPopup,
     Noop,
     TrayEvent(Box<TrayEvent>),
     TrayClick {
@@ -119,6 +142,9 @@ pub enum Msg {
     CpuSampled(CpuSnapshot),
     GpuSampled(GpuSnapshot),
     SensorsSampled(Vec<waywi::system::hardware::ThermalSensor>),
+    UptimeSampled(waywi::system::UptimeSnapshot),
+    ReelAnimTick,
+    StartupHydrate,
     MemorySampled(MemorySnapshot),
     DiskSampled(DiskSnapshot),
     NetworkSampled(NetworkSnapshot),
@@ -128,6 +154,7 @@ pub enum Msg {
     ClockPointerDown(PointerEvent),
     ClockScroll(ScrollEvent),
     Hover(HoverTarget),
+    HoverAnchorX(f32),
     Leave(HoverTarget),
     DrawerTick,
     DrawerTimeoutCheck,

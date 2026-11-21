@@ -45,7 +45,11 @@ pub fn max_notif_scroll_index(items: &[NotificationItem], screen_height: f32) ->
     start
 }
 
-fn collect_visible_cards(items: &[NotificationItem], start: usize, screen_height: f32) -> (&[NotificationItem], f32) {
+fn collect_visible_cards(
+    items: &[NotificationItem],
+    start: usize,
+    screen_height: f32,
+) -> (&[NotificationItem], f32) {
     if items.is_empty() || start >= items.len() {
         return (&[], 60.0);
     }
@@ -70,10 +74,10 @@ pub fn build_notification_center_surface(state: &State) -> Surface<Msg> {
     let p = state.notifications.center_progress.clamp(0.0, 1.0);
     let ease = 1.0 - (1.0 - p).powi(3);
 
-    let start = state
-        .notifications
-        .scroll_index
-        .min(max_notif_scroll_index(&state.notifications.items, state.screen_height));
+    let start = state.notifications.scroll_index.min(max_notif_scroll_index(
+        &state.notifications.items,
+        state.screen_height,
+    ));
     let (visible_slice, body_height) =
         collect_visible_cards(&state.notifications.items, start, state.screen_height);
 

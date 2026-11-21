@@ -4,11 +4,11 @@ use waywi::prelude::*;
 
 use crate::app::bluetooth::BtDeviceMenuAction;
 use crate::app::state::{HoverTarget, Msg, State};
-use crate::widgets::text::marquee_slice;
 use crate::theme::{
     BAR_HEIGHT, BLUE, CRUST, GREEN, MANTLE, MAUVE, NOTIF_CENTER_TOP_MARGIN, OVERLAY0, RED,
     SUBTEXT1, SURFACE0, SURFACE1, TEXT, font_ui, font_ui_bold, font_ui_semibold,
 };
+use crate::widgets::text::marquee_slice;
 
 const BT_POPUP_WIDTH: f32 = 310.0;
 const BT_HEADER_HEIGHT: f32 = 34.0;
@@ -29,9 +29,9 @@ pub fn build_bluetooth_popup_surface(state: &State) -> Surface<Msg> {
 
     let max_total_height = (state.screen_height - NOTIF_CENTER_TOP_MARGIN - 16.0).max(200.0);
     let max_body_height = (max_total_height - BT_HEADER_HEIGHT - 44.0).max(120.0);
-    let visible_slots =
-        (((max_body_height - 12.0 + BT_ROW_GAP) / (BT_ROW_HEIGHT + BT_ROW_GAP)).floor() as usize)
-            .max(1);
+    let visible_slots = (((max_body_height - 12.0 + BT_ROW_GAP) / (BT_ROW_HEIGHT + BT_ROW_GAP))
+        .floor() as usize)
+        .max(1);
 
     let mut sorted_devs: Vec<&BluetoothDevice> = state.bluetooth.devices.iter().collect();
     sorted_devs.sort_by_key(|d| (!d.connected, !d.paired, d.alias.as_str()));
@@ -144,7 +144,10 @@ pub fn build_bluetooth_popup_surface(state: &State) -> Surface<Msg> {
 
     let animated_box = Clip::new(box_group)
         .key("bluetooth-popup-box")
-        .position(Position::absolute(left_x.logical_px(), animated_y.logical_px()))
+        .position(Position::absolute(
+            left_x.logical_px(),
+            animated_y.logical_px(),
+        ))
         .size(Size::new(
             BT_POPUP_WIDTH.logical_px(),
             animated_h.logical_px(),
@@ -319,14 +322,24 @@ fn build_prompt_banner(request_id: u64, label: &str) -> Element<Msg> {
                 .font_size(10.5.logical_px())
                 .color(TEXT),
         )
-        .child(prompt_btn("bt-accept", "Accept", MAUVE, Msg::BtAgentDecision {
-            request_id,
-            accept: true,
-        }))
-        .child(prompt_btn("bt-reject", "Reject", RED, Msg::BtAgentDecision {
-            request_id,
-            accept: false,
-        }))
+        .child(prompt_btn(
+            "bt-accept",
+            "Accept",
+            MAUVE,
+            Msg::BtAgentDecision {
+                request_id,
+                accept: true,
+            },
+        ))
+        .child(prompt_btn(
+            "bt-reject",
+            "Reject",
+            RED,
+            Msg::BtAgentDecision {
+                request_id,
+                accept: false,
+            },
+        ))
         .into()
 }
 
@@ -358,8 +371,11 @@ fn prompt_btn(key: &'static str, label: &'static str, col: Color, msg: Msg) -> E
 
 fn build_device_row(state: &State, dev: &BluetoothDevice, idx: usize) -> Element<Msg> {
     let hovered = state.hovered == HoverTarget::BtDevice(idx);
+    let pending_op = state.bt_ui.pending_ops.get(&dev.object_path).copied();
     let bg = if hovered { SURFACE0 } else { MANTLE };
-    let border_col = if dev.connected {
+    let border_col = if pending_op.is_some() {
+        MAUVE
+    } else if dev.connected {
         BLUE
     } else if dev.paired {
         SURFACE1
@@ -376,7 +392,9 @@ fn build_device_row(state: &State, dev: &BluetoothDevice, idx: usize) -> Element
     };
     let name_text = marquee_slice(raw_name, 22, state.mpris.marquee_tick);
 
-    let status_text = if dev.connected {
+    let status_text = if let Some(op) = pending_op {
+        format!("{op}{}", state.bt_ui.pending_dots())
+    } else if dev.connected {
         dev.battery_percentage
             .map_or_else(|| String::from("connected"), |b| format!("connected {b}%"))
     } else if dev.paired {
@@ -384,7 +402,11 @@ fn build_device_row(state: &State, dev: &BluetoothDevice, idx: usize) -> Element
     } else {
         String::from("pair")
     };
-    let status_col = if dev.connected { MAUVE } else { SUBTEXT1 };
+    let status_col = if pending_op.is_some() || dev.connected {
+        MAUVE
+    } else {
+        SUBTEXT1
+    };
 
     let path = dev.object_path.clone();
     Group::new()
@@ -413,10 +435,14 @@ fn build_device_row(state: &State, dev: &BluetoothDevice, idx: usize) -> Element
                 .gap(8.logical_px())
                 .align(Align::Center)
                 .child(
-                    Text::new(if dev.connected { "\u{f00b1}" } else { "\u{f294}" })
-                        .font(font_ui())
-                        .font_size(12.logical_px())
-                        .color(if dev.connected { MAUVE } else { OVERLAY0 }),
+                    Text::new(if dev.connected {
+                        "\u{f00b1}"
+                    } else {
+                        "\u{f294}"
+                    })
+                    .font(font_ui())
+                    .font_size(12.logical_px())
+                    .color(if dev.connected { MAUVE } else { OVERLAY0 }),
                 )
                 .child(
                     Clip::new(
@@ -448,7 +474,10 @@ fn build_device_row(state: &State, dev: &BluetoothDevice, idx: usize) -> Element
 /// marquee so the device is identifiable, plus Connect / Trust / Forget pill buttons using the
 /// same geometry and hover behavior as the header toggles, each with its own accent color.
 fn build_device_menu(state: &State, dev: &BluetoothDevice, idx: usize) -> Element<Msg> {
-    let connect_label: &'static str = if dev.connected {
+    let pending_op = state.bt_ui.pending_ops.get(&dev.object_path).copied();
+    let connect_label: &'static str = if let Some(op) = pending_op {
+        op
+    } else if dev.connected {
         "Disconnect"
     } else if dev.paired {
         "Connect"
@@ -503,10 +532,14 @@ fn build_device_menu(state: &State, dev: &BluetoothDevice, idx: usize) -> Elemen
                 .gap(4.logical_px())
                 .align(Align::Center)
                 .child(
-                    Text::new(if dev.connected { "\u{f00b1}" } else { "\u{f294}" })
-                        .font(font_ui())
-                        .font_size(12.logical_px())
-                        .color(if dev.connected { MAUVE } else { OVERLAY0 }),
+                    Text::new(if dev.connected {
+                        "\u{f00b1}"
+                    } else {
+                        "\u{f294}"
+                    })
+                    .font(font_ui())
+                    .font_size(12.logical_px())
+                    .color(if dev.connected { MAUVE } else { OVERLAY0 }),
                 )
                 .child(
                     Clip::new(

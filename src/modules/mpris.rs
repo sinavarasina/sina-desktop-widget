@@ -162,4 +162,3 @@ pub fn build_mpris(state: &State) -> Element<Msg> {
 
     row.into()
 }
-

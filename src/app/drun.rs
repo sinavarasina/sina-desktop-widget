@@ -89,8 +89,7 @@ impl DrunState {
     pub fn remeasure_input(&mut self, ctx: &mut EffectCtx<'_>) {
         let display = self.input.display_text();
         let cursor_byte = self.input.display_cursor_bytes();
-        let metrics =
-            ctx.measure_text_cursor(&display, &font_ui(), 11.5.logical_px(), cursor_byte);
+        let metrics = ctx.measure_text_cursor(&display, &font_ui(), 11.5.logical_px(), cursor_byte);
         self.measured_text_w = metrics.size.width.get();
         self.cursor_x = metrics.cursor_x.get();
     }
@@ -158,7 +157,11 @@ impl DrunState {
         path_cache: &mut PathAssetCache,
         ctx: &mut EffectCtx<'_>,
     ) -> Option<ImageAsset> {
-        let icon_name = entry.icon.as_deref().map(str::trim).filter(|s| !s.is_empty())?;
+        let icon_name = entry
+            .icon
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())?;
         let sig = format!("drun-icon:{icon_name}");
         if let Some(&cached) = path_cache.get(&sig) {
             return Some(cached);

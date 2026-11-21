@@ -85,12 +85,19 @@ pub fn build_notification_card(state: &State, item: &NotificationItem) -> Elemen
     } else {
         item.stored.summary.as_str()
     };
-    let summary_text = marquee_slice(raw_summary, MAX_SUMMARY_COLS, state.notifications.marquee_tick);
+    let summary_text = marquee_slice(
+        raw_summary,
+        MAX_SUMMARY_COLS,
+        state.notifications.marquee_tick,
+    );
     let app_text = marquee_slice(&item.stored.app_name, 14, state.notifications.marquee_tick);
 
     let header_row = Clip::new(
         Row::new()
-            .size(Size::new(NOTIF_CARD_TEXT_WIDTH.logical_px(), 16.logical_px()))
+            .size(Size::new(
+                NOTIF_CARD_TEXT_WIDTH.logical_px(),
+                16.logical_px(),
+            ))
             .gap(6.logical_px())
             .align(Align::Center)
             .child(
@@ -106,7 +113,10 @@ pub fn build_notification_card(state: &State, item: &NotificationItem) -> Elemen
                     .color(OVERLAY0),
             ),
     )
-    .size(Size::new(NOTIF_CARD_TEXT_WIDTH.logical_px(), 16.logical_px()));
+    .size(Size::new(
+        NOTIF_CARD_TEXT_WIDTH.logical_px(),
+        16.logical_px(),
+    ));
 
     let mut text_col = Column::new()
         .size(Size::new(NOTIF_CARD_TEXT_WIDTH.logical_px(), Length::Auto))
@@ -119,21 +129,23 @@ pub fn build_notification_card(state: &State, item: &NotificationItem) -> Elemen
         text_col = text_col.child(
             Clip::new(
                 Row::new()
-                    .size(Size::new(NOTIF_CARD_TEXT_WIDTH.logical_px(), 16.logical_px()))
+                    .size(Size::new(
+                        NOTIF_CARD_TEXT_WIDTH.logical_px(),
+                        16.logical_px(),
+                    ))
                     .align(Align::Center)
                     .child(
                         Text::new(body_text)
                             .font(font_ui())
                             .font_size(11.logical_px())
                             .line_height(1.2)
-                            .color(if item.stored.read {
-                                SUBTEXT0
-                            } else {
-                                SUBTEXT1
-                            }),
+                            .color(if item.stored.read { SUBTEXT0 } else { SUBTEXT1 }),
                     ),
             )
-            .size(Size::new(NOTIF_CARD_TEXT_WIDTH.logical_px(), 16.logical_px())),
+            .size(Size::new(
+                NOTIF_CARD_TEXT_WIDTH.logical_px(),
+                16.logical_px(),
+            )),
         );
     }
 

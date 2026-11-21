@@ -1,5 +1,7 @@
 //! Bluetooth management popup state and BlueZ pairing agent state.
 
+use std::collections::HashMap;
+
 use waywi::prelude::*;
 
 const BT_POPUP_ANIM_STEP: f32 = 16.0 / 180.0;
@@ -29,6 +31,8 @@ pub struct BluetoothUiState {
     /// Object path of the device whose context menu (Connect / Trust / Forget) is open.
     pub menu_path: Option<String>,
     pub pending_prompt: Option<PendingPairingPrompt>,
+    pub pending_ops: HashMap<String, &'static str>,
+    pub anim_tick: u32,
     pub last_error: Option<String>,
 }
 
@@ -42,6 +46,44 @@ impl BluetoothUiState {
     pub fn is_animating_popup(&self) -> bool {
         let target = if self.popup_target { 1.0 } else { 0.0 };
         (self.popup_progress - target).abs() > 0.001
+    }
+
+    #[must_use]
+    pub fn has_pending_ops(&self) -> bool {
+        !self.pending_ops.is_empty()
+    }
+
+    pub fn advance_pending_tick(&mut self) {
+        self.anim_tick = self.anim_tick.wrapping_add(1);
+    }
+
+    #[must_use]
+    pub fn pending_dots(&self) -> &'static str {
+        match self.anim_tick % 4 {
+            0 => ".",
+            1 => "..",
+            2 => "...",
+            _ => "",
+        }
+    }
+
+    pub fn set_pending(&mut self, device_path: String, label: &'static str) {
+        self.pending_ops.insert(device_path, label);
+    }
+
+    pub fn clear_settled_pending(&mut self, snap: &BluetoothSnapshot) {
+        self.pending_ops.retain(|path, op| {
+            let Some(dev) = snap.devices.iter().find(|d| d.object_path == *path) else {
+                return *op != "removing";
+            };
+            match *op {
+                "connecting" => !dev.connected,
+                "disconnecting" => dev.connected,
+                "pairing" => !dev.paired && !dev.connected,
+                "removing" => true,
+                _ => false,
+            }
+        });
     }
 
     pub fn step_popup_animation(&mut self) {
@@ -69,7 +111,11 @@ impl BluetoothUiState {
         self.last_error = None;
     }
 
-    pub fn apply_agent_event(&mut self, ev: BluetoothAgentEvent, snap: &BluetoothSnapshot) -> Option<PendingPairingPrompt> {
+    pub fn apply_agent_event(
+        &mut self,
+        ev: BluetoothAgentEvent,
+        snap: &BluetoothSnapshot,
+    ) -> Option<PendingPairingPrompt> {
         match ev {
             BluetoothAgentEvent::Request(req) => {
                 let prompt = match req {
@@ -114,7 +160,10 @@ impl BluetoothUiState {
                         device_path,
                     } => PendingPairingPrompt {
                         request_id,
-                        label: format!("PIN requested (0000) for {}", device_label(snap, &device_path)),
+                        label: format!(
+                            "PIN requested (0000) for {}",
+                            device_label(snap, &device_path)
+                        ),
                         device_path,
                         needs_pin: true,
                         needs_passkey: false,
@@ -124,7 +173,10 @@ impl BluetoothUiState {
                         device_path,
                     } => PendingPairingPrompt {
                         request_id,
-                        label: format!("Passkey requested for {}", device_label(snap, &device_path)),
+                        label: format!(
+                            "Passkey requested for {}",
+                            device_label(snap, &device_path)
+                        ),
                         device_path,
                         needs_pin: false,
                         needs_passkey: true,

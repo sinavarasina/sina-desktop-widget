@@ -1,23 +1,25 @@
-//! Initial state construction and snapshot seeding.
+//! Fast, non-blocking initial state construction; live D-Bus/PipeWire snapshots arrive
+//! asynchronously from subscriptions while heavy scans defer to `Msg::StartupHydrate`.
 
 use std::time::SystemTime;
 
-use crate::app::asset_lru::PathAssetCache;
 use waywi::desktop::icons::XdgIconLookup;
 use waywi::prelude::*;
 use waywi::system::LocalDateTime;
+use waywi::system::os::{read_hostname, read_os_info, read_uptime};
 
+use crate::app::asset_lru::PathAssetCache;
 use crate::app::state::{
-    AudioControlTarget, AudioUiState, BluetoothUiState, DrunState, HoverTarget, MprisState,
-    NotificationStore, State, TrayEntry, WindowScroller, resolve_tray_icon,
-    upsert_tray_entry_into,
+    AudioControlTarget, AudioUiState, BluetoothUiState, DiskUiState, DrunState, ForegroundBooster,
+    HoverTarget, MprisState, NotificationStore, State, SysInfoState, WindowInfoState,
+    WindowScroller,
 };
 use crate::theme::GENTOO_MAUVE_SVG;
 
 pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
     let logo_asset = ctx.load_image_bytes_sized(GENTOO_MAUVE_SVG, 64).ok();
-    let mut icon_lookup = XdgIconLookup::new();
-    let mut path_asset_cache = PathAssetCache::default();
+    let icon_lookup = XdgIconLookup::new();
+    let path_asset_cache = PathAssetCache::default();
 
     let bar_width = ctx
         .outputs()
@@ -32,19 +34,14 @@ pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
         .filter(|h| *h >= 240.0)
         .unwrap_or(1080.0);
 
-    let (workspaces, active_ws_id, scroller) = init_hyprland(ctx);
-    let audio = init_audio(ctx);
-    let nm = init_network_manager(ctx);
-    let bluetooth = init_bluetooth(ctx);
-    let tray_items = init_tray(ctx, &mut icon_lookup, &mut path_asset_cache);
-    let notifications =
-        NotificationStore::load_lazy(None, &mut icon_lookup, &mut path_asset_cache, ctx);
-    let mut mpris = MprisState::default();
-    if let Ok(dbus) = ctx.dbus()
-        && let Ok(players) = dbus.mpris_snapshots()
-    {
-        mpris.set_players(players, &mut path_asset_cache, ctx);
-    }
+    let (workspaces, active_ws_id, scroller, window_info, hypr_version) = init_hyprland(ctx);
+    let sysinfo = SysInfoState::from_waywi(
+        read_os_info().ok(),
+        read_hostname().ok(),
+        hypr_version,
+        read_uptime().ok(),
+    );
+    let notifications = NotificationStore::load_lazy(None);
 
     Ok(State {
         logo_asset,
@@ -54,14 +51,17 @@ pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
         screen_height,
         workspaces,
         active_ws_id,
+        sysinfo,
         scroller,
+        window_info,
+        booster: ForegroundBooster::default(),
         drun: DrunState::default(),
         notifications,
-        mpris,
-        tray_items,
+        mpris: MprisState::default(),
+        tray_items: Vec::new(),
         tray_menu: None,
         blink_phase: false,
-        audio,
+        audio: None,
         audio_target: AudioControlTarget::Sink,
         audio_ui: AudioUiState::default(),
         cpu: None,
@@ -71,27 +71,41 @@ pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
         gpu: None,
         memory: None,
         network: None,
-        nm,
+        nm: None,
         disk_used_gb: 0.0,
         disk_free_gb: 0.0,
         disk_total_gb: 0.0,
         disk_pct_used: 0.0,
         disk_pct_free: 0.0,
-        bluetooth,
+        disk_mounts: Vec::new(),
+        udisks: UDisksSnapshot::default(),
+        disk_ui: DiskUiState::default(),
+        bluetooth: BluetoothSnapshot::default(),
         bt_ui: BluetoothUiState::default(),
         now: LocalDateTime::from_system_time(SystemTime::now()),
         clock_alt: false,
         cal_year_mode: false,
         cal_month_offset: 0,
         hovered: HoverTarget::None,
+        hover_anchor_x: None,
+        startup_hydrated: false,
         drawer_target: false,
         drawer_progress: 0.0,
         drawer_leave_deadline: None,
     })
 }
 
-fn init_hyprland(ctx: &EffectCtx<'_>) -> (Vec<WorkspaceInfo>, i32, WindowScroller) {
+fn init_hyprland(
+    ctx: &EffectCtx<'_>,
+) -> (
+    Vec<WorkspaceInfo>,
+    i32,
+    WindowScroller,
+    WindowInfoState,
+    Option<waywi::compositor::hyprland::HyprlandVersion>,
+) {
     let mut scroller = WindowScroller::default();
+    let mut window_info = WindowInfoState::default();
     let Ok(hc) = ctx.hyprland() else {
         return (
             vec![WorkspaceInfo {
@@ -103,6 +117,8 @@ fn init_hyprland(ctx: &EffectCtx<'_>) -> (Vec<WorkspaceInfo>, i32, WindowScrolle
             }],
             1,
             scroller,
+            window_info,
+            None,
         );
     };
     let workspaces = hc.workspaces().unwrap_or_default();
@@ -110,57 +126,17 @@ fn init_hyprland(ctx: &EffectCtx<'_>) -> (Vec<WorkspaceInfo>, i32, WindowScrolle
         .iter()
         .find(|w| w.focused)
         .map_or(1, |w| w.id.get());
+    let hypr_version = hc.version().ok();
     if let Ok(Some(win)) = hc.active_client() {
-        scroller.set_window(win.class, win.title);
+        scroller.set_window(win.class.clone(), win.title.clone());
+        // Defer `.desktop` directory scanning to `Msg::StartupHydrate` after frame 1 paints.
+        window_info.set_client(Some(win), &[]);
     }
-    (workspaces, active_ws_id, scroller)
-}
-
-fn init_audio(ctx: &EffectCtx<'_>) -> Option<AudioSnapshot> {
-    ctx.audio().ok().and_then(|ac| ac.snapshot().ok().flatten())
-}
-
-fn init_network_manager(ctx: &EffectCtx<'_>) -> Option<NetworkManagerSnapshot> {
-    ctx.dbus()
-        .ok()
-        .and_then(|d| d.network_manager_snapshot().ok())
-}
-
-fn init_bluetooth(ctx: &EffectCtx<'_>) -> BluetoothSnapshot {
-    ctx.dbus()
-        .ok()
-        .and_then(|d| d.bluetooth_snapshot().ok())
-        .unwrap_or_default()
-}
-
-fn init_tray(
-    ctx: &mut EffectCtx<'_>,
-    lookup: &mut XdgIconLookup,
-    cache: &mut PathAssetCache,
-) -> Vec<TrayEntry> {
-    let Ok(dbus) = ctx.dbus() else {
-        return Vec::new();
-    };
-    let Ok(services) = dbus.tray_list_items() else {
-        return Vec::new();
-    };
-    let mut snapshots = Vec::new();
-    for svc in services {
-        if let Ok(snap) = dbus.tray_snapshot(&svc) {
-            snapshots.push(snap);
-        }
-    }
-    let mut entries = Vec::new();
-    for snap in snapshots {
-        let (icon, icon_signature) = resolve_tray_icon(&snap, lookup, cache, ctx);
-        upsert_tray_entry_into(
-            &mut entries,
-            TrayEntry {
-                snapshot: snap,
-                icon,
-                icon_signature,
-            },
-        );
-    }
-    entries
+    (
+        workspaces,
+        active_ws_id,
+        scroller,
+        window_info,
+        hypr_version,
+    )
 }

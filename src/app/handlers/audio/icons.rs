@@ -88,9 +88,13 @@ fn resolve_stream_icon(
     let bracket_target = extract_bracket_target(&q.name);
 
     state.drun.ensure_scanned();
-    if let Some(desktop_icon) =
-        find_desktop_icon(&state.drun.entries, q.app_id.as_deref(), bin_base, &q.name, bracket_target)
-    {
+    if let Some(desktop_icon) = find_desktop_icon(
+        &state.drun.entries,
+        q.app_id.as_deref(),
+        bin_base,
+        &q.name,
+        bracket_target,
+    ) {
         let mut icon_names = Vec::new();
         push_case_variants(&mut icon_names, &desktop_icon);
         if let Some(asset) = resolve_from_candidates(state, &icon_names, ctx) {
@@ -188,7 +192,11 @@ fn find_desktop_icon(
     for key in &keys {
         // Prefer exact desktop ID or executable basename match, then StartupWMClass, then Name.
         if let Some(icon) = entries.iter().find_map(|entry| {
-            let icon = entry.icon.as_deref().map(str::trim).filter(|s| !s.is_empty())?;
+            let icon = entry
+                .icon
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())?;
             let id_base = entry.id.strip_suffix(".desktop").unwrap_or(&entry.id);
             let id_hit = id_base.eq_ignore_ascii_case(key);
             let exec_hit = desktop_exec_key(entry).is_some_and(|ex| ex.eq_ignore_ascii_case(key))
@@ -203,7 +211,11 @@ fn find_desktop_icon(
         }
 
         if let Some(icon) = entries.iter().find_map(|entry| {
-            let icon = entry.icon.as_deref().map(str::trim).filter(|s| !s.is_empty())?;
+            let icon = entry
+                .icon
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())?;
             let wm_hit = entry
                 .startup_wm_class
                 .as_deref()

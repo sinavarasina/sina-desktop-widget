@@ -18,6 +18,7 @@ pub enum IpcTarget {
     Dnd,
     Volume,
     Bluetooth,
+    Disk,
     Mpris,
     All,
 }
@@ -49,6 +50,7 @@ pub fn parse_ipc_command(raw: &str) -> Option<Msg> {
         "dnd" => IpcTarget::Dnd,
         "volume" | "audio" | "mixer" | "vol" => IpcTarget::Volume,
         "bluetooth" | "bt" => IpcTarget::Bluetooth,
+        "disk" | "disks" | "udisks" | "storage" => IpcTarget::Disk,
         "mpris" | "media" | "player" => IpcTarget::Mpris,
         "all" => IpcTarget::All,
         _ => return None,

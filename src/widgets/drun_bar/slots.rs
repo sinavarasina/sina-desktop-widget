@@ -90,9 +90,8 @@ pub fn build_results_section(state: &State, total_w: f32) -> Element<Msg> {
     let slot_w = slots_budget / (count as f32);
 
     let first_match = state.drun.scroll_start;
-    let first_bg = slot_bg(
-        first_match == state.drun.selected || state.hovered == HoverTarget::DrunEntry(0),
-    );
+    let first_bg =
+        slot_bg(first_match == state.drun.selected || state.hovered == HoverTarget::DrunEntry(0));
     let last_slot_idx = count - 1;
     let last_bg = slot_bg(
         (state.drun.scroll_start + last_slot_idx) == state.drun.selected

@@ -28,7 +28,11 @@ pub fn build_notification_segment(state: &State) -> Element<Msg> {
         .align(Align::Center);
 
     if state.notifications.items.is_empty() {
-        content = content.child(build_notif_icon(None, state.notifications.dnd, NOTIF_ICON_SIZE));
+        content = content.child(build_notif_icon(
+            None,
+            state.notifications.dnd,
+            NOTIF_ICON_SIZE,
+        ));
     } else {
         for (idx, item) in state
             .notifications

@@ -43,9 +43,9 @@ fn workspace_click_switches_active_workspace() {
     ));
     rt.step().unwrap();
 
-    // Inactive workspace pill starts directly after `sep-l-3` (~x=96..135). Scan to hit `ws-inactive` 2.
+    // Inactive workspace pill starts after logo + compact sysinfo + active ws. Scan to hit `ws-inactive` 2.
     let mut switched = false;
-    for x in (90..150).step_by(4) {
+    for x in (140..300).step_by(4) {
         if rt.pointer_move_surface_point("bar", x as f32, 12.0) {
             rt.step().unwrap();
             if rt.state().hovered == HoverTarget::InactiveWs(2) {
@@ -369,7 +369,10 @@ fn bluetooth_device_menu_keeps_name_marquee_and_renders_colored_action_buttons()
         },
     });
     rt.step().unwrap();
-    assert_eq!(rt.state().bt_ui.menu_path.as_deref(), Some(dev_path.as_str()));
+    assert_eq!(
+        rt.state().bt_ui.menu_path.as_deref(),
+        Some(dev_path.as_str())
+    );
     rt.step().unwrap();
 
     // ...and a second right-click on the menu card must collapse it back to the row.
@@ -415,12 +418,7 @@ fn bluetooth_device_menu_keeps_name_marquee_and_renders_colored_action_buttons()
             && (i16::from(px[0]) - i16::from(rgb[2])).abs() <= tol
             && px[3] == 255
     };
-    let has_color = |rgb: [u8; 3]| {
-        buf.as_chunks::<4>()
-            .0
-            .iter()
-            .any(|px| near(px, rgb, 12))
-    };
+    let has_color = |rgb: [u8; 3]| buf.as_chunks::<4>().0.iter().any(|px| near(px, rgb, 12));
     assert!(
         has_color([166, 227, 161]),
         "green Connect/Pai button must render inside the popup"
@@ -447,7 +445,10 @@ fn bluetooth_device_menu_keeps_name_marquee_and_renders_colored_action_buttons()
                 && (left_x + 10..left_x + 106).contains(&x)
                 && near(px, [205, 214, 244], 10)
         });
-    assert!(name_visible, "device name must stay visible inside the menu card");
+    assert!(
+        name_visible,
+        "device name must stay visible inside the menu card"
+    );
 }
 
 #[test]
@@ -528,7 +529,10 @@ fn mixer_popup_bar_click_opens_right_click_mutes_and_tracks_set_volume() {
     // Clicking the middle of the master track pins the volume at exactly 50%.
     rt.enqueue(Msg::MixerMasterSeekClick(PointerEvent {
         position: Point::new(1700.logical_px(), 60.logical_px()),
-        local_position: Point::new((crate::theme::MIXER_TRACK_WIDTH / 2.0).logical_px(), 3.logical_px()),
+        local_position: Point::new(
+            (crate::theme::MIXER_TRACK_WIDTH / 2.0).logical_px(),
+            3.logical_px(),
+        ),
         button: Some(MouseButton::Left),
         modifiers: Modifiers::empty(),
     }));
@@ -557,7 +561,10 @@ fn mixer_popup_bar_click_opens_right_click_mutes_and_tracks_set_volume() {
         id: 7,
         ev: PointerEvent {
             position: Point::new(1700.logical_px(), 120.logical_px()),
-            local_position: Point::new((crate::theme::MIXER_TRACK_WIDTH / 4.0).logical_px(), 3.logical_px()),
+            local_position: Point::new(
+                (crate::theme::MIXER_TRACK_WIDTH / 4.0).logical_px(),
+                3.logical_px(),
+            ),
             button: Some(MouseButton::Left),
             modifiers: Modifiers::empty(),
         },
@@ -602,4 +609,233 @@ fn mixer_popup_bar_click_opens_right_click_mutes_and_tracks_set_volume() {
         rt.step().unwrap();
     }
     assert!(!rt.state().audio_ui.is_popup_visible());
+}
+
+#[test]
+fn disk_popup_mounts_cycles_middle_click_luks_unlock_and_pending_animation() {
+    use std::path::PathBuf;
+    use waywi::system::{ByteSize, DiskMount, DiskSnapshot};
+
+    let mut rt = synthetic_rt();
+    rt.step().unwrap();
+
+    rt.enqueue(Msg::DiskSampled(DiskSnapshot {
+        mounts: vec![
+            DiskMount {
+                device: String::from("/dev/nvme0n1p2"),
+                mount_point: PathBuf::from("/"),
+                fs_type: String::from("btrfs"),
+                total: ByteSize::from_bytes(500_000_000_000),
+                available: ByteSize::from_bytes(350_000_000_000),
+                free: ByteSize::from_bytes(350_000_000_000),
+                used: ByteSize::from_bytes(150_000_000_000),
+            },
+            DiskMount {
+                device: String::from("/dev/sdb1"),
+                mount_point: PathBuf::from("/run/media/sina/Ventoy"),
+                fs_type: String::from("exfat"),
+                total: ByteSize::from_bytes(64_000_000_000),
+                available: ByteSize::from_bytes(44_000_000_000),
+                free: ByteSize::from_bytes(44_000_000_000),
+                used: ByteSize::from_bytes(20_000_000_000),
+            },
+        ],
+        io: Vec::new(),
+        total_read_bytes_per_sec: 1_048_576.0,
+        total_write_bytes_per_sec: 524_288.0,
+        timestamp: Instant::now(),
+    }));
+    rt.enqueue(Msg::UDisksUpdated(UDisksSnapshot {
+        drives: vec![UDisksDrive {
+            object_path: String::from("/org/freedesktop/UDisks2/drives/SanDisk_Ultra"),
+            id: String::from("SanDisk_Ultra"),
+            vendor: String::from("SanDisk"),
+            model: String::from("Ultra USB 3.0"),
+            serial: String::from("1234"),
+            size_bytes: 64_000_000_000,
+            connection_bus: String::from("usb"),
+            media: String::from("thumb"),
+            removable: true,
+            media_removable: true,
+            media_available: true,
+            ejectable: true,
+            can_power_off: true,
+            optical: false,
+        }],
+        block_devices: vec![
+            UDisksBlockDevice {
+                object_path: String::from("/org/freedesktop/UDisks2/block_devices/sdb1"),
+                device: String::from("/dev/sdb1"),
+                preferred_device: String::from("/dev/sdb1"),
+                drive_path: Some(String::from(
+                    "/org/freedesktop/UDisks2/drives/SanDisk_Ultra",
+                )),
+                crypto_backing_device: None,
+                id_usage: String::from("filesystem"),
+                id_type: String::from("exfat"),
+                id_label: String::from("Ventoy"),
+                id_uuid: String::from("ABCD-1234"),
+                size_bytes: 64_000_000_000,
+                read_only: false,
+                hint_system: false,
+                hint_ignore: false,
+                hint_auto: true,
+                is_partition: true,
+                is_partition_table: false,
+                has_filesystem: true,
+                is_encrypted: false,
+                cleartext_device: None,
+                mount_points: Vec::new(),
+            },
+            UDisksBlockDevice {
+                object_path: String::from("/org/freedesktop/UDisks2/block_devices/sdc1"),
+                device: String::from("/dev/sdc1"),
+                preferred_device: String::from("/dev/sdc1"),
+                drive_path: Some(String::from(
+                    "/org/freedesktop/UDisks2/drives/SanDisk_Ultra",
+                )),
+                crypto_backing_device: None,
+                id_usage: String::from("crypto"),
+                id_type: String::from("crypto_LUKS"),
+                id_label: String::from("Vault"),
+                id_uuid: String::from("LUKS-9999"),
+                size_bytes: 32_000_000_000,
+                read_only: false,
+                hint_system: false,
+                hint_ignore: false,
+                hint_auto: true,
+                is_partition: true,
+                is_partition_table: false,
+                has_filesystem: false,
+                is_encrypted: true,
+                cleartext_device: None,
+                mount_points: Vec::new(),
+            },
+            UDisksBlockDevice {
+                object_path: String::from("/org/freedesktop/UDisks2/block_devices/nvme0n1p4"),
+                device: String::from("/dev/nvme0n1p4"),
+                preferred_device: String::from("/dev/nvme0n1p4"),
+                drive_path: None,
+                crypto_backing_device: None,
+                id_usage: String::from("filesystem"),
+                id_type: String::from("btrfs"),
+                id_label: String::from("ROOT"),
+                id_uuid: String::from("ROOT-0001"),
+                size_bytes: 500_000_000_000,
+                read_only: false,
+                hint_system: true,
+                hint_ignore: false,
+                hint_auto: false,
+                is_partition: true,
+                is_partition_table: false,
+                has_filesystem: true,
+                is_encrypted: false,
+                cleartext_device: None,
+                mount_points: vec![String::from("/")],
+            },
+            UDisksBlockDevice {
+                object_path: String::from("/org/freedesktop/UDisks2/block_devices/sda1"),
+                device: String::from("/dev/sda1"),
+                preferred_device: String::from("/dev/sda1"),
+                drive_path: None,
+                crypto_backing_device: None,
+                id_usage: String::from("filesystem"),
+                id_type: String::from("ext4"),
+                id_label: String::from("AlterSSD"),
+                id_uuid: String::from("DATA-0002"),
+                size_bytes: 120_000_000_000,
+                read_only: false,
+                hint_system: true,
+                hint_ignore: false,
+                hint_auto: false,
+                is_partition: true,
+                is_partition_table: false,
+                has_filesystem: true,
+                is_encrypted: false,
+                cleartext_device: None,
+                mount_points: vec![String::from("/AlterSSD")],
+            },
+        ],
+    }));
+    rt.step().unwrap();
+
+    // Core OS system partitions (`ROOT` @ `/`) are separated from user/data drives (`sdb1`, `sdc1`, `AlterSSD`)
+    // and hidden by default until `Msg::DiskToggleSystem` is triggered.
+    let user_blocks = crate::app::disk::DiskUiState::user_blocks(&rt.state().udisks);
+    let sys_blocks = crate::app::disk::DiskUiState::system_blocks(&rt.state().udisks);
+    assert_eq!(user_blocks.len(), 3);
+    assert_eq!(sys_blocks.len(), 1);
+    assert_eq!(sys_blocks[0].id_label, "ROOT");
+    assert!(!rt.state().disk_ui.show_system);
+
+    rt.enqueue(Msg::DiskToggleSystem);
+    rt.enqueue(Msg::DiskMarqueeTick);
+    rt.step().unwrap();
+    assert!(rt.state().disk_ui.show_system);
+    assert_eq!(rt.state().disk_ui.marquee_tick, 1);
+
+    // Middle-click on the Disk bar module cycles the displayed mount from `/` to `/run/media/sina/Ventoy`.
+    let m0 = rt.state().disk_metric();
+    assert!(m0.lines[0].text.contains("150.0G Used"));
+    assert!(m0.tooltip.contains("Mounted Filesystems:"));
+    assert!(m0.tooltip.contains("Removable / UDisks2:"));
+    rt.enqueue(Msg::DiskBarPointerDown(PointerEvent {
+        position: Point::new(1780.logical_px(), 12.logical_px()),
+        local_position: Point::ZERO,
+        button: Some(MouseButton::Middle),
+        modifiers: Modifiers::empty(),
+    }));
+    rt.step().unwrap();
+    assert_eq!(rt.state().disk_ui.selected_mount_idx, 1);
+    let m1 = rt.state().disk_metric();
+    assert!(m1.lines[0].text.contains("20.0G /Vento"));
+
+    // Left-click on the Disk bar module opens the Disk popup surface.
+    rt.enqueue(Msg::DiskBarPointerDown(PointerEvent {
+        position: Point::new(1780.logical_px(), 12.logical_px()),
+        local_position: Point::ZERO,
+        button: Some(MouseButton::Left),
+        modifiers: Modifiers::empty(),
+    }));
+    for _ in 0..16 {
+        rt.enqueue(Msg::DiskPopupAnimTick);
+    }
+    rt.step().unwrap();
+    assert!(rt.state().disk_ui.is_popup_visible());
+    assert!(rt.rendered_buffer("bar-disk-popup").is_some());
+
+    // Clicking the locked LUKS volume opens the inline passphrase input bar.
+    rt.enqueue(Msg::DiskDevicePointerDown {
+        path: String::from("/org/freedesktop/UDisks2/block_devices/sdc1"),
+        ev: PointerEvent {
+            position: Point::ZERO,
+            local_position: Point::ZERO,
+            button: Some(MouseButton::Left),
+            modifiers: Modifiers::empty(),
+        },
+    });
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state().disk_ui.unlock_target.as_deref(),
+        Some("/org/freedesktop/UDisks2/block_devices/sdc1")
+    );
+
+    // Simulating a failed UDisks2 mount action clears pending_ops and surfaces a clean error banner.
+    rt.enqueue(Msg::DbusActionOutcome(DbusActionResult {
+        lane: DbusActionLane::Desktop,
+        bus: DbusBus::System,
+        operation: String::from("Filesystem.Mount"),
+        target: String::from("/org/freedesktop/UDisks2/block_devices/sdb1"),
+        reply_object_path: None,
+        count: None,
+        reply: Vec::new(),
+        error: Some(String::from(
+            "Filesystem.Mount failed: org.freedesktop.UDisks2.Error.NotAuthorizedDismissed: Polkit authentication dismissed",
+        )),
+    }));
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state().disk_ui.last_error.as_deref(),
+        Some("Polkit authentication dismissed")
+    );
 }

@@ -45,12 +45,10 @@ pub struct NotificationStore {
 const CENTER_ANIM_STEP: f32 = 16.0 / 180.0;
 
 impl NotificationStore {
-    pub fn load_lazy(
-        store_path: Option<PathBuf>,
-        icon_lookup: &mut XdgIconLookup,
-        path_cache: &mut PathAssetCache,
-        ctx: &mut EffectCtx<'_>,
-    ) -> Self {
+    /// Loads persisted notification metadata from disk without decoding icons upfront so the
+    /// initial bar frame renders immediately; bar icons decode lazily via `ensure_visible_icons`.
+    #[must_use]
+    pub fn load_lazy(store_path: Option<PathBuf>) -> Self {
         let path = store_path.unwrap_or_else(default_store_path);
         let persisted = load_store_from_disk(&path);
         let total_count = persisted.items.len();
@@ -60,28 +58,10 @@ impl NotificationStore {
 
         for (idx, stored) in persisted.items.into_iter().enumerate() {
             if idx < MAX_RAM_NOTIFICATIONS {
-                // Lazily decode only the first 4 bar icons at startup; rest decode on demand.
-                let (icon, icon_loaded) = if idx < 4 {
-                    (
-                        resolve_notification_icon(
-                            &stored.app_icon,
-                            stored.desktop_entry.as_deref(),
-                            stored.image_path.as_deref(),
-                            stored.cached_icon_path.as_deref(),
-                            None,
-                            icon_lookup,
-                            path_cache,
-                            ctx,
-                        ),
-                        true,
-                    )
-                } else {
-                    (None, false)
-                };
                 in_ram.push(NotificationItem {
                     stored,
-                    icon,
-                    icon_loaded,
+                    icon: None,
+                    icon_loaded: false,
                 });
             } else {
                 overflow.push(stored);

@@ -5,21 +5,26 @@ use std::time::{Duration, Instant, SystemTime};
 use waywi::desktop::icons::XdgIconLookup;
 use waywi::prelude::*;
 use waywi::system::{
-    CpuSnapshot, DiskSnapshot, GpuSnapshot, LocalDateTime, MemorySnapshot, NetworkSnapshot,
-    TimeFormat, shift_year_month,
+    CpuSnapshot, DiskMount, DiskSnapshot, GpuSnapshot, LocalDateTime, MemorySnapshot,
+    NetworkSnapshot, TimeFormat, shift_year_month,
 };
 
 use super::asset_lru::PathAssetCache;
 pub use super::audio::AudioUiState;
 pub use super::bluetooth::BluetoothUiState;
+pub use super::booster::ForegroundBooster;
+pub use super::disk::DiskUiState;
 pub use super::drun::DrunState;
 pub use super::mpris::MprisState;
 pub use super::msg::Msg;
 pub use super::notifications::NotificationStore;
 pub use super::scroller::WindowScroller;
+pub use super::sysinfo::SysInfoState;
 pub use super::telemetry::CpuPowerTracker;
-pub use super::tray_cache::{resolve_tray_icon, upsert_tray_entry_into};
+pub use super::tray_cache::resolve_tray_icon;
+use super::tray_cache::upsert_tray_entry_into;
 pub use super::types::{AudioControlTarget, HoverTarget, TrayEntry, TrayMenuPopup};
+pub use super::window_info::WindowInfoState;
 
 pub const DRAWER_ANIM_STEP: f32 = 16.0 / 300.0;
 
@@ -32,7 +37,10 @@ pub struct State {
 
     pub workspaces: Vec<WorkspaceInfo>,
     pub active_ws_id: i32,
+    pub sysinfo: SysInfoState,
     pub scroller: WindowScroller,
+    pub window_info: WindowInfoState,
+    pub booster: ForegroundBooster,
     pub drun: DrunState,
     pub notifications: NotificationStore,
     pub mpris: MprisState,
@@ -60,6 +68,9 @@ pub struct State {
     pub disk_total_gb: f64,
     pub disk_pct_used: f32,
     pub disk_pct_free: f32,
+    pub disk_mounts: Vec<DiskMount>,
+    pub udisks: UDisksSnapshot,
+    pub disk_ui: DiskUiState,
 
     pub bluetooth: BluetoothSnapshot,
     pub bt_ui: BluetoothUiState,
@@ -70,6 +81,8 @@ pub struct State {
     pub cal_month_offset: i32,
 
     pub hovered: HoverTarget,
+    pub hover_anchor_x: Option<f32>,
+    pub startup_hydrated: bool,
     pub drawer_target: bool,
     pub drawer_progress: f32,
     pub drawer_leave_deadline: Option<Instant>,
@@ -89,8 +102,16 @@ impl State {
         (self.drawer_progress - target).abs() > 0.001
     }
 
+    #[must_use]
+    pub const fn is_animating_reels(&self) -> bool {
+        self.sysinfo.is_animating() || self.window_info.is_animating()
+    }
+
     pub fn update_hover(&mut self, target: HoverTarget, entered: bool) {
         if entered {
+            if self.hovered != target {
+                self.hover_anchor_x = None;
+            }
             self.hovered = target;
             if target.is_drawer() {
                 self.drawer_target = true;
@@ -101,6 +122,7 @@ impl State {
             }
         } else if self.hovered == target {
             self.hovered = HoverTarget::None;
+            self.hover_anchor_x = None;
             if target.is_drawer() {
                 // Brief grace avoids flicker when sliding between `expand_sign`, `disk`, and `bluetooth`.
                 self.drawer_leave_deadline = Some(Instant::now() + Duration::from_millis(120));
@@ -127,12 +149,42 @@ impl State {
     }
 
     pub fn apply_disk_snapshot(&mut self, snap: &DiskSnapshot) {
-        let root = snap
-            .mounts
-            .iter()
-            .find(|m| m.mount_point.as_os_str() == "/")
-            .or_else(|| snap.mounts.first());
-        if let Some(m) = root {
+        self.apply_disk_mounts(snap.mounts.clone());
+    }
+
+    pub fn apply_disk_mounts(&mut self, mounts: Vec<DiskMount>) {
+        self.disk_mounts = mounts;
+        if self.disk_mounts.is_empty() {
+            self.disk_ui.selected_mount_idx = 0;
+            return;
+        }
+        if self.disk_ui.selected_mount_idx >= self.disk_mounts.len() {
+            self.disk_ui.selected_mount_idx = 0;
+        }
+        self.sync_selected_mount_metrics();
+    }
+
+    pub fn cycle_selected_mount(&mut self) {
+        if self.disk_mounts.len() <= 1 {
+            return;
+        }
+        self.disk_ui.selected_mount_idx =
+            (self.disk_ui.selected_mount_idx + 1) % self.disk_mounts.len();
+        self.sync_selected_mount_metrics();
+    }
+
+    pub fn sync_selected_mount_metrics(&mut self) {
+        let selected = self
+            .disk_mounts
+            .get(self.disk_ui.selected_mount_idx)
+            .or_else(|| {
+                self.disk_mounts
+                    .iter()
+                    .find(|m| m.mount_point.as_os_str() == "/")
+            })
+            .or_else(|| self.disk_mounts.first());
+
+        if let Some(m) = selected {
             const GB: f64 = 1_000_000_000.0;
             let total_b = m.total.as_bytes() as f64;
             let used_b = m.used.as_bytes() as f64;

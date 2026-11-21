@@ -2,9 +2,7 @@
 
 use waywi::prelude::*;
 
-use crate::app::state::{
-    AudioControlTarget, State, TrayEntry, TrayMenuPopup, resolve_tray_icon,
-};
+use crate::app::state::{AudioControlTarget, State, TrayEntry, TrayMenuPopup, resolve_tray_icon};
 
 /// Returns Wayland vertical scroll step (`< 0` = scroll up, `> 0` = scroll down).
 #[must_use]
@@ -20,18 +18,58 @@ pub fn scroll_direction_y(sc: ScrollEvent) -> i32 {
     }
 }
 
+fn refresh_active_client(state: &mut State, ctx: &EffectCtx<'_>) {
+    let Ok(hc) = ctx.hyprland() else {
+        return;
+    };
+    match hc.active_client() {
+        Ok(Some(c)) => {
+            state.scroller.set_window(c.class.clone(), c.title.clone());
+            if c.content_type.is_none() {
+                state.drun.ensure_scanned();
+            }
+            state.window_info.set_client(Some(c), &state.drun.entries);
+            state.booster.on_focus_change(
+                state.window_info.cgroup.as_ref(),
+                state.memory.as_ref(),
+                ctx,
+            );
+        }
+        Ok(None) => {
+            state.scroller.set_window(String::new(), String::new());
+            state.window_info.set_client(None, &state.drun.entries);
+            state.booster.clear_active(ctx);
+        }
+        Err(_) => {}
+    }
+}
+
 pub fn handle_hypr_event(state: &mut State, ev: HyprlandEvent, ctx: &EffectCtx<'_>) {
     match ev {
         HyprlandEvent::ActiveWindow { class, title } => {
             state.scroller.set_window(class, title);
+            refresh_active_client(state, ctx);
         }
-        HyprlandEvent::ActiveWindowV2 { .. } | HyprlandEvent::CloseWindow { .. } => {
-            if let Ok(hc) = ctx.hyprland() {
-                match hc.active_client() {
-                    Ok(Some(c)) => state.scroller.set_window(c.class, c.title),
-                    _ => state.scroller.set_window(String::new(), String::new()),
-                }
+        HyprlandEvent::ActiveWindowV2 { .. }
+        | HyprlandEvent::CloseWindow { .. }
+        | HyprlandEvent::WindowTitle { .. }
+        | HyprlandEvent::MoveWindowV2 { .. }
+        | HyprlandEvent::Fullscreen(_) => {
+            refresh_active_client(state, ctx);
+        }
+        HyprlandEvent::WindowTitleV2 { address, title } => {
+            state.window_info.update_title(&address, &title);
+            if let Some(c) = &state.window_info.client {
+                state.scroller.set_window(c.class.clone(), c.title.clone());
+            } else {
+                refresh_active_client(state, ctx);
             }
+        }
+        HyprlandEvent::ChangeFloatingMode { address, floating } => {
+            state.window_info.update_floating(&address, floating);
+        }
+        HyprlandEvent::Pin { address, pinned } => {
+            state.window_info.update_pinned(&address, pinned);
         }
         HyprlandEvent::WorkspaceV2 { id, .. }
         | HyprlandEvent::FocusedMonitorV2 {
@@ -42,9 +80,7 @@ pub fn handle_hypr_event(state: &mut State, ev: HyprlandEvent, ctx: &EffectCtx<'
                 if let Ok(list) = hc.workspaces() {
                     state.workspaces = list;
                 }
-                if let Ok(Some(c)) = hc.active_client() {
-                    state.scroller.set_window(c.class, c.title);
-                }
+                refresh_active_client(state, ctx);
             } else {
                 for w in &mut state.workspaces {
                     w.focused = w.id == id;

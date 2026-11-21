@@ -47,15 +47,13 @@ pub fn metric_module(cfg: MetricModuleConfig) -> Element<Msg> {
         None => Size::new(Length::Auto, BAR_HEIGHT.logical_px()),
     };
 
-    let content_group = Group::new()
-        .size(container_size)
-        .child(
-            Row::new()
-                .size(row_size)
-                .padding(Edges::symmetric(0.logical_px(), MODULE_PAD_H.logical_px()))
-                .align(Align::Center)
-                .child(lines_col),
-        );
+    let content_group = Group::new().size(container_size).child(
+        Row::new()
+            .size(row_size)
+            .padding(Edges::symmetric(0.logical_px(), MODULE_PAD_H.logical_px()))
+            .align(Align::Center)
+            .child(lines_col),
+    );
 
     let mut group = Group::new()
         .key(cfg.key)

@@ -4,8 +4,9 @@ use waywi::prelude::*;
 
 use crate::app::state::{AudioControlTarget, HoverTarget, Msg, State};
 use crate::theme::{
-    BAR_HEIGHT, CRUST, MANTLE, MAUVE, MIXER_POPUP_WIDTH, MIXER_TRACK_WIDTH, NOTIF_CENTER_TOP_MARGIN,
-    OVERLAY0, SUBTEXT1, SURFACE0, SURFACE1, TEXT, font_ui, font_ui_bold, font_ui_semibold,
+    BAR_HEIGHT, CRUST, MANTLE, MAUVE, MIXER_POPUP_WIDTH, MIXER_TRACK_WIDTH,
+    NOTIF_CENTER_TOP_MARGIN, OVERLAY0, SUBTEXT1, SURFACE0, SURFACE1, TEXT, font_ui, font_ui_bold,
+    font_ui_semibold,
 };
 use crate::widgets::text::marquee_slice;
 
@@ -33,8 +34,8 @@ pub fn build_mixer_popup_surface(state: &State) -> Surface<Msg> {
     let left_x = raw_left.clamp(8.0, (state.bar_width - MIXER_POPUP_WIDTH - 8.0).max(8.0));
 
     let max_total_height = (state.screen_height - NOTIF_CENTER_TOP_MARGIN - 16.0).max(200.0);
-    let max_body_height = (max_total_height - MASTER_CARD_HEIGHT - 6.0 - APPS_HEADER_HEIGHT - 14.0)
-        .max(ROW_HEIGHT);
+    let max_body_height =
+        (max_total_height - MASTER_CARD_HEIGHT - 6.0 - APPS_HEADER_HEIGHT - 14.0).max(ROW_HEIGHT);
 
     let (rows, body_height) = build_app_rows(state, max_body_height);
 
@@ -56,7 +57,10 @@ pub fn build_mixer_popup_surface(state: &State) -> Surface<Msg> {
 
     let animated_popup = Clip::new(popup_col)
         .key("mixer-popup-column")
-        .position(Position::absolute(left_x.logical_px(), animated_y.logical_px()))
+        .position(Position::absolute(
+            left_x.logical_px(),
+            animated_y.logical_px(),
+        ))
         .size(Size::new(
             MIXER_POPUP_WIDTH.logical_px(),
             animated_h.logical_px(),
@@ -118,7 +122,11 @@ fn build_master_card(state: &State) -> Element<Msg> {
         },
         None => "PipeWire",
     };
-    let name_text = marquee_slice(device_name, (MASTER_NAME_WIDTH / 5.2) as usize, state.audio_ui.marquee_tick);
+    let name_text = marquee_slice(
+        device_name,
+        (MASTER_NAME_WIDTH / 5.2) as usize,
+        state.audio_ui.marquee_tick,
+    );
 
     let muted = match state.audio.as_ref() {
         Some(audio) => match state.audio_target {
@@ -137,7 +145,10 @@ fn build_master_card(state: &State) -> Element<Msg> {
 
     Group::new()
         .key("mixer-master-card")
-        .size(Size::new(MIXER_POPUP_WIDTH.logical_px(), MASTER_CARD_HEIGHT.logical_px()))
+        .size(Size::new(
+            MIXER_POPUP_WIDTH.logical_px(),
+            MASTER_CARD_HEIGHT.logical_px(),
+        ))
         .child(
             Rect::new()
                 .size(Size::fill())
@@ -360,28 +371,33 @@ fn build_app_rows(state: &State, max_body_height: f32) -> (Vec<Element<Msg>>, f3
 
     if app_rows.is_empty() {
         let height = ROW_HEIGHT;
-        let rows = vec![Row::new()
-            .size(Size::new(Length::Fill, ROW_HEIGHT.logical_px()))
-            .padding(Edges::symmetric(0.logical_px(), 8.logical_px()))
-            .align(Align::Center)
-            .child(
-                Text::new("No active apps")
-                    .font(font_ui())
-                    .font_size(11.logical_px())
-                    .color(OVERLAY0),
-            )
-            .into()];
+        let rows = vec![
+            Row::new()
+                .size(Size::new(Length::Fill, ROW_HEIGHT.logical_px()))
+                .padding(Edges::symmetric(0.logical_px(), 8.logical_px()))
+                .align(Align::Center)
+                .child(
+                    Text::new("No active apps")
+                        .font(font_ui())
+                        .font_size(11.logical_px())
+                        .color(OVERLAY0),
+                )
+                .into(),
+        ];
         return (rows, height);
     }
 
-    let visible_slots = (((max_body_height - ROW_GAP) / (ROW_HEIGHT + ROW_GAP)).floor() as usize).max(1);
-    let start = state.audio_ui.scroll_index.min(app_rows.len().saturating_sub(1));
+    let visible_slots =
+        (((max_body_height - ROW_GAP) / (ROW_HEIGHT + ROW_GAP)).floor() as usize).max(1);
+    let start = state
+        .audio_ui
+        .scroll_index
+        .min(app_rows.len().saturating_sub(1));
     let shown: Vec<&AppRow> = app_rows.iter().skip(start).take(visible_slots).collect();
     let count = shown.len();
-    let body_height = ((count as f32) * ROW_HEIGHT
-        + (count.saturating_sub(1) as f32) * ROW_GAP
-        + 14.0)
-        .min(max_body_height);
+    let body_height =
+        ((count as f32) * ROW_HEIGHT + (count.saturating_sub(1) as f32) * ROW_GAP + 14.0)
+            .min(max_body_height);
 
     let rows = shown
         .iter()
@@ -486,10 +502,7 @@ fn build_app_row(r: &AppRow, tick: u32) -> Element<Msg> {
                                             .font_size(10.logical_px())
                                             .color(TEXT),
                                     )
-                                    .size(Size::px(
-                                        NAME_CLIP_WIDTH.logical_px(),
-                                        13.logical_px(),
-                                    )),
+                                    .size(Size::px(NAME_CLIP_WIDTH.logical_px(), 13.logical_px())),
                                 )
                                 .child(
                                     Text::new(if r.muted {
@@ -499,7 +512,11 @@ fn build_app_row(r: &AppRow, tick: u32) -> Element<Msg> {
                                     })
                                     .font(font_ui_semibold())
                                     .font_size(9.5.logical_px())
-                                    .color(if r.muted { OVERLAY0 } else { SUBTEXT1 }),
+                                    .color(if r.muted {
+                                        OVERLAY0
+                                    } else {
+                                        SUBTEXT1
+                                    }),
                                 ),
                         )
                         .child(

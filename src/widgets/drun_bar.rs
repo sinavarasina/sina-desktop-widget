@@ -114,7 +114,10 @@ pub fn build_drun_surface(state: &State) -> Surface<Msg> {
 fn build_runner_pill() -> Element<Msg> {
     Group::new()
         .key("drun-runner-pill")
-        .size(Size::px(RUNNER_PILL_W.logical_px(), BAR_HEIGHT.logical_px()))
+        .size(Size::px(
+            RUNNER_PILL_W.logical_px(),
+            BAR_HEIGHT.logical_px(),
+        ))
         .child(Rect::new().size(Size::fill()).fill(CRUST))
         .child(
             Text::new(">_")

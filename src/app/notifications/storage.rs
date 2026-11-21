@@ -101,7 +101,9 @@ pub fn save_cached_icon(store_path: &Path, raw: &NotificationImageData) -> Optio
     }
     let src_w = u32::try_from(raw.width).ok()?;
     let src_h = u32::try_from(raw.height).ok()?;
-    let channels = usize::try_from(raw.channels).ok().filter(|&c| c == 3 || c == 4)?;
+    let channels = usize::try_from(raw.channels)
+        .ok()
+        .filter(|&c| c == 3 || c == 4)?;
     let src_stride = usize::try_from(raw.rowstride)
         .ok()
         .filter(|&s| s >= (src_w as usize) * channels)?;

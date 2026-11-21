@@ -83,7 +83,11 @@ pub fn handle_drun_launch_index(state: &mut State, match_pos: usize) {
     let Some(entry) = state.drun.entries.get(entry_idx).cloned() else {
         return;
     };
-    *state.drun.launch_counts.entry(entry.id.clone()).or_insert(0) += 1;
+    *state
+        .drun
+        .launch_counts
+        .entry(entry.id.clone())
+        .or_insert(0) += 1;
     let _ = entry.launch_detached();
     state.drun.close();
 }
@@ -98,7 +102,11 @@ pub fn handle_drun_scroll(state: &mut State, sc: ScrollEvent, ctx: &mut EffectCt
 
 fn launch_selected_app(state: &mut State) {
     if let Some(entry) = state.drun.selected_entry().cloned() {
-        *state.drun.launch_counts.entry(entry.id.clone()).or_insert(0) += 1;
+        *state
+            .drun
+            .launch_counts
+            .entry(entry.id.clone())
+            .or_insert(0) += 1;
         let _ = entry.launch_detached();
         state.drun.close();
     }

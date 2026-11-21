@@ -21,6 +21,9 @@ pub fn close_other_overlays(state: &mut State, keep: Option<&str>) {
     if keep != Some("bluetooth") {
         state.bt_ui.close_popup();
     }
+    if keep != Some("disk") {
+        state.disk_ui.close_popup();
+    }
     if keep != Some("volume") {
         state.audio_ui.close_popup();
     }
@@ -93,6 +96,24 @@ pub fn handle_ipc_control(
                 state.bt_ui.toggle_popup();
             } else {
                 state.bt_ui.close_popup();
+            }
+        }
+        IpcTarget::Disk => {
+            let next = resolve_next(state.disk_ui.popup_target, action);
+            if next {
+                close_other_overlays(state, Some("disk"));
+                if state.disk_ui.popup_left_x <= 0.0 {
+                    state.disk_ui.popup_left_x = (state.bar_width - 420.0).max(8.0);
+                }
+                if state.udisks.block_devices.is_empty()
+                    && let Ok(dbus) = ctx.dbus()
+                    && let Ok(snap) = dbus.udisks_snapshot()
+                {
+                    state.udisks = snap;
+                }
+                state.disk_ui.toggle_popup();
+            } else {
+                state.disk_ui.close_popup();
             }
         }
         IpcTarget::Mpris => {

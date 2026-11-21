@@ -12,18 +12,42 @@ pub fn build_tooltip_surface(state: &State) -> Option<Surface<Msg>> {
         return Some(build_calendar_tooltip_surface(state));
     }
 
-    let body = match state.hovered {
-        HoverTarget::Wireplumber => state.wireplumber_metric().tooltip,
-        HoverTarget::Cpu => state.cpu_metric().tooltip,
-        HoverTarget::Memory => state.memory_metric().tooltip,
-        HoverTarget::Network => state.network_metric().tooltip,
-        HoverTarget::Gpu => state.gpu_metric().tooltip,
-        HoverTarget::Temp => state.temp_metric().tooltip,
-        HoverTarget::Disk => state.disk_metric().tooltip,
-        HoverTarget::Bluetooth => state.bluetooth_metric().tooltip,
+    let (body, left_anchor_margin) = match state.hovered {
+        HoverTarget::SysInfo => (
+            state
+                .sysinfo
+                .tooltip(state.cpu.as_ref(), state.memory.as_ref()),
+            Some(
+                state
+                    .hover_anchor_x
+                    .unwrap_or(38.0)
+                    .clamp(8.0, (state.bar_width - 120.0).max(8.0)),
+            ),
+        ),
+        HoverTarget::WindowInfo => (
+            state.window_info.tooltip(
+                state
+                    .booster
+                    .tooltip_line(state.window_info.cgroup.as_ref()),
+            ),
+            Some(
+                state
+                    .hover_anchor_x
+                    .unwrap_or(340.0)
+                    .clamp(8.0, (state.bar_width - 160.0).max(8.0)),
+            ),
+        ),
+        HoverTarget::Wireplumber => (state.wireplumber_metric().tooltip, None),
+        HoverTarget::Cpu => (state.cpu_metric().tooltip, None),
+        HoverTarget::Memory => (state.memory_metric().tooltip, None),
+        HoverTarget::Network => (state.network_metric().tooltip, None),
+        HoverTarget::Gpu => (state.gpu_metric().tooltip, None),
+        HoverTarget::Temp => (state.temp_metric().tooltip, None),
+        HoverTarget::Disk => (state.disk_metric().tooltip, None),
+        HoverTarget::Bluetooth => (state.bluetooth_metric().tooltip, None),
         HoverTarget::TrayItem(idx) => {
             let entry = state.tray_items.get(idx)?;
-            if let Some(tip) = &entry.snapshot.tooltip
+            let text = if let Some(tip) = &entry.snapshot.tooltip
                 && (!tip.title.is_empty() || !tip.description.is_empty())
             {
                 if tip.description.is_empty() {
@@ -35,14 +59,31 @@ pub fn build_tooltip_surface(state: &State) -> Option<Surface<Msg>> {
                 entry.snapshot.title.clone()
             } else {
                 entry.snapshot.id.clone()
-            }
+            };
+            (text, None)
         }
         _ => return None,
     };
 
-    let right_margin = state
-        .hovered
-        .right_margin_hint(state.clock_alt, state.tray_items.len());
+    let (anchor, margin) = if let Some(left_margin) = left_anchor_margin {
+        (
+            Anchor::Top | Anchor::Left,
+            Edges::new(
+                POPUP_TOP_MARGIN.logical_px(),
+                0.logical_px(),
+                0.logical_px(),
+                left_margin.logical_px(),
+            ),
+        )
+    } else {
+        let right_margin = state
+            .hovered
+            .right_margin_hint(state.clock_alt, state.tray_items.len());
+        (
+            Anchor::Top | Anchor::Right,
+            Edges::top_right(POPUP_TOP_MARGIN.logical_px(), right_margin.logical_px()),
+        )
+    };
 
     let mut lines_col = Column::new()
         .size(Size::auto())
@@ -74,11 +115,8 @@ pub fn build_tooltip_surface(state: &State) -> Option<Surface<Msg>> {
         Surface::floating("bar-tooltip", Output::Primary)
             .layer(Layer::Overlay)
             .ignore_exclusive_zone()
-            .anchor(Anchor::Top | Anchor::Right)
-            .margin(Edges::top_right(
-                POPUP_TOP_MARGIN.logical_px(),
-                right_margin.logical_px(),
-            ))
+            .anchor(anchor)
+            .margin(margin)
             .size(Size::auto())
             .input_mode(InputMode::PassThrough)
             .keyboard_interactivity(KeyboardInteractivity::None)

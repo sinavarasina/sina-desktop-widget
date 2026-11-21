@@ -86,13 +86,7 @@ pub fn build_expandable_mon(state: &State) -> Element<Msg> {
             target: HoverTarget::Disk,
             hovered: state.hovered == HoverTarget::Disk,
             fixed_width: Some(DISK_EXPANDED_WIDTH),
-            on_pointer_down: Some(|ev| {
-                if ev.button == Some(MouseButton::Right) {
-                    Msg::SpawnBtop
-                } else {
-                    Msg::Hover(HoverTarget::Disk)
-                }
-            }),
+            on_pointer_down: Some(Msg::DiskBarPointerDown),
             on_scroll: None,
         });
 

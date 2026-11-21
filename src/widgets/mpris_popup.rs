@@ -46,7 +46,10 @@ pub fn build_mpris_popup_surface(state: &State) -> Surface<Msg> {
 
     let animated_popup = Clip::new(popup_col)
         .key("mpris-popup-column")
-        .position(Position::absolute(left_x.logical_px(), animated_y.logical_px()))
+        .position(Position::absolute(
+            left_x.logical_px(),
+            animated_y.logical_px(),
+        ))
         .size(Size::new(
             MPRIS_POPUP_WIDTH.logical_px(),
             animated_h.logical_px(),

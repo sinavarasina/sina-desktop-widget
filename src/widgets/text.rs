@@ -10,12 +10,7 @@ pub fn format_artist_album(p: &MprisSnapshot) -> String {
         (true, true) => format!("{artist} - {album}"),
         (true, false) => artist.to_owned(),
         (false, true) => album.to_owned(),
-        (false, false) => p
-            .identity
-            .as_deref()
-            .unwrap_or("Media")
-            .trim()
-            .to_owned(),
+        (false, false) => p.identity.as_deref().unwrap_or("Media").trim().to_owned(),
     }
 }
 

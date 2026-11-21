@@ -93,6 +93,16 @@ fn ipc_command_parser_handles_all_widgets_and_actions() {
         Some(true)
     );
     assert_eq!(
+        parse_ipc_command("disk").map(|m| matches!(
+            m,
+            Msg::IpcControl {
+                action: IpcAction::Toggle,
+                target: IpcTarget::Disk
+            }
+        )),
+        Some(true)
+    );
+    assert_eq!(
         parse_ipc_command("mpris").map(|m| matches!(
             m,
             Msg::IpcControl {
@@ -129,10 +139,15 @@ fn ipc_triggers_toggle_overlays_exclusively() {
     assert!(rt.state().bt_ui.popup_target);
     assert!(!rt.state().audio_ui.popup_target);
 
+    rt.enqueue(parse_ipc_command("disk").unwrap());
+    rt.step().unwrap();
+    assert!(rt.state().disk_ui.popup_target);
+    assert!(!rt.state().bt_ui.popup_target);
+
     rt.enqueue(parse_ipc_command("mpris").unwrap());
     rt.step().unwrap();
     assert!(rt.state().mpris.popup_target);
-    assert!(!rt.state().bt_ui.popup_target);
+    assert!(!rt.state().disk_ui.popup_target);
 
     rt.enqueue(parse_ipc_command("notifications").unwrap());
     rt.step().unwrap();

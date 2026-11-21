@@ -14,21 +14,34 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
     }));
     subs.push(Hyprland::subscribe(Msg::HyprEvent));
     subs.push(Dbus::tray(|ev| Msg::TrayEvent(Box::new(ev))));
-    subs.push(Dbus::notifications(|ev| Msg::NotificationEvent(Box::new(ev))));
+    subs.push(Dbus::notifications(|ev| {
+        Msg::NotificationEvent(Box::new(ev))
+    }));
     subs.push(Dbus::mpris(|ev| Msg::MprisEvent(Box::new(ev))));
     subs.push(Dbus::action_results(Msg::DbusActionOutcome));
     subs.push(Audio::subscribe(Msg::AudioUpdated));
     subs.push(System::cpu().every(Duration::from_secs(1), Msg::CpuSampled));
     subs.push(System::gpu().every(Duration::from_secs(2), Msg::GpuSampled));
     subs.push(System::sensors().every(Duration::from_secs(2), Msg::SensorsSampled));
+    subs.push(System::uptime().every(Duration::from_secs(5), Msg::UptimeSampled));
     subs.push(System::memory().every(Duration::from_secs(1), Msg::MemorySampled));
     subs.push(System::network().every(Duration::from_secs(1), Msg::NetworkSampled));
     subs.push(System::disk().every(Duration::from_secs(30), Msg::DiskSampled));
     subs.push(System::time().every(Duration::from_secs(1), Msg::TimeTick));
     subs.push(Dbus::network_manager(Msg::NetworkManagerUpdated));
     subs.push(Dbus::bluetooth(Msg::BluetoothUpdated));
-    subs.push(Dbus::bluetooth_agent(|ev| Msg::BluetoothAgentEvent(Box::new(ev))));
+    subs.push(Dbus::bluetooth_agent(|ev| {
+        Msg::BluetoothAgentEvent(Box::new(ev))
+    }));
+    subs.push(Dbus::udisks(Msg::UDisksUpdated));
 
+    if !state.startup_hydrated {
+        subs.push(Timer::once(
+            "startup-hydrate",
+            Duration::from_millis(1),
+            Msg::StartupHydrate,
+        ));
+    }
     if state.scroller.needs_scroll() {
         subs.push(Timer::every(
             "window-scroll-tick",
@@ -41,6 +54,13 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
             "drawer-anim",
             Duration::from_millis(16),
             Msg::DrawerTick,
+        ));
+    }
+    if state.is_animating_reels() {
+        subs.push(Timer::every(
+            "reel-anim",
+            Duration::from_millis(16),
+            Msg::ReelAnimTick,
         ));
     }
     if state.drawer_leave_deadline.is_some() {
@@ -97,6 +117,34 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
             "bt-popup-anim",
             Duration::from_millis(16),
             Msg::BtPopupAnimTick,
+        ));
+    }
+    if state.bt_ui.has_pending_ops() {
+        subs.push(Timer::every(
+            "bt-pending-tick",
+            Duration::from_millis(280),
+            Msg::BtPendingTick,
+        ));
+    }
+    if state.disk_ui.is_animating_popup() {
+        subs.push(Timer::every(
+            "disk-popup-anim",
+            Duration::from_millis(16),
+            Msg::DiskPopupAnimTick,
+        ));
+    }
+    if state.disk_ui.has_pending_ops() {
+        subs.push(Timer::every(
+            "disk-pending-tick",
+            Duration::from_millis(280),
+            Msg::DiskPendingTick,
+        ));
+    }
+    if state.disk_ui.popup_target {
+        subs.push(Timer::every(
+            "disk-marquee",
+            Duration::from_millis(200),
+            Msg::DiskMarqueeTick,
         ));
     }
     if state.audio_ui.is_animating_popup() {

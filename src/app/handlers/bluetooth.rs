@@ -25,8 +25,14 @@ pub fn handle_bluetooth_agent_event(
             summary: String::from("Bluetooth Pairing"),
             body: prompt.label,
             actions: vec![
-                (format!("bt-accept:{}", prompt.request_id), String::from("Accept")),
-                (format!("bt-reject:{}", prompt.request_id), String::from("Reject")),
+                (
+                    format!("bt-accept:{}", prompt.request_id),
+                    String::from("Accept"),
+                ),
+                (
+                    format!("bt-reject:{}", prompt.request_id),
+                    String::from("Reject"),
+                ),
             ],
             urgency: NotificationUrgency::Critical,
             desktop_entry: None,
@@ -97,8 +103,19 @@ pub fn handle_bt_toggle_discoverable(state: &mut State, ctx: &EffectCtx<'_>) {
     }
 }
 
-pub fn handle_bt_device_pointer(state: &mut State, path: String, ev: PointerEvent, ctx: &EffectCtx<'_>) {
-    let Some(dev) = state.bluetooth.devices.iter().find(|d| d.object_path == path).cloned() else {
+pub fn handle_bt_device_pointer(
+    state: &mut State,
+    path: String,
+    ev: PointerEvent,
+    ctx: &EffectCtx<'_>,
+) {
+    let Some(dev) = state
+        .bluetooth
+        .devices
+        .iter()
+        .find(|d| d.object_path == path)
+        .cloned()
+    else {
         return;
     };
     let menu_open_for_this = state.bt_ui.menu_path.as_deref() == Some(path.as_str());
@@ -106,23 +123,23 @@ pub fn handle_bt_device_pointer(state: &mut State, path: String, ev: PointerEven
     match ev.button {
         Some(MouseButton::Left) => {
             state.bt_ui.menu_path = None;
+            state.bt_ui.last_error = None;
             if let Ok(dbus) = ctx.dbus() {
                 if dev.connected {
+                    state.bt_ui.set_pending(path.clone(), "disconnecting");
                     let _ = dbus.disconnect_bluetooth_device(&path);
                 } else if dev.paired {
+                    state.bt_ui.set_pending(path.clone(), "connecting");
                     let _ = dbus.connect_bluetooth_device(&path);
                 } else {
+                    state.bt_ui.set_pending(path.clone(), "pairing");
                     let _ = dbus.pair_bluetooth_device(&path);
                 }
             }
         }
         Some(MouseButton::Right) => {
             // Right-click toggles the device context menu (Connect / Trust / Forget).
-            state.bt_ui.menu_path = if menu_open_for_this {
-                None
-            } else {
-                Some(path)
-            };
+            state.bt_ui.menu_path = if menu_open_for_this { None } else { Some(path) };
         }
         _ => {}
     }
@@ -134,7 +151,13 @@ pub fn handle_bt_device_menu_action(
     action: BtDeviceMenuAction,
     ctx: &EffectCtx<'_>,
 ) {
-    let Some(dev) = state.bluetooth.devices.iter().find(|d| d.object_path == path).cloned() else {
+    let Some(dev) = state
+        .bluetooth
+        .devices
+        .iter()
+        .find(|d| d.object_path == path)
+        .cloned()
+    else {
         return;
     };
     state.bt_ui.menu_path = None;
@@ -143,11 +166,15 @@ pub fn handle_bt_device_menu_action(
     };
     match action {
         BtDeviceMenuAction::ToggleConnect => {
+            state.bt_ui.last_error = None;
             if dev.connected {
+                state.bt_ui.set_pending(path.clone(), "disconnecting");
                 let _ = dbus.disconnect_bluetooth_device(&path);
             } else if dev.paired {
+                state.bt_ui.set_pending(path.clone(), "connecting");
                 let _ = dbus.connect_bluetooth_device(&path);
             } else {
+                state.bt_ui.set_pending(path.clone(), "pairing");
                 let _ = dbus.pair_bluetooth_device(&path);
             }
         }
@@ -164,13 +191,20 @@ pub fn handle_bt_device_menu_action(
             }
         }
         BtDeviceMenuAction::Forget => {
+            state.bt_ui.last_error = None;
+            state.bt_ui.set_pending(path.clone(), "removing");
             let _ = dbus.remove_bluetooth_device(&dev.adapter_path, &path);
             state.bluetooth.devices.retain(|d| d.object_path != path);
         }
     }
 }
 
-pub fn handle_bt_agent_decision(state: &mut State, request_id: u64, accept: bool, ctx: &EffectCtx<'_>) {
+pub fn handle_bt_agent_decision(
+    state: &mut State,
+    request_id: u64,
+    accept: bool,
+    ctx: &EffectCtx<'_>,
+) {
     let prompt = state.bt_ui.pending_prompt.clone();
     if state
         .bt_ui
@@ -224,6 +258,31 @@ pub fn handle_dbus_action_result(state: &mut State, res: DbusActionResult) {
         res.lane,
         DbusActionLane::BluetoothDevice | DbusActionLane::BluetoothAdapter
     ) {
-        state.bt_ui.last_error = res.error;
+        state.bt_ui.pending_ops.remove(&res.target);
+        state.bt_ui.last_error = res.error.map(|e| clean_dbus_error(&e));
+    } else if res.target.starts_with("/org/freedesktop/UDisks2/") {
+        state.disk_ui.pending_ops.remove(&res.target);
+        state.disk_ui.last_error = res.error.map(|e| clean_dbus_error(&e));
+        if state.disk_ui.last_error.is_none()
+            && let Ok(mounts) = waywi::system::disk::read_disk_mounts()
+        {
+            state.apply_disk_mounts(mounts);
+        }
+    }
+}
+
+fn clean_dbus_error(raw: &str) -> String {
+    let trimmed = raw
+        .trim_start_matches("D-Bus error: ")
+        .trim_start_matches("Filesystem.Mount failed: ")
+        .trim_start_matches("Filesystem.Unmount failed: ")
+        .trim_start_matches("Drive.Eject failed: ")
+        .trim_start_matches("Drive.PowerOff failed: ")
+        .trim_start_matches("Encrypted.Unlock failed: ")
+        .trim_start_matches("Encrypted.Lock failed: ");
+    if let Some((_, msg)) = trimmed.split_once(": ") {
+        msg.trim().to_owned()
+    } else {
+        trimmed.trim().to_owned()
     }
 }
