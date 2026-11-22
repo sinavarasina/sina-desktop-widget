@@ -26,8 +26,10 @@ use crate::widgets::wallpaper::build_wallpaper_surface;
 
 pub fn build_surfaces(state: &State) -> Surfaces<Msg> {
     let mut surfaces = Surfaces::new();
-    if let Some(wp) = state.wallpaper_asset {
-        surfaces.push(build_wallpaper_surface(wp));
+    if state.config.wallpaper.enabled
+        && let Some(wp) = state.wallpaper_asset
+    {
+        surfaces.push(build_wallpaper_surface(wp, state.config.wallpaper.fit));
     }
     if let Some(sprite) = build_desktop_sprite_surface(state) {
         surfaces.push(sprite);

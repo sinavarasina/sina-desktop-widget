@@ -7,15 +7,20 @@ use crate::app::desktop_sprite::SliceRect;
 use crate::app::state::{Msg, State};
 
 pub fn build_desktop_sprite_surface(state: &State) -> Option<Surface<Msg>> {
+    if !state.config.sprite.desktop_enabled {
+        return None;
+    }
     let assets = state.desktop_sprite.active_assets?;
     let eye_asset = state.desktop_sprite.current_eye_asset()?;
     let mouth_asset = state.desktop_sprite.current_mouth_asset()?;
     let geom = state.desktop_sprite.current_geometry();
     let alpha = state.desktop_sprite.opacity().clamp(0.0, 1.0);
 
-    let (scale, sprite_w, sprite_h, margin_right) = state
-        .desktop_sprite
-        .layout_metrics(state.bar_width, state.screen_height);
+    let scale_mult = f32::from(state.config.sprite.desktop_scale_pct) / 100.0;
+    let (scale, sprite_w, sprite_h, margin_right) =
+        state
+            .desktop_sprite
+            .layout_metrics_scaled(state.bar_width, state.screen_height, scale_mult);
 
     // Snap adjacent slice edges to shared integer coordinates so horizontal slices join with
     // zero subpixel seams at any scale factor.

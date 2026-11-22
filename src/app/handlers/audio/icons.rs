@@ -312,6 +312,8 @@ mod tests {
             only_show_in: Vec::new(),
             not_show_in: Vec::new(),
             startup_wm_class: wm_class.map(str::to_owned),
+            dbus_activatable: false,
+            actions: Vec::new(),
         }
     }
 

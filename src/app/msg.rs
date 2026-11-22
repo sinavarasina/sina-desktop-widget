@@ -6,6 +6,9 @@ use waywi::system::{
 };
 
 use super::bluetooth::BtDeviceMenuAction;
+use super::config::{
+    RightMetricId, SettingStepperId, SettingToggleId, SettingsDropdown, SettingsSection,
+};
 use super::disk::DiskMenuAction;
 use super::ipc::{IpcAction, IpcTarget};
 use super::mpris::MprisControlAction;
@@ -17,6 +20,10 @@ use super::types::{AudioControlTarget, HoverTarget};
 #[derive(Clone)]
 pub enum Msg {
     SwitchWorkspace(WorkspaceId),
+    SwitchWorkspaceNamed(String),
+    SwitchWorkspacePrevious,
+    WorkspaceScroll(ScrollEvent),
+    ToggleSpecialWorkspace(String),
     HyprEvent(HyprlandEvent),
     ScrollTick,
     ToggleDrun,
@@ -162,11 +169,38 @@ pub enum Msg {
     QuickMenuAnimTick,
     CloseQuickMenu,
     QuickMenuTogglePower,
+    QuickMenuToggleSettings,
     QuickMenuPowerAction(PowerAction),
     QuickMenuPowerTick,
     QuickMenuCancelPower,
     QuickMenuSpriteClick,
+    QuickMenuSpriteScroll(ScrollEvent),
     QuickMenuSpriteReactEnd,
+    SettingsSelectSection(SettingsSection),
+    SettingsRailScroll(ScrollEvent),
+    SettingsListScroll(ScrollEvent),
+    SettingsToggle(SettingToggleId),
+    SettingsStep {
+        id: SettingStepperId,
+        delta: i32,
+    },
+    SettingsToggleDropdown(SettingsDropdown),
+    SettingsSelectDropdown {
+        dropdown: SettingsDropdown,
+        index: usize,
+    },
+    SettingsWallpaperPathFocus,
+    SettingsWallpaperPathApply,
+    SettingsWallpaperPathClear,
+    SettingsKey(KeyEvent),
+    SettingsIme(ImeEvent),
+    SettingsPreviewSound,
+    SettingsResetDefaults,
+    SettingsCycleMetricPlacement(RightMetricId),
+    SettingsMoveMetric {
+        id: RightMetricId,
+        delta: i32,
+    },
     DesktopSpriteFadeTick,
     DesktopSpriteBlinkTick,
     DesktopSpriteMouthTick,

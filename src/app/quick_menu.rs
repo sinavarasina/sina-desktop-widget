@@ -9,36 +9,133 @@ use crate::theme::{BLUE, MAUVE, RED, SUBTEXT1, TEXT};
 
 const QUICK_MENU_ANIM_STEP: f32 = 16.0 / 180.0;
 
-// Embed ONLY the 4 deduplicated 1x PNG files needed for `21_witch_profile_right` (~51 KB total).
-// At 0.50x display scale (163.5x168 px), 1x sources avoid >2x single-pass downscale aliasing.
-// No CSV or JSON is loaded or parsed at runtime.
-const WITCH_BASE_PNG: &[u8] = include_bytes!(
+// Embed ONLY the 1x PNG files needed for the 3 scrollable witch poses (~185 KB total).
+// At ~0.50x display scale, 1x sources avoid >2x single-pass downscale aliasing.
+// Only the active pose is decoded at a time; scrolling or closing evicts old pixels to 0 B.
+
+// Pose 0: `21_witch_profile_right` (side profile, facing right)
+const WITCH21_BASE: &[u8] = include_bytes!(
     "../../assets/sprites/yuki_nagato_yakusoku_psp_portraits/21_witch_profile_right/base_body.png"
 );
-const WITCH_EYE_FORWARD_STRIP_PNG: &[u8] = include_bytes!(
+const WITCH21_EYE_PRIMARY: &[u8] = include_bytes!(
     "../../assets/sprites/yuki_nagato_yakusoku_psp_portraits/21_witch_profile_right/expressions/expr01_witchhat_profile_looking_forward_eyes_strip.png"
 );
-const WITCH_EYE_GLANCE_STRIP_PNG: &[u8] = include_bytes!(
+const WITCH21_EYE_ALT: &[u8] = include_bytes!(
     "../../assets/sprites/yuki_nagato_yakusoku_psp_portraits/21_witch_profile_right/expressions/expr02_witchhat_profile_side_glance_viewer_eyes_strip.png"
 );
-// `expr01` and `expr02` mouth strips are byte-identical (10x54, 3 frames of 10x18).
-const WITCH_MOUTH_STRIP_PNG: &[u8] = include_bytes!(
+const WITCH21_MOUTH: &[u8] = include_bytes!(
     "../../assets/sprites/yuki_nagato_yakusoku_psp_portraits/21_witch_profile_right/expressions/expr01_witchhat_profile_looking_forward_mouth_strip.png"
 );
 
-// Exact reference pixel coordinates for Pose 21 (`21_witch_profile_right`).
-pub const SPRITE_BASE_W: f32 = 327.0;
-pub const SPRITE_BASE_H: f32 = 336.0;
-pub const SPRITE_EYE_X: f32 = 184.0;
-pub const SPRITE_EYE_Y: f32 = 127.0;
-pub const SPRITE_EYE_W: f32 = 34.0;
-pub const SPRITE_EYE_H: f32 = 42.0;
-pub const SPRITE_MOUTH_X: f32 = 200.0;
-pub const SPRITE_MOUTH_Y: f32 = 175.0;
-pub const SPRITE_MOUTH_W: f32 = 10.0;
-pub const SPRITE_MOUTH_H: f32 = 18.0;
+// Pose 1: `20_witch_3q_right` (3/4 angle, turning toward viewer)
+const WITCH20_BASE: &[u8] = include_bytes!(
+    "../../assets/sprites/yuki_nagato_yakusoku_psp_portraits/20_witch_3q_right/base_body.png"
+);
+const WITCH20_EYE_PRIMARY: &[u8] = include_bytes!(
+    "../../assets/sprites/yuki_nagato_yakusoku_psp_portraits/20_witch_3q_right/expressions/expr01_witchhat_neutral_calm_eyes_strip.png"
+);
+const WITCH20_EYE_ALT: &[u8] = include_bytes!(
+    "../../assets/sprites/yuki_nagato_yakusoku_psp_portraits/20_witch_3q_right/expressions/expr06_witchhat_side_glance_viewer_eyes_strip.png"
+);
+const WITCH20_MOUTH_PRIMARY: &[u8] = include_bytes!(
+    "../../assets/sprites/yuki_nagato_yakusoku_psp_portraits/20_witch_3q_right/expressions/expr01_witchhat_neutral_calm_mouth_strip.png"
+);
+const WITCH20_MOUTH_ALT: &[u8] = include_bytes!(
+    "../../assets/sprites/yuki_nagato_yakusoku_psp_portraits/20_witch_3q_right/expressions/expr06_witchhat_side_glance_viewer_mouth_strip.png"
+);
 
-/// Eye gaze variants available for `21_witch_profile_right`.
+// Pose 2: `19_witch_front_standard` (facing front straight at viewer)
+const WITCH19_BASE: &[u8] = include_bytes!(
+    "../../assets/sprites/yuki_nagato_yakusoku_psp_portraits/19_witch_front_standard/base_body.png"
+);
+const WITCH19_EYE_PRIMARY: &[u8] = include_bytes!(
+    "../../assets/sprites/yuki_nagato_yakusoku_psp_portraits/19_witch_front_standard/expressions/expr01_witchhat_neutral_calm_eyes_strip.png"
+);
+const WITCH19_EYE_ALT: &[u8] = include_bytes!(
+    "../../assets/sprites/yuki_nagato_yakusoku_psp_portraits/19_witch_front_standard/expressions/expr04_witchhat_gentle_smile_eyes_strip.png"
+);
+const WITCH19_MOUTH_PRIMARY: &[u8] = include_bytes!(
+    "../../assets/sprites/yuki_nagato_yakusoku_psp_portraits/19_witch_front_standard/expressions/expr01_witchhat_neutral_calm_mouth_strip.png"
+);
+const WITCH19_MOUTH_ALT: &[u8] = include_bytes!(
+    "../../assets/sprites/yuki_nagato_yakusoku_psp_portraits/19_witch_front_standard/expressions/expr04_witchhat_gentle_smile_mouth_strip.png"
+);
+
+#[derive(Clone, Copy)]
+pub struct WitchPoseSpec {
+    pub base_w: f32,
+    pub base_h: f32,
+    pub eye_x: f32,
+    pub eye_y: f32,
+    pub eye_w: f32,
+    pub eye_h: f32,
+    pub mouth_x: f32,
+    pub mouth_y: f32,
+    pub mouth_w: f32,
+    pub mouth_h: f32,
+    pub base_png: &'static [u8],
+    pub eye_primary_png: &'static [u8],
+    pub eye_alt_png: &'static [u8],
+    pub mouth_primary_png: &'static [u8],
+    pub mouth_alt_png: Option<&'static [u8]>,
+}
+
+/// Scroll order: side profile (`21`) → 3/4 view (`20`) → front view (`19`).
+pub const WITCH_POSES: [WitchPoseSpec; 3] = [
+    WitchPoseSpec {
+        base_w: 327.0,
+        base_h: 336.0,
+        eye_x: 184.0,
+        eye_y: 127.0,
+        eye_w: 34.0,
+        eye_h: 42.0,
+        mouth_x: 200.0,
+        mouth_y: 175.0,
+        mouth_w: 10.0,
+        mouth_h: 18.0,
+        base_png: WITCH21_BASE,
+        eye_primary_png: WITCH21_EYE_PRIMARY,
+        eye_alt_png: WITCH21_EYE_ALT,
+        mouth_primary_png: WITCH21_MOUTH,
+        mouth_alt_png: None,
+    },
+    WitchPoseSpec {
+        base_w: 352.0,
+        base_h: 346.0,
+        eye_x: 143.0,
+        eye_y: 145.0,
+        eye_w: 74.0,
+        eye_h: 42.0,
+        mouth_x: 183.0,
+        mouth_y: 185.0,
+        mouth_w: 10.0,
+        mouth_h: 18.0,
+        base_png: WITCH20_BASE,
+        eye_primary_png: WITCH20_EYE_PRIMARY,
+        eye_alt_png: WITCH20_EYE_ALT,
+        mouth_primary_png: WITCH20_MOUTH_PRIMARY,
+        mouth_alt_png: Some(WITCH20_MOUTH_ALT),
+    },
+    WitchPoseSpec {
+        base_w: 326.0,
+        base_h: 349.0,
+        eye_x: 125.0,
+        eye_y: 148.0,
+        eye_w: 82.0,
+        eye_h: 42.0,
+        mouth_x: 157.0,
+        mouth_y: 188.0,
+        mouth_w: 18.0,
+        mouth_h: 18.0,
+        base_png: WITCH19_BASE,
+        eye_primary_png: WITCH19_EYE_PRIMARY,
+        eye_alt_png: WITCH19_EYE_ALT,
+        mouth_primary_png: WITCH19_MOUTH_PRIMARY,
+        mouth_alt_png: Some(WITCH19_MOUTH_ALT),
+    },
+];
+
+/// Eye gaze / expression toggle available for the active Quick Status witch pose.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum YukiGaze {
     #[default]
@@ -46,25 +143,46 @@ pub enum YukiGaze {
     SideGlanceViewer,
 }
 
-/// Decoded layered sprite assets cached lazily on first Quick Menu open.
+/// Decoded layered sprite assets cached lazily per witch pose.
 #[derive(Clone)]
 pub struct YukiSpriteAssets {
     pub base: ImageAsset,
     pub eye_forward: SpriteSheet,
     pub eye_glance: SpriteSheet,
     pub mouth: SpriteSheet,
+    pub mouth_alt: Option<SpriteSheet>,
 }
 
 impl YukiSpriteAssets {
-    /// Lazily decodes the 4 embedded PNGs and builds timed blink & mouth-reaction `SpriteSheet`s.
-    pub fn load(ctx: &mut EffectCtx<'_>) -> Option<Self> {
-        let base = ctx.load_image_bytes(WITCH_BASE_PNG).ok()?;
-        let eye_fwd_asset = ctx.load_image_bytes(WITCH_EYE_FORWARD_STRIP_PNG).ok()?;
-        let eye_glc_asset = ctx.load_image_bytes(WITCH_EYE_GLANCE_STRIP_PNG).ok()?;
-        let mouth_asset = ctx.load_image_bytes(WITCH_MOUTH_STRIP_PNG).ok()?;
+    /// Lazily decodes the embedded PNGs for `spec` and builds timed blink & mouth `SpriteSheet`s.
+    pub fn load(spec: &WitchPoseSpec, ctx: &mut EffectCtx<'_>) -> Option<Self> {
+        let base = ctx.load_image_bytes(spec.base_png).ok()?;
+        let eye_fwd_asset = ctx.load_image_bytes(spec.eye_primary_png).ok()?;
+        let eye_glc_asset = ctx.load_image_bytes(spec.eye_alt_png).ok()?;
+        let mouth_asset = ctx.load_image_bytes(spec.mouth_primary_png).ok()?;
+
+        let make_mouth_sheet = |asset: ImageAsset| {
+            SpriteSheet::new(asset)
+                .frame_size(spec.mouth_w.logical_px(), spec.mouth_h.logical_px())
+                .timed_animation(
+                    "react",
+                    [
+                        (1, Duration::from_millis(90)),
+                        (2, Duration::from_millis(150)),
+                        (1, Duration::from_millis(90)),
+                        (0, Duration::from_millis(60)),
+                    ],
+                    PlaybackMode::Once,
+                )
+        };
+
+        let mouth_alt = match spec.mouth_alt_png {
+            Some(bytes) => Some(make_mouth_sheet(ctx.load_image_bytes(bytes).ok()?)),
+            None => None,
+        };
 
         let eye_forward = SpriteSheet::new(eye_fwd_asset)
-            .frame_size(SPRITE_EYE_W.logical_px(), SPRITE_EYE_H.logical_px())
+            .frame_size(spec.eye_w.logical_px(), spec.eye_h.logical_px())
             .timed_animation(
                 "blink",
                 [
@@ -77,7 +195,7 @@ impl YukiSpriteAssets {
             );
 
         let eye_glance = SpriteSheet::new(eye_glc_asset)
-            .frame_size(SPRITE_EYE_W.logical_px(), SPRITE_EYE_H.logical_px())
+            .frame_size(spec.eye_w.logical_px(), spec.eye_h.logical_px())
             .timed_animation(
                 "blink",
                 [
@@ -89,25 +207,23 @@ impl YukiSpriteAssets {
                 PlaybackMode::Loop,
             );
 
-        let mouth = SpriteSheet::new(mouth_asset)
-            .frame_size(SPRITE_MOUTH_W.logical_px(), SPRITE_MOUTH_H.logical_px())
-            .timed_animation(
-                "react",
-                [
-                    (1, Duration::from_millis(90)),
-                    (2, Duration::from_millis(150)),
-                    (1, Duration::from_millis(90)),
-                    (0, Duration::from_millis(60)),
-                ],
-                PlaybackMode::Once,
-            );
-
         Some(Self {
             base,
             eye_forward,
             eye_glance,
-            mouth,
+            mouth: make_mouth_sheet(mouth_asset),
+            mouth_alt,
         })
+    }
+
+    pub fn evict_pixels(&self, ctx: &mut EffectCtx<'_>) {
+        let _ = ctx.evict_asset_pixels(self.base);
+        let _ = ctx.evict_asset_pixels(self.eye_forward.asset);
+        let _ = ctx.evict_asset_pixels(self.eye_glance.asset);
+        let _ = ctx.evict_asset_pixels(self.mouth.asset);
+        if let Some(ref alt) = self.mouth_alt {
+            let _ = ctx.evict_asset_pixels(alt.asset);
+        }
     }
 }
 
@@ -226,13 +342,16 @@ pub struct QuickMenuState {
     pub popup_target: bool,
     pub popup_progress: f32,
     pub power_menu_open: bool,
+    pub settings_open: bool,
     pub pending_power: Option<PendingPowerAction>,
     pub logind: LogindSnapshot,
     pub power_error: Option<String>,
     pub username: String,
     pub gaze: YukiGaze,
     pub mouth_reacting: bool,
+    pub sprite_pose_idx: usize,
     pub sprite_assets: Option<YukiSpriteAssets>,
+    cached_sprite_poses: [Option<YukiSpriteAssets>; 3],
 }
 
 impl Default for QuickMenuState {
@@ -248,18 +367,26 @@ impl Default for QuickMenuState {
             popup_target: false,
             popup_progress: 0.0,
             power_menu_open: false,
+            settings_open: false,
             pending_power: None,
             logind: LogindSnapshot::default(),
             power_error: None,
             username,
             gaze: YukiGaze::LookingForward,
             mouth_reacting: false,
+            sprite_pose_idx: 0,
             sprite_assets: None,
+            cached_sprite_poses: [None, None, None],
         }
     }
 }
 
 impl QuickMenuState {
+    #[must_use]
+    pub fn current_pose_spec(&self) -> WitchPoseSpec {
+        WITCH_POSES[self.sprite_pose_idx % WITCH_POSES.len()]
+    }
+
     #[must_use]
     pub fn is_popup_visible(&self) -> bool {
         self.popup_target || self.popup_progress > 0.001
@@ -282,20 +409,71 @@ impl QuickMenuState {
         }
     }
 
+    fn load_or_cached_pose(
+        &mut self,
+        idx: usize,
+        ctx: &mut EffectCtx<'_>,
+    ) -> Option<YukiSpriteAssets> {
+        let slot = idx % WITCH_POSES.len();
+        if let Some(ref cached) = self.cached_sprite_poses[slot] {
+            return Some(cached.clone());
+        }
+        let loaded = YukiSpriteAssets::load(&WITCH_POSES[slot], ctx)?;
+        self.cached_sprite_poses[slot] = Some(loaded.clone());
+        Some(loaded)
+    }
+
     pub fn ensure_sprite_loaded(&mut self, ctx: &mut EffectCtx<'_>) {
         if self.sprite_assets.is_none() {
-            self.sprite_assets = YukiSpriteAssets::load(ctx);
+            let idx = self.sprite_pose_idx % WITCH_POSES.len();
+            self.sprite_assets = self.load_or_cached_pose(idx, ctx);
         }
     }
 
-    /// Evicts decoded RGBA8 sprite pixels (~470 KB) back to their ~52 KB compressed PNG bytes
-    /// while the Quick Status popup is closed; `waywi` re-decodes them transparently on next open.
+    /// Scrolls through the 3 witch poses (`21_profile` ↔ `20_3q` ↔ `19_front`), lazily decoding
+    /// the newly active pose and immediately evicting the previous pose's RGBA8 pixels.
+    pub fn scroll_sprite_pose(&mut self, delta: i32, ctx: &mut EffectCtx<'_>) {
+        if delta == 0 {
+            return;
+        }
+        let len = WITCH_POSES.len();
+        let next_idx = if delta > 0 {
+            (self.sprite_pose_idx + 1) % len
+        } else {
+            (self.sprite_pose_idx + len - 1) % len
+        };
+        if next_idx == self.sprite_pose_idx {
+            return;
+        }
+        if let Some(ref prev) = self.sprite_assets {
+            prev.evict_pixels(ctx);
+        }
+        self.sprite_pose_idx = next_idx;
+        self.sprite_assets = self.load_or_cached_pose(next_idx, ctx);
+        self.mouth_reacting = false;
+    }
+
+    /// Sets the active Quick Menu witch pose by index (`0..=2`), evicting old pixels when loaded.
+    pub fn set_sprite_pose(&mut self, idx: usize, ctx: &mut EffectCtx<'_>) {
+        let target = idx % WITCH_POSES.len();
+        if target == self.sprite_pose_idx {
+            return;
+        }
+        if let Some(ref prev) = self.sprite_assets {
+            prev.evict_pixels(ctx);
+        }
+        self.sprite_pose_idx = target;
+        if self.popup_target || self.sprite_assets.is_some() {
+            self.sprite_assets = self.load_or_cached_pose(target, ctx);
+        }
+        self.mouth_reacting = false;
+    }
+
+    /// Evicts decoded RGBA8 sprite pixels back to their compressed PNG bytes while Quick Status
+    /// is closed; `waywi` re-decodes them transparently on next open.
     pub fn evict_sprite_pixels(&self, ctx: &mut EffectCtx<'_>) {
         if let Some(ref assets) = self.sprite_assets {
-            let _ = ctx.evict_asset_pixels(assets.base);
-            let _ = ctx.evict_asset_pixels(assets.eye_forward.asset);
-            let _ = ctx.evict_asset_pixels(assets.eye_glance.asset);
-            let _ = ctx.evict_asset_pixels(assets.mouth.asset);
+            assets.evict_pixels(ctx);
         }
     }
 
@@ -308,15 +486,16 @@ impl QuickMenuState {
     pub fn close_popup(&mut self) {
         self.popup_target = false;
         self.power_menu_open = false;
+        self.settings_open = false;
         self.pending_power = None;
         self.mouth_reacting = false;
     }
 
-    pub fn start_power_countdown(&mut self, action: PowerAction) {
+    pub fn start_power_countdown_secs(&mut self, action: PowerAction, secs: u8) {
         self.power_error = None;
         self.pending_power = Some(PendingPowerAction {
             action,
-            seconds_left: POWER_COUNTDOWN_SECS,
+            seconds_left: secs.max(1),
         });
     }
 
@@ -326,6 +505,17 @@ impl QuickMenuState {
 
     pub fn toggle_power_menu(&mut self) {
         self.power_menu_open = !self.power_menu_open;
+        if self.power_menu_open {
+            self.settings_open = false;
+        }
+        self.power_error = None;
+    }
+
+    pub fn toggle_settings_menu(&mut self) {
+        self.settings_open = !self.settings_open;
+        if self.settings_open {
+            self.power_menu_open = false;
+        }
         self.power_error = None;
     }
 

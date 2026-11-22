@@ -2,6 +2,7 @@
 
 use waywi::prelude::*;
 
+use super::config::RightMetricId;
 use super::quick_menu::PowerAction;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -18,6 +19,8 @@ pub enum HoverTarget {
     SysInfo,
     ActiveWs,
     InactiveWs(i32),
+    NamedWs(usize),
+    SpecialWs(usize),
     WindowScroll,
     WindowInfo,
     Notifications,
@@ -68,19 +71,38 @@ pub enum HoverTarget {
     Bluetooth,
     ClockMenu,
     Clock,
+    QuickSettingsToggle,
     QuickPowerToggle,
     QuickPowerAction(PowerAction),
     QuickPowerCancel,
     QuickSprite,
+    SettingsTab(usize),
+    SettingsRow(usize),
+    SettingsDropdownOpt(usize),
+    SettingsStepperMinus(usize),
+    SettingsStepperPlus(usize),
+    SettingsAction(usize),
+    SettingsPathApply,
+    SettingsPathClear,
+    SettingsMetricPlace(usize),
+    SettingsMetricUp(usize),
+    SettingsMetricDown(usize),
 }
 
 impl HoverTarget {
     #[must_use]
-    pub const fn is_drawer(self) -> bool {
-        matches!(
-            self,
-            Self::ExpandSign | Self::Gpu | Self::Temp | Self::Disk | Self::Bluetooth
-        )
+    pub const fn right_metric_id(self) -> Option<RightMetricId> {
+        match self {
+            Self::Wireplumber => Some(RightMetricId::Audio),
+            Self::Cpu => Some(RightMetricId::Cpu),
+            Self::Memory => Some(RightMetricId::Memory),
+            Self::Network => Some(RightMetricId::Network),
+            Self::Gpu => Some(RightMetricId::Gpu),
+            Self::Temp => Some(RightMetricId::Temp),
+            Self::Disk => Some(RightMetricId::Disk),
+            Self::Bluetooth => Some(RightMetricId::Bluetooth),
+            _ => None,
+        }
     }
 
     #[must_use]

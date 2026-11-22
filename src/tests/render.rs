@@ -118,6 +118,7 @@ fn desktop_yuki_sprite_fades_rotates_on_workspace_switch_blinks_and_evicts_old_v
         rt.state().desktop_sprite.current_mouth_frame(),
         MouthFrame::Closed
     );
+    let nonce_before = rt.state().desktop_sprite.mouth_nonce;
     rt.enqueue(Msg::NotificationEvent(Box::new(
         NotificationEvent::Received(Box::new(DesktopNotification {
             id: 77,
@@ -128,16 +129,7 @@ fn desktop_yuki_sprite_fades_rotates_on_workspace_switch_blinks_and_evicts_old_v
         })),
     )));
     rt.step().unwrap();
-    assert_eq!(
-        rt.state().desktop_sprite.current_mouth_frame(),
-        MouthFrame::HalfOpen
-    );
-    rt.enqueue(Msg::DesktopSpriteMouthTick);
-    rt.step().unwrap();
-    assert_eq!(
-        rt.state().desktop_sprite.current_mouth_frame(),
-        MouthFrame::Open
-    );
+    assert_eq!(rt.state().desktop_sprite.mouth_nonce, nonce_before + 1);
     for _ in 0..8 {
         rt.enqueue(Msg::DesktopSpriteMouthTick);
     }
@@ -149,6 +141,7 @@ fn desktop_yuki_sprite_fades_rotates_on_workspace_switch_blinks_and_evicts_old_v
     assert!(rt.state().desktop_sprite.mouth_step.is_none());
 
     // DND suppresses desktop sprite mouth reaction on incoming notification.
+    let nonce_dnd = rt.state().desktop_sprite.mouth_nonce;
     rt.enqueue(Msg::NotifCenterToggleDnd);
     rt.enqueue(Msg::NotificationEvent(Box::new(
         NotificationEvent::Received(Box::new(DesktopNotification {
@@ -159,6 +152,7 @@ fn desktop_yuki_sprite_fades_rotates_on_workspace_switch_blinks_and_evicts_old_v
         })),
     )));
     rt.step().unwrap();
+    assert_eq!(rt.state().desktop_sprite.mouth_nonce, nonce_dnd);
     assert!(rt.state().desktop_sprite.mouth_step.is_none());
     rt.enqueue(Msg::NotifCenterToggleDnd);
     rt.step().unwrap();

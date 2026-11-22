@@ -29,8 +29,6 @@ pub const GPU_EXPANDED_WIDTH: f32 = 56.0;
 pub const TEMP_EXPANDED_WIDTH: f32 = 52.0;
 pub const DISK_EXPANDED_WIDTH: f32 = 72.0;
 pub const BT_EXPANDED_WIDTH: f32 = 56.0;
-pub const DRAWER_REVEALED_WIDTH: f32 =
-    GPU_EXPANDED_WIDTH + TEMP_EXPANDED_WIDTH + DISK_EXPANDED_WIDTH + BT_EXPANDED_WIDTH;
 
 pub const NOTIF_ICON_SIZE: f32 = 16.0;
 pub const NOTIF_CENTER_ICON_SIZE: f32 = 44.0;
@@ -58,7 +56,9 @@ pub const WALLPAPER_PNG: &[u8] =
 // Catppuccin Mocha palette from style.css
 pub const MAUVE: Color = Color::rgb(203, 166, 247);
 pub const RED: Color = Color::rgb(243, 139, 168);
+pub const PEACH: Color = Color::rgb(250, 179, 135);
 pub const GREEN: Color = Color::rgb(166, 227, 161);
+pub const TEAL: Color = Color::rgb(148, 226, 213);
 pub const BLUE: Color = Color::rgb(137, 180, 250);
 pub const TEXT: Color = Color::rgb(205, 214, 244);
 pub const SUBTEXT1: Color = Color::rgb(186, 194, 222);

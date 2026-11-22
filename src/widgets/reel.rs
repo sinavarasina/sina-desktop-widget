@@ -33,6 +33,39 @@ pub fn build_reel_slot(
     align: ReelAlign,
     direction: ReelDirection,
 ) -> Element<Msg> {
+    build_reel_slot_accented(
+        key,
+        width,
+        height,
+        items,
+        reel,
+        font,
+        font_size,
+        color,
+        None,
+        max_chars,
+        align,
+        direction,
+    )
+}
+
+/// Like [`build_reel_slot`], optionally coloring the first character of each item with a rotating
+/// palette indexed by item position (e.g. `G`entoo, `H`ypr, `v`arasina).
+#[allow(clippy::too_many_arguments)]
+pub fn build_reel_slot_accented(
+    key: &'static str,
+    width: f32,
+    height: f32,
+    items: &[String],
+    reel: &ReelState,
+    font: Font,
+    font_size: f32,
+    color: Color,
+    first_char_palette: Option<&[Color]>,
+    max_chars: usize,
+    align: ReelAlign,
+    direction: ReelDirection,
+) -> Element<Msg> {
     if items.is_empty() {
         return Group::new()
             .key(key)
@@ -47,23 +80,30 @@ pub fn build_reel_slot(
 
     let idx = reel.index % items.len();
     let current = truncate_compact(&items[idx], max_chars);
+    let cur_accent = first_char_palette
+        .filter(|pal| !pal.is_empty())
+        .map(|pal| pal[idx % pal.len()]);
 
     let inner: Element<Msg> = if !reel.animating || items.len() <= 1 {
         Group::new()
             .size(Size::px(width.logical_px(), height.logical_px()))
-            .child(
-                Text::new(current)
-                    .font(font)
-                    .font_size(font_size.logical_px())
-                    .line_height(1.0)
-                    .color(color)
-                    .position(Position::relative_to_parent(x_pct, Percent::new(50.0)))
-                    .anchor(anchor),
-            )
+            .child(build_reel_line(
+                &current,
+                font,
+                font_size,
+                color,
+                cur_accent,
+                1.0,
+                Position::relative_to_parent(x_pct, Percent::new(50.0)),
+                anchor,
+            ))
             .into()
     } else {
         let next_idx = (idx + 1) % items.len();
         let next = truncate_compact(&items[next_idx], max_chars);
+        let next_accent = first_char_palette
+            .filter(|pal| !pal.is_empty())
+            .map(|pal| pal[next_idx % pal.len()]);
         let p = reel.progress.clamp(0.0, 1.0);
         let ease = 1.0 - (1.0 - p).powi(3);
         let (cur_dx, cur_dy, next_dx, next_dy) = match direction {
@@ -75,40 +115,92 @@ pub fn build_reel_slot(
 
         Group::new()
             .size(Size::px(width.logical_px(), height.logical_px()))
-            .child(
-                Text::new(current)
-                    .font(font.clone())
-                    .font_size(font_size.logical_px())
-                    .line_height(1.0)
-                    .color(color.with_opacity(cur_alpha))
-                    .position(Position::RelativeToParent {
-                        x: x_pct,
-                        y: Percent::new(50.0),
-                        offset_x: cur_dx.logical_px(),
-                        offset_y: cur_dy.logical_px(),
-                    })
-                    .anchor(anchor),
-            )
-            .child(
-                Text::new(next)
-                    .font(font)
-                    .font_size(font_size.logical_px())
-                    .line_height(1.0)
-                    .color(color.with_opacity(next_alpha))
-                    .position(Position::RelativeToParent {
-                        x: x_pct,
-                        y: Percent::new(50.0),
-                        offset_x: next_dx.logical_px(),
-                        offset_y: next_dy.logical_px(),
-                    })
-                    .anchor(anchor),
-            )
+            .child(build_reel_line(
+                &current,
+                font.clone(),
+                font_size,
+                color,
+                cur_accent,
+                cur_alpha,
+                Position::RelativeToParent {
+                    x: x_pct,
+                    y: Percent::new(50.0),
+                    offset_x: cur_dx.logical_px(),
+                    offset_y: cur_dy.logical_px(),
+                },
+                anchor,
+            ))
+            .child(build_reel_line(
+                &next,
+                font,
+                font_size,
+                color,
+                next_accent,
+                next_alpha,
+                Position::RelativeToParent {
+                    x: x_pct,
+                    y: Percent::new(50.0),
+                    offset_x: next_dx.logical_px(),
+                    offset_y: next_dy.logical_px(),
+                },
+                anchor,
+            ))
             .into()
     };
 
     Clip::new(inner)
         .key(key)
         .size(Size::px(width.logical_px(), height.logical_px()))
+        .into()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_reel_line(
+    text: &str,
+    font: Font,
+    font_size: f32,
+    color: Color,
+    first_char_accent: Option<Color>,
+    alpha: f32,
+    position: Position,
+    anchor: ElementAnchor,
+) -> Element<Msg> {
+    if let Some(accent) = first_char_accent {
+        let mut chars = text.chars();
+        if let Some(first) = chars.next() {
+            let rest = chars.as_str();
+            let mut row = Row::new()
+                .size(Size::auto())
+                .align(Align::Center)
+                .position(position)
+                .anchor(anchor)
+                .child(
+                    Text::new(first.to_string())
+                        .font(font.clone())
+                        .font_size(font_size.logical_px())
+                        .line_height(1.0)
+                        .color(accent.with_opacity(alpha)),
+                );
+            if !rest.is_empty() {
+                row = row.child(
+                    Text::new(rest.to_owned())
+                        .font(font)
+                        .font_size(font_size.logical_px())
+                        .line_height(1.0)
+                        .color(color.with_opacity(alpha)),
+                );
+            }
+            return row.into();
+        }
+    }
+
+    Text::new(text.to_owned())
+        .font(font)
+        .font_size(font_size.logical_px())
+        .line_height(1.0)
+        .color(color.with_opacity(alpha))
+        .position(position)
+        .anchor(anchor)
         .into()
 }
 

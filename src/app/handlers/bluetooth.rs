@@ -5,7 +5,7 @@ use std::time::SystemTime;
 use waywi::prelude::*;
 
 use crate::app::bluetooth::BtDeviceMenuAction;
-use crate::app::state::State;
+use crate::app::state::{SoundCue, State};
 
 use super::events::scroll_direction_y;
 
@@ -43,15 +43,22 @@ pub fn handle_bluetooth_agent_event(
             notif,
             &mut state.icon_lookup,
             &mut state.path_asset_cache,
+            &mut state.sounds,
             ctx,
         );
     }
 }
 
-pub fn handle_bt_bar_pointer(state: &mut State, ev: PointerEvent) {
+pub fn handle_bt_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &EffectCtx<'_>) {
     if ev.button == Some(MouseButton::Left) {
         state.bt_ui.popup_left_x = (ev.position.x.get() - 140.0).max(8.0);
         state.bt_ui.toggle_popup();
+        let cue = if state.bt_ui.popup_target {
+            SoundCue::MenuPopup
+        } else {
+            SoundCue::MenuPopdown
+        };
+        state.play_sound(cue, ctx);
     }
 }
 
@@ -67,6 +74,14 @@ pub fn handle_bt_toggle_power(state: &mut State, ctx: &EffectCtx<'_>) {
     if let Some(a) = state.bluetooth.adapters.first_mut() {
         a.powered = next;
     }
+    state.play_sound(
+        if next {
+            SoundCue::ToggleOn
+        } else {
+            SoundCue::ToggleOff
+        },
+        ctx,
+    );
 }
 
 pub fn handle_bt_toggle_scan(state: &mut State, ctx: &EffectCtx<'_>) {
@@ -82,9 +97,18 @@ pub fn handle_bt_toggle_scan(state: &mut State, ctx: &EffectCtx<'_>) {
             let _ = dbus.start_bluetooth_discovery(&path);
         }
     }
+    let next = !discovering;
     if let Some(a) = state.bluetooth.adapters.first_mut() {
-        a.discovering = !discovering;
+        a.discovering = next;
     }
+    state.play_sound(
+        if next {
+            SoundCue::ToggleOn
+        } else {
+            SoundCue::ToggleOff
+        },
+        ctx,
+    );
 }
 
 pub fn handle_bt_toggle_discoverable(state: &mut State, ctx: &EffectCtx<'_>) {
@@ -93,12 +117,21 @@ pub fn handle_bt_toggle_discoverable(state: &mut State, ctx: &EffectCtx<'_>) {
     };
     let path = adapter.object_path.clone();
     let discoverable = adapter.discoverable;
+    let next = !discoverable;
     if let Ok(dbus) = ctx.dbus() {
-        let _ = dbus.set_bluetooth_discoverable(&path, !discoverable);
+        let _ = dbus.set_bluetooth_discoverable(&path, next);
     }
     if let Some(a) = state.bluetooth.adapters.first_mut() {
-        a.discoverable = !discoverable;
+        a.discoverable = next;
     }
+    state.play_sound(
+        if next {
+            SoundCue::ToggleOn
+        } else {
+            SoundCue::ToggleOff
+        },
+        ctx,
+    );
 }
 
 pub fn handle_bt_device_pointer(
@@ -251,7 +284,8 @@ pub fn handle_bt_popup_scroll(state: &mut State, sc: ScrollEvent) {
     state.bt_ui.scroll_index = next.min(max_idx);
 }
 
-pub fn handle_dbus_action_result(state: &mut State, res: DbusActionResult) {
+pub fn handle_dbus_action_result(state: &mut State, res: DbusActionResult, ctx: &EffectCtx<'_>) {
+    let had_error = res.error.is_some();
     if matches!(
         res.lane,
         DbusActionLane::BluetoothDevice | DbusActionLane::BluetoothAdapter
@@ -268,6 +302,9 @@ pub fn handle_dbus_action_result(state: &mut State, res: DbusActionResult) {
         }
     } else if res.target.starts_with("/org/freedesktop/login1") {
         state.quick_menu.power_error = res.error.map(|e| clean_dbus_error(&e));
+    }
+    if had_error {
+        state.play_sound(SoundCue::DialogError, ctx);
     }
 }
 

@@ -4,7 +4,7 @@ mod icons;
 
 use waywi::prelude::*;
 
-use crate::app::state::{AudioControlTarget, State};
+use crate::app::state::{AudioControlTarget, SoundCue, State};
 use crate::theme::{MIXER_TRACK_WIDTH, SEP_WIDTH};
 
 use super::events::scroll_direction_y;
@@ -19,6 +19,12 @@ pub fn handle_mixer_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &Effec
             let module_left = ev.position.x.get() - ev.local_position.x.get();
             state.audio_ui.popup_left_x = (module_left + SEP_WIDTH).max(8.0);
             state.audio_ui.toggle_popup();
+            let cue = if state.audio_ui.popup_target {
+                SoundCue::MenuPopup
+            } else {
+                SoundCue::MenuPopdown
+            };
+            state.play_sound(cue, ctx);
         }
         Some(MouseButton::Right) => toggle_target_mute(state, ctx),
         _ => {}
@@ -62,6 +68,7 @@ pub fn handle_mixer_stream_scroll(
     {
         s.linear = next;
     }
+    state.play_sound(SoundCue::VolumeChange, ctx);
 }
 
 pub fn handle_mixer_stream_seek_click(
@@ -82,6 +89,7 @@ pub fn handle_mixer_stream_seek_click(
     {
         s.linear = ratio;
     }
+    state.play_sound(SoundCue::VolumeChange, ctx);
 }
 
 pub fn handle_mixer_capture_scroll(
@@ -150,6 +158,7 @@ fn set_master_volume(state: &mut State, level: f32, ctx: &EffectCtx<'_>) {
             AudioControlTarget::Source => audio.source_linear = level,
         }
     }
+    state.play_sound(SoundCue::VolumeChange, ctx);
 }
 
 fn toggle_target_mute(state: &mut State, ctx: &EffectCtx<'_>) {
@@ -163,12 +172,25 @@ fn toggle_target_mute(state: &mut State, ctx: &EffectCtx<'_>) {
             }
         }
     }
+    let mut now_muted = false;
     if let Some(audio) = &mut state.audio {
         match state.audio_target {
-            AudioControlTarget::Sink => audio.muted = !audio.muted,
-            AudioControlTarget::Source => audio.source_muted = !audio.source_muted,
+            AudioControlTarget::Sink => {
+                audio.muted = !audio.muted;
+                now_muted = audio.muted;
+            }
+            AudioControlTarget::Source => {
+                audio.source_muted = !audio.source_muted;
+                now_muted = audio.source_muted;
+            }
         }
     }
+    let cue = if now_muted {
+        SoundCue::ToggleOff
+    } else {
+        SoundCue::ToggleOn
+    };
+    state.play_sound(cue, ctx);
 }
 
 fn stream_linear(state: &State, id: u32) -> Option<f32> {

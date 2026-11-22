@@ -4,15 +4,17 @@ use waywi::prelude::*;
 
 use crate::app::state::{HoverTarget, Msg, State};
 use crate::theme::{
-    BAR_HEIGHT, CRUST, MANTLE, SUBTEXT0, SUBTEXT1, SURFACE0, SURFACE1, font_ui, font_ui_semibold,
+    BAR_HEIGHT, BLUE, CRUST, GREEN, MANTLE, MAUVE, RED, SUBTEXT0, SUBTEXT1, SURFACE0, SURFACE1,
+    font_ui, font_ui_semibold,
 };
-use crate::widgets::reel::{ReelAlign, ReelDirection, build_reel_slot};
+use crate::widgets::reel::{ReelAlign, ReelDirection, build_reel_slot, build_reel_slot_accented};
 use crate::widgets::separators::{SepShape, separator};
 
 const ROW_HEIGHT: f32 = 11.0;
 const CHAR_WIDTH_PX: f32 = 5.0;
 const MAX_CHARS: usize = 14;
 const INNER_PAD_H: f32 = 2.0;
+const TEXT_A_INITIAL_ACCENTS: [Color; 4] = [MAUVE, BLUE, GREEN, RED];
 
 pub fn build_sysinfo(state: &State) -> Element<Msg> {
     let bg = if state.hovered == HoverTarget::SysInfo {
@@ -36,7 +38,7 @@ pub fn build_sysinfo(state: &State) -> Element<Msg> {
     let body_w = text_w + INNER_PAD_H * 2.0;
     let divider_w = (text_w - 10.0).max(16.0);
 
-    let line_a = build_reel_slot(
+    let line_a = build_reel_slot_accented(
         "sysinfo-text-a",
         text_w,
         ROW_HEIGHT,
@@ -45,6 +47,7 @@ pub fn build_sysinfo(state: &State) -> Element<Msg> {
         font_ui_semibold(),
         8.0,
         SUBTEXT1,
+        Some(&TEXT_A_INITIAL_ACCENTS),
         MAX_CHARS,
         ReelAlign::Center,
         ReelDirection::SlideUp,

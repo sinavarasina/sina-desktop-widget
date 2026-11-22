@@ -10,6 +10,7 @@ mod ipc;
 mod mpris;
 mod notifications;
 mod quick_menu;
+mod settings;
 mod subscriptions;
 mod update;
 

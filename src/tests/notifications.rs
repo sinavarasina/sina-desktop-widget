@@ -400,3 +400,128 @@ fn notification_sound_dnd_and_xdg_v1_2_hints_behave_properly() {
     );
     assert!(rt.state().notifications.active_ticker.is_none());
 }
+
+#[test]
+fn xdg_sound_theme_engine_tracks_transitions_cooldowns_and_dnd() {
+    use crate::app::state::SoundCue;
+
+    let mut rt = synthetic_rt();
+    // Ensure deterministic enabled state regardless of host GTK settings.ini.
+    assert!(rt.state().sounds.played_cues.is_empty());
+
+    // 1. Initial hardware/network snapshots establish startup baselines with ZERO false sounds.
+    rt.enqueue(Msg::UDisksUpdated(UDisksSnapshot {
+        drives: vec![UDisksDrive {
+            object_path: String::from("/org/freedesktop/UDisks2/drives/NVMe0"),
+            ..UDisksDrive::default()
+        }],
+        block_devices: Vec::new(),
+    }));
+    rt.enqueue(Msg::BluetoothUpdated(BluetoothSnapshot {
+        adapters: Vec::new(),
+        devices: vec![BluetoothDevice {
+            object_path: String::from("/org/bluez/hci0/dev_AA"),
+            connected: false,
+            ..BluetoothDevice::default()
+        }],
+    }));
+    rt.enqueue(Msg::NetworkManagerUpdated(NetworkManagerSnapshot {
+        state: NmState::ConnectedGlobal,
+        ..NetworkManagerSnapshot::default()
+    }));
+    rt.step().unwrap();
+    assert!(
+        !rt.state().sounds.played_cues.iter().any(|c| matches!(
+            c,
+            SoundCue::DeviceAdded
+                | SoundCue::DeviceRemoved
+                | SoundCue::NetworkConnected
+                | SoundCue::NetworkDisconnected
+        )),
+        "initial startup snapshots must not emit spurious hardware/network sounds"
+    );
+    let baseline_len = rt.state().sounds.played_cues.len();
+
+    // 2. Subsequent hotplug / BT connect / network drop emit exact XDG cues.
+    rt.enqueue(Msg::UDisksUpdated(UDisksSnapshot {
+        drives: vec![
+            UDisksDrive {
+                object_path: String::from("/org/freedesktop/UDisks2/drives/NVMe0"),
+                ..UDisksDrive::default()
+            },
+            UDisksDrive {
+                object_path: String::from("/org/freedesktop/UDisks2/drives/USB1"),
+                ..UDisksDrive::default()
+            },
+        ],
+        block_devices: Vec::new(),
+    }));
+    rt.enqueue(Msg::NetworkManagerUpdated(NetworkManagerSnapshot {
+        state: NmState::Disconnected,
+        ..NetworkManagerSnapshot::default()
+    }));
+    rt.enqueue(Msg::HyprEvent(HyprlandEvent::Bell {
+        address: String::from("0x1"),
+    }));
+    rt.enqueue(Msg::HyprEvent(HyprlandEvent::Urgent {
+        address: String::from("0x2"),
+    }));
+    rt.enqueue(Msg::DbusActionOutcome(DbusActionResult {
+        lane: DbusActionLane::BluetoothDevice,
+        bus: DbusBus::System,
+        operation: String::from("Device1.Connect"),
+        target: String::from("/org/bluez/hci0/dev_AA"),
+        reply_object_path: None,
+        count: None,
+        reply: Vec::new(),
+        error: Some(String::from("Connection refused")),
+    }));
+    rt.step().unwrap();
+
+    if rt.state().sounds.event_sounds_enabled {
+        assert_eq!(
+            &rt.state().sounds.played_cues[baseline_len..],
+            &[
+                SoundCue::DeviceAdded,
+                SoundCue::NetworkDisconnected,
+                SoundCue::Bell,
+                SoundCue::WindowUrgent,
+                SoundCue::DialogError,
+            ]
+        );
+    }
+
+    // 3. Rapid volume scrolls are coalesced by per-cue cooldown (only 1 VolumeChange emitted).
+    let scroll_up = ScrollEvent {
+        position: Point::ZERO,
+        local_position: Point::ZERO,
+        delta_x: 0.0,
+        delta_y: -15.0,
+        discrete_x: 0,
+        discrete_y: -1,
+        modifiers: Modifiers::empty(),
+    };
+    let before_len = rt.state().sounds.played_cues.len();
+    for _ in 0..5 {
+        rt.enqueue(Msg::AudioScroll(scroll_up));
+    }
+    rt.step().unwrap();
+    if rt.state().sounds.event_sounds_enabled {
+        assert_eq!(rt.state().sounds.played_cues.len(), before_len + 1);
+        assert_eq!(
+            rt.state().sounds.played_cues.last().copied(),
+            Some(SoundCue::VolumeChange)
+        );
+    }
+
+    // 4. DND silences all cues completely.
+    rt.enqueue(Msg::NotifCenterToggleDnd);
+    rt.step().unwrap();
+    let dnd_len = rt.state().sounds.played_cues.len();
+    rt.enqueue(Msg::ToggleDrun);
+    rt.enqueue(Msg::HyprEvent(HyprlandEvent::Bell {
+        address: String::from("0x3"),
+    }));
+    rt.step().unwrap();
+    assert_eq!(rt.state().sounds.played_cues.len(), dnd_len);
+}

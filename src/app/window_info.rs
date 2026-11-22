@@ -322,6 +322,8 @@ mod tests {
             only_show_in: Vec::new(),
             not_show_in: Vec::new(),
             startup_wm_class: Some(wm_class.into()),
+            dbus_activatable: false,
+            actions: Vec::new(),
         }
     }
 

@@ -6,11 +6,14 @@ use waywi::prelude::*;
 use crate::app::disk::{DiskMenuAction, DiskUiState};
 use crate::app::handlers::events::scroll_direction_y;
 use crate::app::handlers::ipc::close_other_overlays;
-use crate::app::state::State;
+use crate::app::state::{SoundCue, State};
 use crate::widgets::disk_popup::DISK_POPUP_WIDTH;
 
-pub fn handle_udisks_updated(state: &mut State, snap: UDisksSnapshot) {
+pub fn handle_udisks_updated(state: &mut State, snap: UDisksSnapshot, ctx: &EffectCtx<'_>) {
     state.disk_ui.clear_settled_pending(&snap);
+    state
+        .sounds
+        .observe_udisks(&snap, state.notifications.dnd, ctx);
     state.udisks = snap;
 }
 
@@ -31,6 +34,12 @@ pub fn handle_disk_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &Effect
                 }
             }
             state.disk_ui.toggle_popup();
+            let cue = if state.disk_ui.popup_target {
+                SoundCue::MenuPopup
+            } else {
+                SoundCue::MenuPopdown
+            };
+            state.play_sound(cue, ctx);
         }
         Some(MouseButton::Middle) => {
             state.cycle_selected_mount();

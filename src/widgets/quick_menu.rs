@@ -1,19 +1,20 @@
 //! Quick status/settings popup overlay with live clock, uptime/user summary, layered
-//! Yuki Nagato witch sprite (`21_witch_profile_right`), and minimalist icon-only power strip.
+//! Yuki Nagato witch sprite (`21_witch_profile_right`), expandable Settings drawer,
+//! and minimalist icon-only power strip.
+
+pub mod settings;
 
 use waywi::prelude::*;
-use waywi::system::TimeFormat;
 
-use crate::app::quick_menu::{
-    PowerAction, SPRITE_BASE_H, SPRITE_BASE_W, SPRITE_EYE_H, SPRITE_EYE_W, SPRITE_EYE_X,
-    SPRITE_EYE_Y, SPRITE_MOUTH_H, SPRITE_MOUTH_W, SPRITE_MOUTH_X, SPRITE_MOUTH_Y, YukiGaze,
-};
+use crate::app::quick_menu::{PowerAction, YukiGaze};
 use crate::app::state::{HoverTarget, Msg, State};
 use crate::theme::{
     CRUST, MANTLE, MAUVE, OVERLAY0, POPUP_TOP_MARGIN, RED, SUBTEXT1, SURFACE0, SURFACE1, TEXT,
     font_ui, font_ui_bold, font_ui_semibold,
 };
 use crate::widgets::text::marquee_slice;
+
+use settings::{SETTINGS_PANEL_HEIGHT, build_settings_panel};
 
 pub const QUICK_MENU_WIDTH: f32 = 396.0;
 const QUICK_CARD_HEIGHT: f32 = 192.0;
@@ -22,7 +23,6 @@ const QUICK_CARD_GAP: f32 = 6.0;
 const POWER_CARD_HEIGHT: f32 = 50.0;
 const POWER_BTN_SIZE: f32 = 32.0;
 
-const SPRITE_SCALE: f32 = 0.50;
 const SPRITE_FRAME_W: f32 = 168.0;
 const SPRITE_FRAME_H: f32 = 172.0;
 
@@ -31,16 +31,17 @@ pub fn build_quick_menu_surface(state: &State) -> Surface<Msg> {
     let ease = 1.0 - (1.0 - p).powi(3);
 
     let main_card = build_main_card(state);
-    let power_card = if state.quick_menu.power_menu_open {
-        Some(build_power_card(state))
+    let lower_panel: Option<(Element<Msg>, f32)> = if state.quick_menu.settings_open {
+        Some((build_settings_panel(state), SETTINGS_PANEL_HEIGHT))
+    } else if state.quick_menu.power_menu_open {
+        Some((build_power_card(state), POWER_CARD_HEIGHT))
     } else {
         None
     };
 
-    let full_height = if power_card.is_some() {
-        QUICK_CARD_HEIGHT + QUICK_CARD_GAP + POWER_CARD_HEIGHT
-    } else {
-        QUICK_CARD_HEIGHT
+    let full_height = match lower_panel {
+        Some((_, extra_h)) => QUICK_CARD_HEIGHT + QUICK_CARD_GAP + extra_h,
+        None => QUICK_CARD_HEIGHT,
     };
     let animated_h = (full_height * ease).max(1.0);
     let slide_offset = (1.0 - ease) * -14.0;
@@ -55,8 +56,8 @@ pub fn build_quick_menu_surface(state: &State) -> Surface<Msg> {
         .gap(QUICK_CARD_GAP.logical_px())
         .child(main_card);
 
-    if let Some(card) = power_card {
-        col = col.child(card);
+    if let Some((panel, _)) = lower_panel {
+        col = col.child(panel);
     }
 
     let animated_box = Clip::new(col)
@@ -77,26 +78,40 @@ pub fn build_quick_menu_surface(state: &State) -> Surface<Msg> {
         .on_pointer_down(|_| Msg::CloseQuickMenu)
         .child(animated_box);
 
-    Surface::floating("bar-quick-menu", Output::Primary)
+    let input_focused = state.quick_menu.settings_open && state.settings_ui.wallpaper_focused;
+    let mut surface = Surface::floating("bar-quick-menu", Output::Primary)
         .layer(Layer::Overlay)
         .ignore_exclusive_zone()
         .anchor(Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right)
         .size(Size::fill())
         .input_mode(InputMode::Full)
-        .keyboard_interactivity(KeyboardInteractivity::OnDemand)
-        .background(Color::TRANSPARENT)
-        .on_key(|ev| {
-            if ev.key == Key::Escape {
-                Some(Msg::CloseQuickMenu)
-            } else {
-                None
-            }
+        .keyboard_interactivity(if input_focused {
+            KeyboardInteractivity::Exclusive
+        } else {
+            KeyboardInteractivity::OnDemand
         })
-        .child(backdrop)
+        .background(Color::TRANSPARENT)
+        .on_key(|ev| Some(Msg::SettingsKey(ev)))
+        .on_ime(|ev| Some(Msg::SettingsIme(ev)));
+
+    if input_focused {
+        let cursor_rect = GeoRect::new(
+            (left_x + 120.0 + state.settings_ui.wallpaper_cursor_x.min(176.0)).logical_px(),
+            (animated_y + QUICK_CARD_HEIGHT + QUICK_CARD_GAP + 76.0).logical_px(),
+            2.0.logical_px(),
+            22.0.logical_px(),
+        );
+        let ime_cfg = ImeConfig::enabled()
+            .from_text_input(&state.settings_ui.wallpaper_input)
+            .cursor_rect(cursor_rect);
+        surface = surface.ime(ime_cfg);
+    }
+
+    surface.child(backdrop)
 }
 
 fn build_main_card(state: &State) -> Element<Msg> {
-    let time_str = state.now.format_hms(TimeFormat::H24);
+    let time_str = state.now.format_hms(state.time_format());
     let date_str = state.now.format_long_date();
     let uptime_str = state
         .sysinfo
@@ -107,6 +122,72 @@ fn build_main_card(state: &State) -> Element<Msg> {
 
     let left_w = QUICK_MENU_WIDTH - QUICK_PAD * 2.0 - SPRITE_FRAME_W - 10.0;
     let inner_h = QUICK_CARD_HEIGHT - QUICK_PAD * 2.0;
+
+    let settings_hovered = state.hovered == HoverTarget::QuickSettingsToggle;
+    let settings_active = state.quick_menu.settings_open;
+    let settings_bg = if settings_active {
+        SURFACE1
+    } else if settings_hovered {
+        SURFACE0
+    } else {
+        MANTLE
+    };
+    let settings_border = if settings_active || settings_hovered {
+        MAUVE
+    } else {
+        SURFACE1
+    };
+    let settings_fg = if settings_active || settings_hovered {
+        MAUVE
+    } else {
+        TEXT
+    };
+
+    let settings_btn = Group::new()
+        .key("quick-settings-toggle")
+        .size(Size::px(34.logical_px(), 34.logical_px()))
+        .on_hover(Msg::Hover(HoverTarget::QuickSettingsToggle))
+        .on_leave(Msg::Leave(HoverTarget::QuickSettingsToggle))
+        .on_click(Msg::QuickMenuToggleSettings)
+        .child(
+            Rect::new()
+                .size(Size::fill())
+                .fill(settings_bg)
+                .corner_radius(0.logical_px())
+                .border(1.logical_px(), settings_border),
+        )
+        .child(
+            Text::new("\u{f013}")
+                .font(font_ui())
+                .font_size(14.logical_px())
+                .optical_bounds(true)
+                .color(settings_fg)
+                .position(Position::relative_to_parent(
+                    Percent::new(50.0),
+                    Percent::new(50.0),
+                ))
+                .anchor(ElementAnchor::Center),
+        );
+
+    let settings_hint = if settings_active {
+        (state.settings_ui.active_section.title(), MAUVE)
+    } else if settings_hovered {
+        ("Settings", SUBTEXT1)
+    } else {
+        ("", OVERLAY0)
+    };
+
+    let settings_row = Row::new()
+        .size(Size::new(left_w.logical_px(), 34.logical_px()))
+        .gap(8.logical_px())
+        .align(Align::Center)
+        .child(settings_btn)
+        .child(
+            Text::new(settings_hint.0)
+                .font(font_ui_semibold())
+                .font_size(10.logical_px())
+                .color(settings_hint.1),
+        );
 
     let power_hovered = state.hovered == HoverTarget::QuickPowerToggle;
     let power_active = state.quick_menu.power_menu_open;
@@ -154,7 +235,7 @@ fn build_main_card(state: &State) -> Element<Msg> {
                 .anchor(ElementAnchor::Center),
         );
 
-    // Right of the Power icon: when a 3-second countdown is active, show `<action> in <N>s`
+    // Right of the Power icon: when a countdown is active, show `<action> in <N>s`
     // with a compact `Cancel` pill button directly underneath; otherwise show hover hint / error.
     let status_slot: Element<Msg> = if let Some(pending) = state.quick_menu.pending_power {
         let cancel_hovered = state.hovered == HoverTarget::QuickPowerCancel;
@@ -219,17 +300,24 @@ fn build_main_card(state: &State) -> Element<Msg> {
             .into()
     };
 
-    let bottom_bar = Row::new()
+    let power_row = Row::new()
         .size(Size::new(left_w.logical_px(), 36.logical_px()))
         .gap(8.logical_px())
         .align(Align::Center)
+        .child(power_btn)
+        .child(status_slot);
+
+    let bottom_stack = Column::new()
+        .size(Size::new(left_w.logical_px(), 76.logical_px()))
+        .gap(6.logical_px())
+        .align(Align::Start)
         .position(Position::relative_to_parent(
             Percent::new(0.0),
             Percent::new(100.0),
         ))
         .anchor(ElementAnchor::BottomLeft)
-        .child(power_btn)
-        .child(status_slot);
+        .child(settings_row)
+        .child(power_row);
 
     let top_info = Column::new()
         .size(Size::new(left_w.logical_px(), Length::Auto))
@@ -256,7 +344,7 @@ fn build_main_card(state: &State) -> Element<Msg> {
     let left_col = Group::new()
         .size(Size::px(left_w.logical_px(), inner_h.logical_px()))
         .child(top_info)
-        .child(bottom_bar);
+        .child(bottom_stack);
 
     let sprite_box = build_sprite_box(state);
 
@@ -298,6 +386,7 @@ fn build_sprite_box(state: &State) -> Element<Msg> {
         .on_hover(Msg::Hover(HoverTarget::QuickSprite))
         .on_leave(Msg::Leave(HoverTarget::QuickSprite))
         .on_click(Msg::QuickMenuSpriteClick)
+        .on_scroll(Msg::QuickMenuSpriteScroll)
         .child(
             Rect::new()
                 .size(Size::fill())
@@ -307,8 +396,13 @@ fn build_sprite_box(state: &State) -> Element<Msg> {
         );
 
     if let Some(ref assets) = state.quick_menu.sprite_assets {
-        let base_w = SPRITE_BASE_W * SPRITE_SCALE;
-        let base_h = SPRITE_BASE_H * SPRITE_SCALE;
+        let pose_idx = state.quick_menu.sprite_pose_idx;
+        let spec = state.quick_menu.current_pose_spec();
+        let scale = (SPRITE_FRAME_W / spec.base_w)
+            .min(SPRITE_FRAME_H / spec.base_h)
+            .min(0.50);
+        let base_w = spec.base_w * scale;
+        let base_h = spec.base_h * scale;
 
         let glance = hovered || state.quick_menu.gaze == YukiGaze::SideGlanceViewer;
         let eye_sheet = if glance {
@@ -317,41 +411,48 @@ fn build_sprite_box(state: &State) -> Element<Msg> {
             &assets.eye_forward
         };
         let eye_key = if glance {
-            "yuki-eye-glance"
+            ("yuki-eye-glance", pose_idx)
         } else {
-            "yuki-eye-forward"
+            ("yuki-eye-forward", pose_idx)
         };
+        let mouth_sheet = if glance {
+            assets.mouth_alt.as_ref().unwrap_or(&assets.mouth)
+        } else {
+            &assets.mouth
+        };
+        let mouth_variant = u8::from(glance && assets.mouth_alt.is_some());
 
         let mouth_el = if state.quick_menu.mouth_reacting {
-            Sprite::new(&assets.mouth)
-                .key("yuki-mouth-react")
+            Sprite::new(mouth_sheet)
+                .key(("yuki-mouth-react", pose_idx, mouth_variant))
                 .playing("react")
                 .on_animation_end(Msg::QuickMenuSpriteReactEnd)
                 .filter(ImageFilter::Bicubic)
                 .position(Position::absolute(
-                    (SPRITE_MOUTH_X * SPRITE_SCALE).logical_px(),
-                    (SPRITE_MOUTH_Y * SPRITE_SCALE).logical_px(),
+                    (spec.mouth_x * scale).logical_px(),
+                    (spec.mouth_y * scale).logical_px(),
                 ))
                 .size(Size::px(
-                    (SPRITE_MOUTH_W * SPRITE_SCALE).logical_px(),
-                    (SPRITE_MOUTH_H * SPRITE_SCALE).logical_px(),
+                    (spec.mouth_w * scale).logical_px(),
+                    (spec.mouth_h * scale).logical_px(),
                 ))
         } else {
-            Sprite::new(&assets.mouth)
-                .key("yuki-mouth-idle")
+            Sprite::new(mouth_sheet)
+                .key(("yuki-mouth-idle", pose_idx, mouth_variant))
                 .frame(0)
                 .filter(ImageFilter::Bicubic)
                 .position(Position::absolute(
-                    (SPRITE_MOUTH_X * SPRITE_SCALE).logical_px(),
-                    (SPRITE_MOUTH_Y * SPRITE_SCALE).logical_px(),
+                    (spec.mouth_x * scale).logical_px(),
+                    (spec.mouth_y * scale).logical_px(),
                 ))
                 .size(Size::px(
-                    (SPRITE_MOUTH_W * SPRITE_SCALE).logical_px(),
-                    (SPRITE_MOUTH_H * SPRITE_SCALE).logical_px(),
+                    (spec.mouth_w * scale).logical_px(),
+                    (spec.mouth_h * scale).logical_px(),
                 ))
         };
 
         let layered = Group::new()
+            .key(("yuki-pose-layer", pose_idx))
             .size(Size::px(base_w.logical_px(), base_h.logical_px()))
             .position(Position::relative_to_parent(
                 Percent::new(50.0),
@@ -369,12 +470,12 @@ fn build_sprite_box(state: &State) -> Element<Msg> {
                     .playing("blink")
                     .filter(ImageFilter::Bicubic)
                     .position(Position::absolute(
-                        (SPRITE_EYE_X * SPRITE_SCALE).logical_px(),
-                        (SPRITE_EYE_Y * SPRITE_SCALE).logical_px(),
+                        (spec.eye_x * scale).logical_px(),
+                        (spec.eye_y * scale).logical_px(),
                     ))
                     .size(Size::px(
-                        (SPRITE_EYE_W * SPRITE_SCALE).logical_px(),
-                        (SPRITE_EYE_H * SPRITE_SCALE).logical_px(),
+                        (spec.eye_w * scale).logical_px(),
+                        (spec.eye_h * scale).logical_px(),
                     )),
             )
             .child(mouth_el);

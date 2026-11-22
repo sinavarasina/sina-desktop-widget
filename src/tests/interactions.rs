@@ -14,6 +14,18 @@ use super::support::{
 
 #[test]
 fn workspace_click_switches_active_workspace() {
+    use crate::modules::left::workspaces::{hovered_workspace_tooltip, layout_accent_color};
+    use crate::theme::{BLUE, GREEN, MAUVE, PEACH, TEAL};
+
+    assert_eq!(layout_accent_color(&HyprlandLayout::Dwindle), MAUVE);
+    assert_eq!(layout_accent_color(&HyprlandLayout::Master), BLUE);
+    assert_eq!(layout_accent_color(&HyprlandLayout::Scrolling), TEAL);
+    assert_eq!(layout_accent_color(&HyprlandLayout::Monocle), PEACH);
+    assert_eq!(
+        layout_accent_color(&HyprlandLayout::Custom(String::from("hy3"))),
+        GREEN
+    );
+
     let mut rt = synthetic_rt();
     rt.enqueue(Msg::TestSetWorkspaces(
         vec![
@@ -22,41 +34,103 @@ fn workspace_click_switches_active_workspace() {
                 name: String::from("1"),
                 monitor: String::from("eDP-1"),
                 windows: 1,
+                layout: HyprlandLayout::Dwindle,
                 focused: true,
+                ..WorkspaceInfo::default()
             },
             WorkspaceInfo {
                 id: WorkspaceId::new(2),
-                name: String::from("2"),
+                name: String::from("dev"),
                 monitor: String::from("eDP-1"),
-                windows: 1,
+                windows: 2,
+                has_fullscreen: true,
+                last_window_title: String::from("Firefox"),
+                layout: HyprlandLayout::Master,
                 focused: false,
+                ..WorkspaceInfo::default()
             },
             WorkspaceInfo {
                 id: WorkspaceId::new(3),
                 name: String::from("3"),
                 monitor: String::from("eDP-1"),
                 windows: 0,
+                layout: HyprlandLayout::Scrolling,
                 focused: false,
+                ..WorkspaceInfo::default()
+            },
+            WorkspaceInfo {
+                id: WorkspaceId::new(0),
+                address: String::from("name:code"),
+                workspace_type: WorkspaceType::Named,
+                name: String::from("code"),
+                monitor: String::from("eDP-1"),
+                windows: 1,
+                last_window_title: String::from("nvim"),
+                layout: HyprlandLayout::Scrolling,
+                ..WorkspaceInfo::default()
+            },
+            WorkspaceInfo {
+                id: WorkspaceId::new(0),
+                address: String::from("special:magic"),
+                workspace_type: WorkspaceType::Special,
+                name: String::from("special:magic"),
+                monitor: String::from("eDP-1"),
+                windows: 1,
+                last_window_title: String::from("foot"),
+                layout: HyprlandLayout::Dwindle,
+                ..WorkspaceInfo::default()
             },
         ],
         1,
     ));
     rt.step().unwrap();
 
-    // Inactive workspace pill starts after logo + compact sysinfo + active ws. Scan to hit `ws-inactive` 2.
-    let mut switched = false;
-    for x in (140..300).step_by(4) {
+    // Scan the unified workspace strip to hover & click inactive workspace 2 (also verifying renamed tooltip).
+    let mut switched_x = None;
+    for x in (100..320).step_by(4) {
         if rt.pointer_move_surface_point("bar", x as f32, 12.0) {
             rt.step().unwrap();
             if rt.state().hovered == HoverTarget::InactiveWs(2) {
-                assert!(rt.click_surface_point("bar", x as f32, 12.0));
+                let tip = hovered_workspace_tooltip(rt.state()).expect("workspace 2 tooltip");
+                assert!(tip.contains("Workspace 2 (dev) · master"));
+                assert!(tip.contains("Windows: 2 (fullscreen)"));
+                assert!(tip.contains("Last: Firefox"));
+                assert!(rt.pointer_down_surface_point(
+                    "bar",
+                    x as f32,
+                    12.0,
+                    MouseButton::Left
+                ));
                 rt.step().unwrap();
-                switched = true;
+                switched_x = Some(x as f32);
                 break;
             }
         }
     }
-    assert!(switched, "pointer hit inactive workspace 2");
+    let ws_x = switched_x.expect("pointer hit inactive workspace 2");
+    assert_eq!(rt.state().active_ws_id, 2);
+
+    // Scrolling down on the workspace strip advances to the next existing workspace (2 -> 3).
+    assert!(rt.scroll_surface_point("bar", ws_x, 12.0, (0.0, 15.0), (0, 1)));
+    rt.step().unwrap();
+    assert_eq!(rt.state().active_ws_id, 3);
+
+    // Middle-clicking the workspace strip returns to the previous workspace (3 -> 2).
+    assert!(rt.pointer_down_surface_point("bar", ws_x, 12.0, MouseButton::Middle));
+    rt.step().unwrap();
+    assert_eq!(rt.state().active_ws_id, 2);
+
+    // Named workspace tooltip formats cleanly and switching targets its `name:` spec.
+    rt.enqueue(Msg::Hover(HoverTarget::NamedWs(0)));
+    rt.step().unwrap();
+    let named_tip = hovered_workspace_tooltip(rt.state()).expect("named workspace tooltip");
+    assert!(named_tip.contains("Workspace code · scrolling"));
+    assert!(named_tip.contains("Last: nvim"));
+
+    // Special workspace toggle tracks active_special cleanly without disturbing active_ws_id.
+    rt.enqueue(Msg::ToggleSpecialWorkspace(String::from("special:magic")));
+    rt.step().unwrap();
+    assert_eq!(rt.state().active_special.as_deref(), Some("special:magic"));
     assert_eq!(rt.state().active_ws_id, 2);
 }
 
@@ -259,6 +333,34 @@ fn clock_hover_reveals_menu_and_opens_quick_status_with_sprite_and_power_strip()
     rt.enqueue(Msg::QuickMenuSpriteReactEnd);
     rt.step().unwrap();
     assert!(!rt.state().quick_menu.mouth_reacting);
+
+    // Scrolling on the sprite cycles 21_profile (0) -> 20_3q (1) -> 19_front (2) -> 21_profile (0)
+    // and evicts the outgoing pose's decoded RGBA8 pixels immediately.
+    let pose0_base = rt.state().quick_menu.sprite_assets.as_ref().unwrap().base;
+    assert_eq!(rt.state().quick_menu.sprite_pose_idx, 0);
+    let scroll_down = ScrollEvent {
+        position: Point::ZERO,
+        local_position: Point::ZERO,
+        delta_x: 0.0,
+        delta_y: 15.0,
+        discrete_x: 0,
+        discrete_y: 1,
+        modifiers: Modifiers::empty(),
+    };
+    rt.enqueue(Msg::QuickMenuSpriteScroll(scroll_down));
+    rt.step().unwrap();
+    assert_eq!(rt.state().quick_menu.sprite_pose_idx, 1);
+    assert!(!rt.asset_pixels_resident(pose0_base));
+    assert!(rt.rendered_buffer("bar-quick-menu").is_some());
+
+    rt.enqueue(Msg::QuickMenuSpriteScroll(scroll_down));
+    rt.step().unwrap();
+    assert_eq!(rt.state().quick_menu.sprite_pose_idx, 2);
+    assert!(rt.rendered_buffer("bar-quick-menu").is_some());
+
+    rt.enqueue(Msg::QuickMenuSpriteScroll(scroll_down));
+    rt.step().unwrap();
+    assert_eq!(rt.state().quick_menu.sprite_pose_idx, 0);
 
     // Toggling the Power icon opens the minimalist icon-only power strip.
     rt.enqueue(Msg::QuickMenuTogglePower);
@@ -954,4 +1056,238 @@ fn disk_popup_mounts_cycles_middle_click_luks_unlock_and_pending_animation() {
         rt.state().disk_ui.last_error.as_deref(),
         Some("Polkit authentication dismissed")
     );
+}
+
+#[test]
+fn quick_menu_settings_drawer_controls_persist_toml_and_apply_live() {
+    use crate::app::config::{
+        DesktopPoseMode, MetricPlacement, RightMetricId, SettingStepperId, SettingToggleId,
+        SettingsDropdown, SettingsSection, WallpaperFit, WidgetConfig,
+    };
+    use crate::app::state::SoundCue;
+
+    let mut rt = synthetic_rt();
+
+    // Open Quick Menu and let slide animation settle.
+    rt.enqueue(Msg::ClockMenuClick);
+    for _ in 0..16 {
+        rt.enqueue(Msg::QuickMenuAnimTick);
+    }
+    rt.step().unwrap();
+    assert!(rt.state().quick_menu.popup_target);
+    assert!(!rt.state().quick_menu.settings_open);
+
+    // Open Power first, then toggle Settings: must be mutually exclusive.
+    rt.enqueue(Msg::QuickMenuTogglePower);
+    rt.step().unwrap();
+    assert!(rt.state().quick_menu.power_menu_open);
+
+    rt.enqueue(Msg::QuickMenuToggleSettings);
+    rt.step().unwrap();
+    assert!(rt.state().quick_menu.settings_open);
+    assert!(!rt.state().quick_menu.power_menu_open);
+    assert!(rt.rendered_buffer("bar-quick-menu").is_some());
+
+    // General section: toggle 24h clock, booster, step power countdown.
+    rt.enqueue(Msg::SettingsToggle(SettingToggleId::Clock24h));
+    rt.enqueue(Msg::SettingsToggle(SettingToggleId::ForegroundBooster));
+    rt.enqueue(Msg::SettingsStep {
+        id: SettingStepperId::PowerCountdownSecs,
+        delta: 2,
+    });
+    rt.step().unwrap();
+    assert!(!rt.state().config.general.clock_24h);
+    assert!(!rt.state().config.general.foreground_booster);
+    assert_eq!(rt.state().config.general.power_countdown_secs, 5);
+
+    // Audio section: disable UI feedback sounds while keeping XDG sounds on, then disable master XDG sounds.
+    rt.enqueue(Msg::SettingsSelectSection(SettingsSection::Audio));
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state().settings_ui.active_section,
+        SettingsSection::Audio
+    );
+    rt.enqueue(Msg::SettingsToggle(SettingToggleId::UiFeedbackSounds));
+    rt.enqueue(Msg::SettingsStep {
+        id: SettingStepperId::SoundVolumePct,
+        delta: -2,
+    });
+    rt.step().unwrap();
+    assert!(!rt.state().sounds.ui_feedback_enabled);
+    assert_eq!(rt.state().config.audio.sound_volume_pct, 80);
+
+    // UI cues are silenced while Bell (preview) still plays even with DND off!
+    let prev_played = rt.state().sounds.played_cues.len();
+    rt.enqueue(Msg::SettingsPreviewSound);
+    rt.step().unwrap();
+    assert_eq!(rt.state().sounds.played_cues.len(), prev_played + 1);
+    assert_eq!(
+        rt.state().sounds.played_cues.last().copied(),
+        Some(SoundCue::Bell)
+    );
+
+    // Turning off master XDG Sound Theme silences Bell even when DND is off.
+    rt.enqueue(Msg::SettingsToggle(SettingToggleId::XdgSoundsEnabled));
+    rt.step().unwrap();
+    assert!(!rt.state().notifications.dnd);
+    let count_before_muted_preview = rt.state().sounds.played_cues.len();
+    rt.enqueue(Msg::SettingsPreviewSound);
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state().sounds.played_cues.len(),
+        count_before_muted_preview
+    );
+
+    // Desktop section (Wallpaper + Companion Yuki subsections): open dropdown, select Contain,
+    // test invalid path error + valid PNG dynamic load.
+    rt.enqueue(Msg::SettingsSelectSection(SettingsSection::Desktop));
+    rt.enqueue(Msg::SettingsToggleDropdown(SettingsDropdown::WallpaperFit));
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state().settings_ui.open_dropdown,
+        Some(SettingsDropdown::WallpaperFit)
+    );
+    assert!(rt.rendered_buffer("bar-quick-menu").is_some());
+
+    rt.enqueue(Msg::SettingsSelectDropdown {
+        dropdown: SettingsDropdown::WallpaperFit,
+        index: 1,
+    });
+    rt.step().unwrap();
+    assert_eq!(rt.state().config.wallpaper.fit, WallpaperFit::Contain);
+    assert_eq!(rt.state().settings_ui.open_dropdown, None);
+
+    // Focus wallpaper path, type a nonexistent file via KeyEvent, press Enter -> error banner.
+    rt.enqueue(Msg::SettingsWallpaperPathFocus);
+    rt.step().unwrap();
+    assert!(rt.state().settings_ui.wallpaper_focused);
+    for ch in "/nonexistent/wp.png".chars() {
+        rt.enqueue(Msg::SettingsKey(KeyEvent {
+            key: Key::from_keysym(ch as u32),
+            modifiers: Modifiers::empty(),
+            repeat: false,
+            utf8: Some(ch.to_string().into()),
+        }));
+    }
+    rt.enqueue(Msg::SettingsKey(KeyEvent {
+        key: Key::Enter,
+        modifiers: Modifiers::empty(),
+        repeat: false,
+        utf8: None,
+    }));
+    rt.step().unwrap();
+    assert!(rt.state().settings_ui.wallpaper_error.is_some());
+
+    // Apply a real PNG on disk and verify dynamic load succeeds.
+    let real_png = format!(
+        "{}/assets/sprites/yuki_nagato_yakusoku_psp_portraits/21_witch_profile_right/base_body.png",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    rt.enqueue(Msg::SettingsWallpaperPathClear);
+    rt.enqueue(Msg::SettingsWallpaperPathFocus);
+    for ch in real_png.chars() {
+        rt.enqueue(Msg::SettingsKey(KeyEvent {
+            key: Key::from_keysym(ch as u32),
+            modifiers: Modifiers::empty(),
+            repeat: false,
+            utf8: Some(ch.to_string().into()),
+        }));
+    }
+    rt.enqueue(Msg::SettingsWallpaperPathApply);
+    rt.step().unwrap();
+    assert!(
+        rt.state().settings_ui.wallpaper_error.is_none(),
+        "unexpected wallpaper error: {:?}",
+        rt.state().settings_ui.wallpaper_error
+    );
+    assert_eq!(rt.state().config.wallpaper.path, real_png);
+    assert!(rt.state().wallpaper_asset.is_some());
+
+    // Companion Yuki subsection inside Desktop: pin desktop pose, change Quick Menu pose, step scale & interval.
+    rt.enqueue(Msg::TestLoadDesktopSprite);
+    rt.enqueue(Msg::SettingsSelectDropdown {
+        dropdown: SettingsDropdown::DesktopPose,
+        index: 2,
+    });
+    rt.enqueue(Msg::SettingsSelectDropdown {
+        dropdown: SettingsDropdown::QuickMenuPose,
+        index: 2,
+    });
+    rt.enqueue(Msg::SettingsStep {
+        id: SettingStepperId::DesktopScalePct,
+        delta: -2,
+    });
+    rt.enqueue(Msg::SettingsStep {
+        id: SettingStepperId::SpriteRotateIntervalSecs,
+        delta: 1,
+    });
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state().config.sprite.desktop_pose,
+        DesktopPoseMode::Pinned(1)
+    );
+    assert_eq!(rt.state().desktop_sprite.active_idx, 1);
+    assert_eq!(rt.state().quick_menu.sprite_pose_idx, 2);
+    assert_eq!(rt.state().config.sprite.desktop_scale_pct, 90);
+    assert_eq!(rt.state().config.sprite.rotate_interval_secs, 210);
+
+    // Bar section: toggle System Info (logo keeps CRUST ArrowR cap), MPRIS, reorder metrics & swap Bar <-> Drawer!
+    rt.enqueue(Msg::SettingsSelectSection(SettingsSection::Bar));
+    rt.enqueue(Msg::SettingsToggle(SettingToggleId::WidgetSysInfo));
+    rt.enqueue(Msg::SettingsToggle(SettingToggleId::WidgetMpris));
+    // Move CPU into Drawer (Bar -> Drawer) and Bluetooth onto Bar (Drawer -> Hidden -> Bar), and reorder CPU before Audio!
+    rt.enqueue(Msg::SettingsCycleMetricPlacement(RightMetricId::Cpu));
+    rt.enqueue(Msg::SettingsCycleMetricPlacement(RightMetricId::Bluetooth));
+    rt.enqueue(Msg::SettingsCycleMetricPlacement(RightMetricId::Bluetooth));
+    rt.enqueue(Msg::SettingsMoveMetric {
+        id: RightMetricId::Cpu,
+        delta: -1,
+    });
+    rt.enqueue(Msg::SettingsListScroll(ScrollEvent {
+        position: Point::ZERO,
+        local_position: Point::ZERO,
+        delta_x: 0.0,
+        delta_y: 120.0,
+        discrete_x: 0,
+        discrete_y: 2,
+        modifiers: Modifiers::empty(),
+    }));
+    rt.step().unwrap();
+    assert!(!rt.state().config.widgets.show_sysinfo);
+    assert!(!rt.state().config.widgets.show_mpris);
+    assert_eq!(
+        rt.state().config.widgets.placement_of(RightMetricId::Cpu),
+        MetricPlacement::Drawer
+    );
+    assert_eq!(
+        rt.state()
+            .config
+            .widgets
+            .placement_of(RightMetricId::Bluetooth),
+        MetricPlacement::Bar
+    );
+    assert_eq!(rt.state().config.widgets.right_metrics[0].id, RightMetricId::Cpu);
+    // Hovering CPU now opens/keeps drawer open, while hovering Bluetooth (now on Bar) does NOT!
+    assert!(rt.state().is_drawer_target(HoverTarget::Cpu));
+    assert!(!rt.state().is_drawer_target(HoverTarget::Bluetooth));
+    assert!(rt.state().settings_ui.list_scroll_y > 0.0);
+    assert!(rt.rendered_buffer("bar").is_some());
+
+    // Verify config.toml persisted to disk and reloads identically!
+    let saved_path = rt.state().config_path.clone();
+    assert!(saved_path.is_file());
+    let reloaded = WidgetConfig::load_from_path(&saved_path);
+    assert_eq!(reloaded, rt.state().config);
+
+    // Reset Defaults restores everything cleanly.
+    rt.enqueue(Msg::SettingsResetDefaults);
+    rt.step().unwrap();
+    assert_eq!(rt.state().config, WidgetConfig::default());
+    assert!(rt.state().sounds.event_sounds_enabled);
+    assert!(rt.state().config.widgets.show_sysinfo);
+    assert!(rt.state().config.wallpaper.path.is_empty());
+    assert!(!rt.state().is_drawer_target(HoverTarget::Cpu));
+    assert!(rt.state().is_drawer_target(HoverTarget::Bluetooth));
+
+    let _ = std::fs::remove_file(&saved_path);
 }

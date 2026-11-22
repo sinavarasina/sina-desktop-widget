@@ -3,6 +3,7 @@
 use waywi::prelude::*;
 
 use crate::app::state::{HoverTarget, Msg, State};
+use crate::modules::left::workspaces::hovered_workspace_tooltip;
 use crate::theme::{CRUST, POPUP_TOP_MARGIN, SURFACE1, TEXT, font_ui};
 
 /// Builds the floating hover tooltip surface for the currently hovered target.
@@ -17,6 +18,18 @@ pub fn build_tooltip_surface(state: &State) -> Option<Surface<Msg>> {
                     .hover_anchor_x
                     .unwrap_or(38.0)
                     .clamp(8.0, (state.bar_width - 120.0).max(8.0)),
+            ),
+        ),
+        HoverTarget::ActiveWs
+        | HoverTarget::InactiveWs(_)
+        | HoverTarget::NamedWs(_)
+        | HoverTarget::SpecialWs(_) => (
+            hovered_workspace_tooltip(state)?,
+            Some(
+                state
+                    .hover_anchor_x
+                    .unwrap_or(140.0)
+                    .clamp(8.0, (state.bar_width - 140.0).max(8.0)),
             ),
         ),
         HoverTarget::WindowInfo => (

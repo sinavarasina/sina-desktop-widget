@@ -382,11 +382,18 @@ impl DesktopSpriteState {
         !matches!(self.phase, SpriteFadePhase::Hold { .. })
     }
 
-    /// Computes `(scale, sprite_w, sprite_h, margin_right)` for the active pose on the current screen.
+    /// Computes `(scale, sprite_w, sprite_h, margin_right)` scaled by `scale_mult` (`0.70..=1.15`).
     #[must_use]
-    pub fn layout_metrics(&self, bar_width: f32, screen_height: f32) -> (f32, f32, f32, f32) {
+    pub fn layout_metrics_scaled(
+        &self,
+        bar_width: f32,
+        screen_height: f32,
+        scale_mult: f32,
+    ) -> (f32, f32, f32, f32) {
         let geom = self.current_geometry();
-        let scale = ((screen_height * geom.target_height_ratio) / geom.canvas_h).clamp(0.6, 2.5);
+        let mult = scale_mult.clamp(0.70, 1.15);
+        let scale =
+            ((screen_height * geom.target_height_ratio * mult) / geom.canvas_h).clamp(0.45, 2.5);
         let sprite_w = (geom.canvas_w * scale).round().max(1.0);
         let sprite_h = (geom.canvas_h * scale).round().max(1.0);
         let target_center_x = bar_width * DESKTOP_SPRITE_CENTER_X_RATIO;
@@ -394,6 +401,38 @@ impl DesktopSpriteState {
             .clamp(8.0, (bar_width - sprite_w - 8.0).max(8.0))
             .round();
         (scale, sprite_w, sprite_h, margin_right)
+    }
+
+    /// Evicts active decoded RGBA8 pixels and clears `active_assets` when the desktop sprite is disabled.
+    pub fn unload_and_evict(&mut self, ctx: &mut EffectCtx<'_>) {
+        if let Some(prev) = self.active_assets.take() {
+            prev.evict_unique_pixels(None, ctx);
+        }
+        self.mouth_step = None;
+        self.phase = SpriteFadePhase::Hold { elapsed_secs: 0 };
+    }
+
+    /// Immediately switches to an explicit pose index (`0..6`), evicting old variant pixels.
+    pub fn set_pose_instant(&mut self, target_idx: usize, ctx: &mut EffectCtx<'_>) {
+        let idx = target_idx % DESKTOP_VARIANTS.len();
+        if !self.is_visible() {
+            self.active_idx = idx;
+            return;
+        }
+        if self.active_idx == idx {
+            self.phase = SpriteFadePhase::Hold { elapsed_secs: 0 };
+            return;
+        }
+        let prev_assets = self.active_assets;
+        let next_assets = self.load_or_cached(idx, ctx);
+        if let Some(prev) = prev_assets {
+            prev.evict_unique_pixels(next_assets.as_ref(), ctx);
+        }
+        self.active_idx = idx;
+        self.active_assets = next_assets;
+        self.blink = BlinkPhase::Open;
+        self.mouth_step = None;
+        self.phase = SpriteFadePhase::Hold { elapsed_secs: 0 };
     }
 
     #[must_use]
@@ -510,17 +549,24 @@ impl DesktopSpriteState {
         self.phase = SpriteFadePhase::Hold { elapsed_secs: 0 };
     }
 
-    /// Called once per second from `Msg::TimeTick`; triggers rotation after 3 minutes of hold.
-    pub fn tick_second(&mut self) {
-        if !self.is_visible() {
+    /// Called once per second from `Msg::TimeTick`; triggers rotation after `hold_secs` if `auto_rotate` is enabled.
+    pub fn tick_second_with(&mut self, hold_secs: u16, auto_rotate: bool) {
+        if !self.is_visible() || !auto_rotate {
             return;
         }
+        let limit = hold_secs.max(1);
         if let SpriteFadePhase::Hold { ref mut elapsed_secs } = self.phase {
             *elapsed_secs = elapsed_secs.saturating_add(1);
-            if *elapsed_secs >= DESKTOP_SPRITE_HOLD_SECS {
+            if *elapsed_secs >= limit {
                 self.trigger_rotate();
             }
         }
+    }
+
+    /// Convenience wrapper using the default 3-minute hold interval (retained for tests).
+    #[allow(dead_code)]
+    pub fn tick_second(&mut self) {
+        self.tick_second_with(DESKTOP_SPRITE_HOLD_SECS, true);
     }
 
     /// Advances the 60fps fade animation, swapping and evicting old variant pixels at opacity 0.

@@ -4,15 +4,17 @@ use waywi::prelude::*;
 
 use crate::app::handlers::events::scroll_direction_y;
 use crate::app::handlers::ipc::close_other_overlays;
-use crate::app::state::State;
+use crate::app::state::{SoundCue, State};
 
 pub fn handle_toggle_drun(state: &mut State, ctx: &mut EffectCtx<'_>) {
     if state.drun.target {
         state.drun.close();
+        state.play_sound(SoundCue::MenuPopdown, ctx);
     } else {
         close_other_overlays(state, Some("drun"));
         state.drun.open(ctx);
         resolve_visible_drun_icons(state, ctx);
+        state.play_sound(SoundCue::MenuPopup, ctx);
     }
 }
 
@@ -51,12 +53,19 @@ pub fn handle_drun_key(state: &mut State, ev: KeyEvent, ctx: &mut EffectCtx<'_>)
 
     let outcome = state.drun.input.handle_key(&ev);
     match outcome {
-        TextInputOutcome::Cancelled => state.drun.close(),
+        TextInputOutcome::Cancelled => {
+            state.drun.close();
+            state.play_sound(SoundCue::MenuPopdown, ctx);
+        }
         TextInputOutcome::Submitted => launch_selected_app(state),
         TextInputOutcome::Edited => {
+            let had_matches = !state.drun.match_indices.is_empty();
             state.drun.refresh_matches();
             state.drun.remeasure_input(ctx);
             resolve_visible_drun_icons(state, ctx);
+            if had_matches && state.drun.match_indices.is_empty() {
+                state.play_sound(SoundCue::SearchEmpty, ctx);
+            }
         }
         TextInputOutcome::CursorMoved => {
             state.drun.remeasure_input(ctx);

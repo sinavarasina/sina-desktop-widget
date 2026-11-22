@@ -28,6 +28,8 @@ fn sample_desktop_entry(id: &str, name: &str) -> DesktopEntry {
         only_show_in: Vec::new(),
         not_show_in: Vec::new(),
         startup_wm_class: None,
+        dbus_activatable: false,
+        actions: Vec::new(),
     }
 }
 

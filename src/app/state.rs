@@ -1,5 +1,6 @@
 //! Core application state, hover tracking, and drawer animation.
 
+use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime};
 
 use waywi::desktop::icons::XdgIconLookup;
@@ -13,6 +14,7 @@ use super::asset_lru::PathAssetCache;
 pub use super::audio::AudioUiState;
 pub use super::bluetooth::BluetoothUiState;
 pub use super::booster::ForegroundBooster;
+pub use super::config::{SettingsUiState, WidgetConfig};
 pub use super::desktop_sprite::DesktopSpriteState;
 pub use super::disk::DiskUiState;
 pub use super::drun::DrunState;
@@ -21,6 +23,7 @@ pub use super::msg::Msg;
 pub use super::notifications::NotificationStore;
 pub use super::quick_menu::QuickMenuState;
 pub use super::scroller::WindowScroller;
+pub use super::sounds::{SoundCue, SoundEngine};
 pub use super::sysinfo::SysInfoState;
 pub use super::telemetry::CpuPowerTracker;
 pub use super::tray_cache::resolve_tray_icon;
@@ -31,9 +34,13 @@ pub use super::window_info::WindowInfoState;
 pub const DRAWER_ANIM_STEP: f32 = 16.0 / 300.0;
 
 pub struct State {
+    pub config: WidgetConfig,
+    pub config_path: PathBuf,
+    pub settings_ui: SettingsUiState,
     pub logo_asset: Option<ImageAsset>,
     pub wallpaper_asset: Option<ImageAsset>,
     pub desktop_sprite: DesktopSpriteState,
+    pub sounds: SoundEngine,
     pub icon_lookup: XdgIconLookup,
     pub path_asset_cache: PathAssetCache,
     pub bar_width: f32,
@@ -41,6 +48,8 @@ pub struct State {
 
     pub workspaces: Vec<WorkspaceInfo>,
     pub active_ws_id: i32,
+    pub prev_ws_id: i32,
+    pub active_special: Option<String>,
     pub sysinfo: SysInfoState,
     pub scroller: WindowScroller,
     pub window_info: WindowInfoState,
@@ -98,6 +107,11 @@ pub struct State {
 }
 
 impl State {
+    /// Plays a standard XDG Sound Theme cue via the O(1)-cached [`SoundEngine`], honoring DND.
+    pub fn play_sound(&mut self, cue: SoundCue, ctx: &EffectCtx<'_>) {
+        self.sounds.play(cue, self.notifications.dnd, ctx);
+    }
+
     #[must_use]
     pub fn has_attention_tray(&self) -> bool {
         self.tray_items
@@ -122,13 +136,25 @@ impl State {
         self.sysinfo.is_animating() || self.window_info.is_animating()
     }
 
+    #[must_use]
+    pub fn is_drawer_target(&self, target: HoverTarget) -> bool {
+        if self.config.widgets.drawer_metrics().is_empty() {
+            return false;
+        }
+        target == HoverTarget::ExpandSign
+            || target
+                .right_metric_id()
+                .is_some_and(|id| self.config.widgets.is_in_drawer(id))
+    }
+
     pub fn update_hover(&mut self, target: HoverTarget, entered: bool) {
+        let target_in_drawer = self.is_drawer_target(target);
         if entered {
             if self.hovered != target {
                 self.hover_anchor_x = None;
             }
             self.hovered = target;
-            if target.is_drawer() {
+            if target_in_drawer {
                 self.drawer_target = true;
                 self.drawer_leave_deadline = None;
             } else {
@@ -145,8 +171,8 @@ impl State {
         } else if self.hovered == target {
             self.hovered = HoverTarget::None;
             self.hover_anchor_x = None;
-            if target.is_drawer() {
-                // Brief grace avoids flicker when sliding between `expand_sign`, `disk`, and `bluetooth`.
+            if target_in_drawer {
+                // Brief grace avoids flicker when sliding between `expand_sign` and drawer modules.
                 self.drawer_leave_deadline = Some(Instant::now() + Duration::from_millis(120));
             }
             if target.is_clock_group() && !self.quick_menu.popup_target {
@@ -169,7 +195,7 @@ impl State {
 
     pub fn expire_drawer_leave(&mut self) {
         self.drawer_leave_deadline = None;
-        if !self.hovered.is_drawer() {
+        if !self.is_drawer_target(self.hovered) {
             self.drawer_target = false;
         }
     }
@@ -253,12 +279,25 @@ impl State {
     }
 
     #[must_use]
+    pub const fn time_format(&self) -> TimeFormat {
+        if self.config.general.clock_24h {
+            TimeFormat::H24
+        } else {
+            TimeFormat::H12
+        }
+    }
+
+    #[must_use]
     pub fn clock_display(&self) -> String {
         if self.clock_alt {
             self.now.format_long_date()
         } else {
-            self.now.format_hm(TimeFormat::H24)
+            self.now.format_hm(self.time_format())
         }
+    }
+
+    pub fn save_config(&self) {
+        let _ = self.config.save_to_path(&self.config_path);
     }
 
     #[must_use]

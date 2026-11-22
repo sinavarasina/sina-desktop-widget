@@ -9,10 +9,11 @@ use waywi::system::LocalDateTime;
 use waywi::system::os::{read_hostname, read_os_info, read_uptime};
 
 use crate::app::asset_lru::PathAssetCache;
+use crate::app::config::{DesktopPoseMode, SettingsUiState, WidgetConfig};
 use crate::app::state::{
     AudioControlTarget, AudioUiState, BluetoothUiState, DesktopSpriteState, DiskUiState,
     DrunState, ForegroundBooster, HoverTarget, MprisState, NotificationStore, QuickMenuState,
-    State, SysInfoState, WindowInfoState, WindowScroller,
+    SoundEngine, State, SysInfoState, WindowInfoState, WindowScroller,
 };
 use crate::theme::{GENTOO_MAUVE_SVG, WALLPAPER_PNG};
 
@@ -25,9 +26,33 @@ pub fn load_embedded_wallpaper(ctx: &mut EffectCtx<'_>) -> Option<ImageAsset> {
 }
 
 pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
+    #[cfg(not(test))]
+    let config_path = WidgetConfig::default_path();
+    #[cfg(test)]
+    let config_path = {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static TEST_CFG_SEQ: AtomicU64 = AtomicU64::new(0);
+        let seq = TEST_CFG_SEQ.fetch_add(1, Ordering::Relaxed);
+        let p = std::env::temp_dir().join(format!(
+            "sina-desktop-widget-test-config-{}-{seq}.toml",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&p);
+        p
+    };
+    let config = WidgetConfig::load_from_path(&config_path);
+    let mut settings_ui = SettingsUiState::default();
+    settings_ui.sync_from_config(&config);
+
     let logo_asset = ctx.load_image_bytes_sized(GENTOO_MAUVE_SVG, 64).ok();
     #[cfg(not(test))]
-    let wallpaper_asset = load_embedded_wallpaper(ctx);
+    let wallpaper_asset = match super::settings::load_configured_wallpaper(&config.wallpaper, ctx) {
+        Ok(asset) => asset,
+        Err(err) => {
+            settings_ui.wallpaper_error = Some(err);
+            load_embedded_wallpaper(ctx)
+        }
+    };
     #[cfg(test)]
     let wallpaper_asset = None;
     let icon_lookup = XdgIconLookup::new();
@@ -53,18 +78,58 @@ pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
         hypr_version,
         read_uptime().ok(),
     );
+    #[cfg(not(test))]
     let notifications = NotificationStore::load_lazy(None);
+    #[cfg(test)]
+    let notifications = {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static TEST_SEQ: AtomicU64 = AtomicU64::new(0);
+        let seq = TEST_SEQ.fetch_add(1, Ordering::Relaxed);
+        let p = std::env::temp_dir().join(format!(
+            "sina-desktop-widget-test-notif-{}-{seq}.json",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&p);
+        NotificationStore::load_lazy(Some(p))
+    };
+    #[cfg(not(test))]
+    let mut sounds = SoundEngine::default();
+    #[cfg(test)]
+    let mut sounds = SoundEngine::new(true);
+    // Honor GTK desktop preference if config hasn't explicitly disabled sounds, and always honor config.
+    if config_path.exists() {
+        sounds.apply_config(&config.audio);
+    } else {
+        sounds.ui_feedback_enabled = config.audio.ui_feedback_sounds;
+        sounds.notification_sounds_enabled = config.audio.notification_sounds;
+        sounds.volume_scale = (f32::from(config.audio.sound_volume_pct) / 100.0).clamp(0.1, 1.5);
+    }
+
+    let mut desktop_sprite = DesktopSpriteState::default();
+    if let DesktopPoseMode::Pinned(idx) = config.sprite.desktop_pose {
+        desktop_sprite.active_idx = idx;
+    }
+
+    let mut quick_menu = QuickMenuState::default();
+    quick_menu.sprite_pose_idx = config.sprite.quick_menu_pose % 3;
+    let clock_alt = config.general.clock_alt_default;
 
     Ok(State {
+        config,
+        config_path,
+        settings_ui,
         logo_asset,
         wallpaper_asset,
-        desktop_sprite: DesktopSpriteState::default(),
+        desktop_sprite,
+        sounds,
         icon_lookup,
         path_asset_cache,
         bar_width,
         screen_height,
         workspaces,
         active_ws_id,
+        prev_ws_id: active_ws_id,
+        active_special: None,
         sysinfo,
         scroller,
         window_info,
@@ -97,14 +162,14 @@ pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
         bluetooth: BluetoothSnapshot::default(),
         bt_ui: BluetoothUiState::default(),
         now: LocalDateTime::from_system_time(SystemTime::now()),
-        clock_alt: false,
+        clock_alt,
         calendar_open: false,
         cal_year_mode: false,
         cal_month_offset: 0,
         clock_menu_target: false,
         clock_menu_progress: 0.0,
         clock_menu_leave_deadline: None,
-        quick_menu: QuickMenuState::default(),
+        quick_menu,
         hovered: HoverTarget::None,
         hover_anchor_x: None,
         startup_hydrated: false,
@@ -130,9 +195,8 @@ fn init_hyprland(
             vec![WorkspaceInfo {
                 id: WorkspaceId::new(1),
                 name: String::from("1"),
-                monitor: String::new(),
-                windows: 0,
                 focused: true,
+                ..WorkspaceInfo::default()
             }],
             1,
             scroller,

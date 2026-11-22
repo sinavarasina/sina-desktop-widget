@@ -3,11 +3,12 @@
 
 use waywi::prelude::*;
 
+use crate::app::config::WallpaperFit;
 use crate::app::state::Msg;
 use crate::theme::CRUST;
 
-pub fn build_wallpaper_surface(asset: ImageAsset) -> Surface<Msg> {
-    Surface::memo("desktop-wallpaper", &asset, |&img| {
+pub fn build_wallpaper_surface(asset: ImageAsset, fit: WallpaperFit) -> Surface<Msg> {
+    Surface::memo("desktop-wallpaper", &(asset, fit), |&(img, fit_mode)| {
         Surface::overlay("desktop-wallpaper", Output::All)
             .layer(Layer::Background)
             .ignore_exclusive_zone()
@@ -20,7 +21,7 @@ pub fn build_wallpaper_surface(asset: ImageAsset) -> Surface<Msg> {
             .child(
                 Image::new(img)
                     .size(Size::fill())
-                    .fit(ImageFit::Cover)
+                    .fit(fit_mode.to_image_fit())
                     .filter(ImageFilter::Bilinear),
             )
     })

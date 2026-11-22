@@ -2,7 +2,7 @@
 
 use waywi::prelude::*;
 
-use crate::app::state::State;
+use crate::app::state::{SoundCue, State};
 use crate::widgets::notification_center::card::action_max_scroll_x;
 use crate::widgets::notification_center::max_notif_scroll_index;
 
@@ -23,9 +23,10 @@ pub fn handle_notification_event(
                 *notif,
                 &mut state.icon_lookup,
                 &mut state.path_asset_cache,
+                &mut state.sounds,
                 ctx,
             );
-            if !dnd {
+            if !dnd && state.config.sprite.mouth_on_notification {
                 state.desktop_sprite.trigger_mouth_react();
             }
         }
@@ -47,10 +48,16 @@ pub fn handle_notif_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &mut E
                     &mut state.path_asset_cache,
                     ctx,
                 );
+                state.play_sound(SoundCue::MenuPopup, ctx);
+            } else {
+                state.play_sound(SoundCue::MenuPopdown, ctx);
             }
         }
         Some(MouseButton::Right) => {
             state.notifications.toggle_dnd(ctx);
+            if !state.notifications.dnd {
+                state.play_sound(SoundCue::ToggleOn, ctx);
+            }
         }
         _ => {}
     }

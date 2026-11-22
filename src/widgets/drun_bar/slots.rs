@@ -1,4 +1,4 @@
-//! Slanted semi-transparent app result slots and hidden-count pills for `drun`.
+//! Slanted solid app result slots and hidden-count pills for `drun`.
 
 use waywi::prelude::*;
 
@@ -15,11 +15,7 @@ const DRUN_ICON_SIZE: f32 = 16.0;
 
 #[must_use]
 fn slot_bg(is_active: bool) -> Color {
-    if is_active {
-        SURFACE0.with_opacity(0.88)
-    } else {
-        CRUST.with_opacity(0.76)
-    }
+    if is_active { SURFACE0 } else { CRUST }
 }
 
 pub fn build_hidden_count_pill(
@@ -120,9 +116,9 @@ pub fn build_results_section(state: &State, total_w: f32) -> Element<Msg> {
 
         if slot_idx > 0 {
             let stroke = if prev_selected || is_selected {
-                MAUVE.with_opacity(0.85)
+                MAUVE
             } else {
-                SURFACE1.with_opacity(0.75)
+                SURFACE1
             };
             row = row.child(slanted_join(("drun-join", slot_idx), prev_bg, bg, stroke));
         }

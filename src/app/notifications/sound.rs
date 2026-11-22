@@ -3,6 +3,8 @@
 
 use waywi::prelude::*;
 
+use crate::app::sounds::SoundEngine;
+
 const NOTIF_SOUND_VOLUME: f32 = 0.85;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -66,13 +68,16 @@ pub fn resolve_notification_sound(
             fallback_preset: SoundPreset::Warning,
         },
         NotificationUrgency::Normal => match notif.category.as_deref() {
-            Some(cat) if cat.starts_with("im") || cat.starts_with("email") => {
-                NotificationSoundPlan::ThemeName {
-                    primary: "message-new-instant",
-                    fallback_theme: Some("message"),
-                    fallback_preset: SoundPreset::Notification,
-                }
-            }
+            Some(cat) if cat.starts_with("email") => NotificationSoundPlan::ThemeName {
+                primary: "message-new-email",
+                fallback_theme: Some("message-new-instant"),
+                fallback_preset: SoundPreset::Notification,
+            },
+            Some(cat) if cat.starts_with("im") => NotificationSoundPlan::ThemeName {
+                primary: "message-new-instant",
+                fallback_theme: Some("message"),
+                fallback_preset: SoundPreset::Notification,
+            },
             Some("device.added") => NotificationSoundPlan::ThemeName {
                 primary: "device-added",
                 fallback_theme: Some("bell"),
@@ -83,6 +88,43 @@ pub fn resolve_notification_sound(
                 fallback_theme: Some("bell"),
                 fallback_preset: SoundPreset::Notification,
             },
+            Some("device.error") => NotificationSoundPlan::ThemeName {
+                primary: "dialog-error",
+                fallback_theme: Some("error"),
+                fallback_preset: SoundPreset::Warning,
+            },
+            Some("network.connected") => NotificationSoundPlan::ThemeName {
+                primary: "network-connectivity-established",
+                fallback_theme: Some("message"),
+                fallback_preset: SoundPreset::Notification,
+            },
+            Some("network.disconnected") => NotificationSoundPlan::ThemeName {
+                primary: "network-connectivity-lost",
+                fallback_theme: Some("dialog-warning"),
+                fallback_preset: SoundPreset::Warning,
+            },
+            Some("network.error") => NotificationSoundPlan::ThemeName {
+                primary: "network-connectivity-error",
+                fallback_theme: Some("dialog-error"),
+                fallback_preset: SoundPreset::Warning,
+            },
+            Some("transfer.complete") => NotificationSoundPlan::ThemeName {
+                primary: "complete-download",
+                fallback_theme: Some("complete"),
+                fallback_preset: SoundPreset::Notification,
+            },
+            Some("transfer.error") => NotificationSoundPlan::ThemeName {
+                primary: "dialog-error",
+                fallback_theme: Some("error"),
+                fallback_preset: SoundPreset::Warning,
+            },
+            Some(cat) if cat.starts_with("battery") || cat.starts_with("power") => {
+                NotificationSoundPlan::ThemeName {
+                    primary: "battery-low",
+                    fallback_theme: Some("dialog-warning"),
+                    fallback_preset: SoundPreset::Warning,
+                }
+            }
             _ => NotificationSoundPlan::ThemeName {
                 primary: "message",
                 fallback_theme: Some("bell"),
@@ -100,24 +142,33 @@ const fn preset_for_urgency(urgency: NotificationUrgency) -> SoundPreset {
     }
 }
 
-/// Plays a resolved [`NotificationSoundPlan`] through WayWi's native `AudioPlayer`.
+/// Plays a resolved [`NotificationSoundPlan`] through the O(1)-cached [`SoundEngine`] and WayWi's
+/// native `AudioPlayer`.
 #[cfg(not(test))]
-pub fn play_notification_sound(plan: &NotificationSoundPlan, ctx: &EffectCtx<'_>) {
+pub fn play_notification_sound(
+    plan: &NotificationSoundPlan,
+    sounds: &mut SoundEngine,
+    ctx: &EffectCtx<'_>,
+) {
+    if !sounds.event_sounds_enabled || !sounds.notification_sounds_enabled {
+        return;
+    }
+    let vol = (NOTIF_SOUND_VOLUME * sounds.volume_scale).clamp(0.0, 1.0);
     match plan {
         NotificationSoundPlan::Silent => {}
         NotificationSoundPlan::File(path) => {
             if let Ok(asset) = ctx.load_sound(path) {
-                ctx.play_sound_volume(asset, NOTIF_SOUND_VOLUME);
+                ctx.play_sound_volume(asset, vol);
             } else {
-                ctx.play_sound_preset(SoundPreset::Notification, NOTIF_SOUND_VOLUME);
+                ctx.play_sound_preset(SoundPreset::Notification, vol);
             }
         }
         NotificationSoundPlan::CustomThemeName {
             name,
             fallback_preset,
         } => {
-            if ctx.play_system_sound(name, NOTIF_SOUND_VOLUME).is_err() {
-                ctx.play_sound_preset(*fallback_preset, NOTIF_SOUND_VOLUME);
+            if !sounds.play_theme_name_cached(name, vol, ctx) {
+                ctx.play_sound_preset(*fallback_preset, vol);
             }
         }
         NotificationSoundPlan::ThemeName {
@@ -125,20 +176,24 @@ pub fn play_notification_sound(plan: &NotificationSoundPlan, ctx: &EffectCtx<'_>
             fallback_theme,
             fallback_preset,
         } => {
-            if ctx.play_system_sound(primary, NOTIF_SOUND_VOLUME).is_ok() {
+            if sounds.play_theme_name_cached(primary, vol, ctx) {
                 return;
             }
             if let Some(fb) = fallback_theme
-                && ctx.play_system_sound(fb, NOTIF_SOUND_VOLUME).is_ok()
+                && sounds.play_theme_name_cached(fb, vol, ctx)
             {
                 return;
             }
-            ctx.play_sound_preset(*fallback_preset, NOTIF_SOUND_VOLUME);
+            ctx.play_sound_preset(*fallback_preset, vol);
         }
     }
 }
 
 #[cfg(test)]
-pub fn play_notification_sound(_plan: &NotificationSoundPlan, _ctx: &EffectCtx<'_>) {
+pub fn play_notification_sound(
+    _plan: &NotificationSoundPlan,
+    _sounds: &mut SoundEngine,
+    _ctx: &EffectCtx<'_>,
+) {
     let _ = NOTIF_SOUND_VOLUME;
 }

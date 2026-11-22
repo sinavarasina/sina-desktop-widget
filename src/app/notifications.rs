@@ -92,10 +92,11 @@ impl NotificationStore {
         notif: DesktopNotification,
         icon_lookup: &mut XdgIconLookup,
         path_cache: &mut PathAssetCache,
+        sounds: &mut crate::app::sounds::SoundEngine,
         ctx: &mut EffectCtx<'_>,
     ) {
         let sound_plan = resolve_notification_sound(&notif, self.dnd);
-        play_notification_sound(&sound_plan, ctx);
+        play_notification_sound(&sound_plan, sounds, ctx);
         self.last_sound_plan = sound_plan;
 
         let cached_icon_path = if notif.transient {

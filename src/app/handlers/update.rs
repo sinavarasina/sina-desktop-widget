@@ -3,7 +3,8 @@
 use waywi::desktop::spawn_detached;
 use waywi::prelude::*;
 
-use crate::app::state::{AudioControlTarget, Msg, State};
+use crate::app::config::DesktopPoseMode;
+use crate::app::state::{AudioControlTarget, Msg, SoundCue, State};
 
 use super::audio::{
     handle_audio_updated, handle_mixer_bar_pointer, handle_mixer_capture_scroll,
@@ -42,6 +43,13 @@ use super::quick_menu::{
     handle_clock_menu_click, handle_logind_event, handle_power_action, handle_power_countdown_tick,
     handle_quick_menu_toggle_power,
 };
+use super::settings::{
+    handle_cycle_metric_placement, handle_list_scroll, handle_move_metric, handle_preview_sound,
+    handle_rail_scroll, handle_reset_defaults, handle_select_dropdown, handle_select_section,
+    handle_settings_ime, handle_settings_key, handle_step_setting, handle_toggle_dropdown,
+    handle_toggle_setting, handle_toggle_settings, handle_wallpaper_path_apply,
+    handle_wallpaper_path_clear, handle_wallpaper_path_focus,
+};
 
 pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Result<()> {
     match msg {
@@ -58,18 +66,147 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
                 state.active_ws_id = id.get();
             } else {
                 for w in &mut state.workspaces {
-                    w.focused = w.id == id;
+                    w.focused = !w.is_special() && !w.is_named() && w.id == id;
                 }
                 state.active_ws_id = id.get();
             }
             if prev_ws != state.active_ws_id {
+                state.prev_ws_id = prev_ws;
+                if state.config.sprite.rotate_on_workspace
+                    && state.config.sprite.desktop_pose == DesktopPoseMode::Auto
+                {
+                    state.desktop_sprite.rotate_instant(ctx);
+                }
+                state.play_sound(SoundCue::TabChanged, ctx);
+            }
+        }
+        Msg::SwitchWorkspaceNamed(target) => {
+            let prev_ws = state.active_ws_id;
+            if let Ok(hc) = ctx.hyprland() {
+                let _ = hc.switch_workspace_name(&target);
+                if let Ok(list) = hc.workspaces() {
+                    state.workspaces = list;
+                }
+            } else {
+                for w in &mut state.workspaces {
+                    w.focused = w.is_named() && w.target_spec() == target;
+                }
+            }
+            if prev_ws > 0 {
+                state.prev_ws_id = prev_ws;
+            }
+            if state.config.sprite.rotate_on_workspace
+                && state.config.sprite.desktop_pose == DesktopPoseMode::Auto
+            {
                 state.desktop_sprite.rotate_instant(ctx);
             }
+            state.play_sound(SoundCue::TabChanged, ctx);
+        }
+        Msg::SwitchWorkspacePrevious => {
+            let prev_ws = state.active_ws_id;
+            if let Ok(hc) = ctx.hyprland() {
+                let _ = hc.switch_workspace_previous();
+                if let Ok(list) = hc.workspaces() {
+                    if let Some(focused) = list
+                        .iter()
+                        .find(|w| w.focused && !w.is_special() && w.id.get() > 0)
+                    {
+                        state.active_ws_id = focused.id.get();
+                    }
+                    state.workspaces = list;
+                }
+            } else if state.prev_ws_id > 0 && state.prev_ws_id != state.active_ws_id {
+                let target_id = state.prev_ws_id;
+                for w in &mut state.workspaces {
+                    w.focused = !w.is_special() && !w.is_named() && w.id.get() == target_id;
+                }
+                state.active_ws_id = target_id;
+            }
+            if prev_ws != state.active_ws_id {
+                state.prev_ws_id = prev_ws;
+                if state.config.sprite.rotate_on_workspace
+                    && state.config.sprite.desktop_pose == DesktopPoseMode::Auto
+                {
+                    state.desktop_sprite.rotate_instant(ctx);
+                }
+                state.play_sound(SoundCue::TabChanged, ctx);
+            }
+        }
+        Msg::WorkspaceScroll(sc) => {
+            let dir = super::events::scroll_direction_y(sc);
+            if dir != 0 {
+                let step = if dir > 0 { 1 } else { -1 };
+                let prev_ws = state.active_ws_id;
+                if let Ok(hc) = ctx.hyprland() {
+                    let _ = hc.switch_workspace_relative(step, true);
+                    if let Ok(list) = hc.workspaces() {
+                        if let Some(focused) = list
+                            .iter()
+                            .find(|w| w.focused && !w.is_special() && w.id.get() > 0)
+                        {
+                            state.active_ws_id = focused.id.get();
+                        }
+                        state.workspaces = list;
+                    }
+                } else {
+                    let mut ids: Vec<i32> = state
+                        .workspaces
+                        .iter()
+                        .filter(|w| !w.is_special() && !w.is_named() && w.id.get() > 0)
+                        .map(|w| w.id.get())
+                        .collect();
+                    ids.sort_unstable();
+                    ids.dedup();
+                    if ids.len() > 1
+                        && let Some(pos) = ids.iter().position(|&id| id == state.active_ws_id)
+                    {
+                        let next_pos = if step > 0 {
+                            (pos + 1) % ids.len()
+                        } else {
+                            (pos + ids.len() - 1) % ids.len()
+                        };
+                        let next_id = ids[next_pos];
+                        for w in &mut state.workspaces {
+                            w.focused = !w.is_special() && !w.is_named() && w.id.get() == next_id;
+                        }
+                        state.active_ws_id = next_id;
+                    }
+                }
+                if prev_ws != state.active_ws_id {
+                    state.prev_ws_id = prev_ws;
+                    if state.config.sprite.rotate_on_workspace
+                        && state.config.sprite.desktop_pose == DesktopPoseMode::Auto
+                    {
+                        state.desktop_sprite.rotate_instant(ctx);
+                    }
+                    state.play_sound(SoundCue::TabChanged, ctx);
+                }
+            }
+        }
+        Msg::ToggleSpecialWorkspace(name) => {
+            let short = name.strip_prefix("special:").unwrap_or(&name);
+            let target = (!short.is_empty()).then_some(short);
+            if let Ok(hc) = ctx.hyprland() {
+                let _ = hc.toggle_special_workspace(target);
+                if let Ok(list) = hc.workspaces() {
+                    state.workspaces = list;
+                }
+            } else if state.active_special.as_deref() == Some(name.as_str()) {
+                state.active_special = None;
+            } else {
+                state.active_special = Some(name);
+            }
+            state.play_sound(SoundCue::TabChanged, ctx);
         }
         Msg::HyprEvent(ev) => handle_hypr_event(state, ev, ctx),
         Msg::ScrollTick => state.scroller.advance(),
         Msg::ToggleDrun => handle_toggle_drun(state, ctx),
-        Msg::CloseDrun => state.drun.close(),
+        Msg::CloseDrun => {
+            if state.drun.target {
+                state.drun.close();
+                state.play_sound(SoundCue::MenuPopdown, ctx);
+            }
+        }
         Msg::DrunKey(ev) => handle_drun_key(state, ev, ctx),
         Msg::DrunIme(ev) => handle_drun_ime(state, ev, ctx),
         Msg::DrunLaunchIndex(idx) => handle_drun_launch_index(state, idx),
@@ -79,14 +216,17 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
             state.drun.marquee_tick = state.drun.marquee_tick.wrapping_add(1);
         }
         Msg::IpcControl { action, target } => handle_ipc_control(state, action, target, ctx),
-        Msg::DbusActionOutcome(res) => handle_dbus_action_result(state, res),
+        Msg::DbusActionOutcome(res) => handle_dbus_action_result(state, res, ctx),
         Msg::NotificationEvent(ev) => handle_notification_event(state, *ev, ctx),
         Msg::NotifBarPointerDown(ev) => handle_notif_bar_pointer(state, ev, ctx),
         Msg::NotifTickerTick => state.notifications.step_ticker(),
         Msg::NotifCenterAnimTick => state.notifications.step_center_animation(),
         Msg::NotifCenterMarqueeTick => state.notifications.advance_marquee(),
         Msg::CloseNotificationCenter => {
-            state.notifications.close_center();
+            if state.notifications.center_target {
+                state.notifications.close_center();
+                state.play_sound(SoundCue::MenuPopdown, ctx);
+            }
         }
         Msg::NotifCenterScroll(sc) => handle_notif_center_scroll(state, sc, ctx),
         Msg::NotifCenterCardPointerDown { id, ev } => {
@@ -99,10 +239,17 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
             handle_notif_action_scroll(state, id, sc);
         }
         Msg::NotifCenterClearAll => {
+            let had_items = state.notifications.total_count > 0;
             state.notifications.clear_all();
+            if had_items {
+                state.play_sound(SoundCue::TrashEmpty, ctx);
+            }
         }
         Msg::NotifCenterToggleDnd => {
             state.notifications.toggle_dnd(ctx);
+            if !state.notifications.dnd {
+                state.play_sound(SoundCue::ToggleOn, ctx);
+            }
         }
         Msg::MprisEvent(ev) => handle_mpris_event(state, *ev, ctx),
         Msg::MprisBarPointerDown(ev) => handle_mpris_bar_pointer(state, ev, ctx),
@@ -112,10 +259,13 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
         Msg::MprisTick => state.mpris.advance_tick(),
         Msg::MprisPopupAnimTick => state.mpris.step_popup_animation(),
         Msg::CloseMprisPopup => {
-            state.mpris.close_popup();
+            if state.mpris.popup_target {
+                state.mpris.close_popup();
+                state.play_sound(SoundCue::MenuPopdown, ctx);
+            }
         }
         Msg::BluetoothAgentEvent(ev) => handle_bluetooth_agent_event(state, *ev, ctx),
-        Msg::BtBarPointerDown(ev) => handle_bt_bar_pointer(state, ev),
+        Msg::BtBarPointerDown(ev) => handle_bt_bar_pointer(state, ev, ctx),
         Msg::BtTogglePower => handle_bt_toggle_power(state, ctx),
         Msg::BtToggleScan => handle_bt_toggle_scan(state, ctx),
         Msg::BtToggleDiscoverable => handle_bt_toggle_discoverable(state, ctx),
@@ -129,11 +279,24 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
         Msg::BtPopupScroll(sc) => handle_bt_popup_scroll(state, sc),
         Msg::BtPopupAnimTick => state.bt_ui.step_popup_animation(),
         Msg::BtPendingTick => state.bt_ui.advance_pending_tick(),
-        Msg::CloseBtPopup => state.bt_ui.close_popup(),
-        Msg::UDisksUpdated(snap) => handle_udisks_updated(state, snap),
+        Msg::CloseBtPopup => {
+            if state.bt_ui.popup_target {
+                state.bt_ui.close_popup();
+                state.play_sound(SoundCue::MenuPopdown, ctx);
+            }
+        }
+        Msg::UDisksUpdated(snap) => handle_udisks_updated(state, snap, ctx),
         Msg::DiskBarPointerDown(ev) => handle_disk_bar_pointer(state, ev, ctx),
         Msg::DiskRefresh => handle_disk_refresh(state, ctx),
-        Msg::DiskToggleSystem => state.disk_ui.toggle_show_system(),
+        Msg::DiskToggleSystem => {
+            state.disk_ui.toggle_show_system();
+            let cue = if state.disk_ui.show_system {
+                SoundCue::ToggleOn
+            } else {
+                SoundCue::ToggleOff
+            };
+            state.play_sound(cue, ctx);
+        }
         Msg::DiskDevicePointerDown { path, ev } => {
             handle_disk_device_pointer(state, path, ev, ctx);
         }
@@ -143,12 +306,20 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
         Msg::DiskUnlockKey(ev) => handle_disk_unlock_key(state, ev, ctx),
         Msg::DiskUnlockIme(ev) => handle_disk_unlock_ime(state, ev, ctx),
         Msg::DiskUnlockSubmit => handle_disk_unlock_submit(state, ctx),
-        Msg::DiskUnlockCancel => state.disk_ui.close_unlock_prompt(),
+        Msg::DiskUnlockCancel => {
+            state.disk_ui.close_unlock_prompt();
+            state.play_sound(SoundCue::DialogCancel, ctx);
+        }
         Msg::DiskPopupScroll(sc) => handle_disk_popup_scroll(state, sc),
         Msg::DiskPopupAnimTick => state.disk_ui.step_popup_animation(),
         Msg::DiskPendingTick => state.disk_ui.advance_pending_tick(),
         Msg::DiskMarqueeTick => state.disk_ui.advance_marquee(),
-        Msg::CloseDiskPopup => state.disk_ui.close_popup(),
+        Msg::CloseDiskPopup => {
+            if state.disk_ui.popup_target {
+                state.disk_ui.close_popup();
+                state.play_sound(SoundCue::MenuPopdown, ctx);
+            }
+        }
         Msg::Noop => {}
         Msg::TrayEvent(ev) => handle_tray_event(state, *ev, ctx),
         Msg::TrayClick { index, ev } => handle_tray_click(state, index, ev, ctx),
@@ -160,7 +331,9 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
             }
         }
         Msg::CloseTrayMenu => {
-            state.tray_menu = None;
+            if state.tray_menu.take().is_some() {
+                state.play_sound(SoundCue::MenuPopdown, ctx);
+            }
         }
         Msg::TrayBlinkTick => {
             state.blink_phase = !state.blink_phase;
@@ -172,6 +345,7 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
                     AudioControlTarget::Sink => AudioControlTarget::Source,
                     AudioControlTarget::Source => AudioControlTarget::Sink,
                 };
+                state.play_sound(SoundCue::TabChanged, ctx);
             }
             Some(MouseButton::Left) => {
                 if let Ok(ac) = ctx.audio() {
@@ -184,6 +358,16 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
                         }
                     }
                 }
+                let was_muted = state.audio.as_ref().is_some_and(|a| match state.audio_target {
+                    AudioControlTarget::Sink => a.muted,
+                    AudioControlTarget::Source => a.source_muted,
+                });
+                let cue = if was_muted {
+                    SoundCue::ToggleOn
+                } else {
+                    SoundCue::ToggleOff
+                };
+                state.play_sound(cue, ctx);
             }
             _ => {}
         },
@@ -191,7 +375,12 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
         Msg::MixerBarPointerDown(ev) => handle_mixer_bar_pointer(state, ev, ctx),
         Msg::MixerPopupAnimTick => state.audio_ui.step_popup_animation(),
         Msg::MixerMarqueeTick => state.audio_ui.advance_marquee(),
-        Msg::CloseMixerPopup => state.audio_ui.close_popup(),
+        Msg::CloseMixerPopup => {
+            if state.audio_ui.popup_target {
+                state.audio_ui.close_popup();
+                state.play_sound(SoundCue::MenuPopdown, ctx);
+            }
+        }
         Msg::MixerSetTarget(target) => handle_mixer_set_target(state, target),
         Msg::MixerMasterScroll(sc) => handle_audio_scroll(state, sc, ctx),
         Msg::MixerMasterSeekClick(ev) => handle_mixer_master_seek_click(state, ev, ctx),
@@ -231,7 +420,9 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
             if !state.startup_hydrated {
                 state.startup_hydrated = true;
                 #[cfg(not(test))]
-                state.desktop_sprite.ensure_loaded(ctx);
+                if state.config.sprite.desktop_enabled {
+                    state.desktop_sprite.ensure_loaded(ctx);
+                }
                 state.notifications.ensure_visible_icons(
                     0,
                     crate::theme::NOTIF_MAX_BAR_ICONS,
@@ -248,11 +439,14 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
                     state.drun.ensure_scanned();
                     state.window_info.refresh_category(&state.drun.entries);
                 }
-                state.booster.on_focus_change(
-                    state.window_info.cgroup.as_ref(),
-                    state.memory.as_ref(),
-                    ctx,
-                );
+                if state.config.general.foreground_booster {
+                    state.booster.on_focus_change(
+                        state.window_info.cgroup.as_ref(),
+                        state.memory.as_ref(),
+                        ctx,
+                    );
+                }
+                state.play_sound(SoundCue::SystemReady, ctx);
             }
         }
         Msg::MemorySampled(snap) => {
@@ -265,10 +459,16 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
             state.network = Some(snap);
         }
         Msg::NetworkManagerUpdated(snap) => {
+            state
+                .sounds
+                .observe_network(&snap, state.notifications.dnd, ctx);
             state.nm = Some(snap);
         }
         Msg::BluetoothUpdated(snap) => {
             state.bt_ui.clear_settled_pending(&snap);
+            state
+                .sounds
+                .observe_bluetooth(&snap, state.notifications.dnd, ctx);
             state.bluetooth = snap;
         }
         Msg::TimeTick(snap) => {
@@ -277,16 +477,21 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
                 .sysinfo
                 .tick_second(state.cpu.as_ref(), state.memory.as_ref());
             state.window_info.tick_second(state.booster.short_badge());
-            state.desktop_sprite.tick_second();
+            let auto_rotate = state.config.sprite.desktop_pose == DesktopPoseMode::Auto;
+            state
+                .desktop_sprite
+                .tick_second_with(state.config.sprite.rotate_interval_secs, auto_rotate);
         }
         Msg::ClockPointerDown(ev) => match ev.button {
             Some(MouseButton::Left) => state.clock_alt = !state.clock_alt,
             Some(MouseButton::Middle) => {
                 if state.calendar_open {
                     state.calendar_open = false;
+                    state.play_sound(SoundCue::MenuPopdown, ctx);
                 } else {
                     close_other_overlays(state, Some("calendar"));
                     state.calendar_open = true;
+                    state.play_sound(SoundCue::MenuPopup, ctx);
                 }
             }
             Some(MouseButton::Right) => state.cal_year_mode = !state.cal_year_mode,
@@ -299,7 +504,10 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
             }
         }
         Msg::CloseCalendar => {
-            state.calendar_open = false;
+            if state.calendar_open {
+                state.calendar_open = false;
+                state.play_sound(SoundCue::MenuPopdown, ctx);
+            }
         }
         Msg::ClockMenuClick => handle_clock_menu_click(state, ctx),
         Msg::ClockMenuTick => state.step_clock_menu_animation(),
@@ -312,19 +520,59 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
             }
         }
         Msg::CloseQuickMenu => {
+            let was_open = state.quick_menu.popup_target;
             state.quick_menu.close_popup();
+            state.settings_ui.unfocus_inputs();
+            state.settings_ui.open_dropdown = None;
             if !state.hovered.is_clock_group() {
                 state.clock_menu_target = false;
             }
+            if was_open {
+                state.play_sound(SoundCue::MenuPopdown, ctx);
+            }
         }
         Msg::QuickMenuTogglePower => handle_quick_menu_toggle_power(state, ctx),
-        Msg::QuickMenuPowerAction(action) => handle_power_action(state, action),
+        Msg::QuickMenuToggleSettings => handle_toggle_settings(state, ctx),
+        Msg::QuickMenuPowerAction(action) => handle_power_action(state, action, ctx),
         Msg::QuickMenuPowerTick => handle_power_countdown_tick(state, ctx),
-        Msg::QuickMenuCancelPower => state.quick_menu.cancel_power_countdown(),
+        Msg::QuickMenuCancelPower => {
+            if state.quick_menu.pending_power.is_some() {
+                state.quick_menu.cancel_power_countdown();
+                state.play_sound(SoundCue::DialogCancel, ctx);
+            }
+        }
         Msg::QuickMenuSpriteClick => state.quick_menu.interact_sprite(),
+        Msg::QuickMenuSpriteScroll(sc) => {
+            let delta = super::events::scroll_direction_y(sc);
+            let prev = state.quick_menu.sprite_pose_idx;
+            state.quick_menu.scroll_sprite_pose(delta, ctx);
+            if state.quick_menu.sprite_pose_idx != prev {
+                state.config.sprite.quick_menu_pose = state.quick_menu.sprite_pose_idx;
+                state.save_config();
+                state.play_sound(SoundCue::TabChanged, ctx);
+            }
+        }
         Msg::QuickMenuSpriteReactEnd => {
             state.quick_menu.mouth_reacting = false;
         }
+        Msg::SettingsSelectSection(section) => handle_select_section(state, section, ctx),
+        Msg::SettingsRailScroll(sc) => handle_rail_scroll(state, sc),
+        Msg::SettingsListScroll(sc) => handle_list_scroll(state, sc),
+        Msg::SettingsToggle(id) => handle_toggle_setting(state, id, ctx),
+        Msg::SettingsStep { id, delta } => handle_step_setting(state, id, delta, ctx),
+        Msg::SettingsToggleDropdown(dd) => handle_toggle_dropdown(state, dd, ctx),
+        Msg::SettingsSelectDropdown { dropdown, index } => {
+            handle_select_dropdown(state, dropdown, index, ctx);
+        }
+        Msg::SettingsWallpaperPathFocus => handle_wallpaper_path_focus(state, ctx),
+        Msg::SettingsWallpaperPathApply => handle_wallpaper_path_apply(state, ctx),
+        Msg::SettingsWallpaperPathClear => handle_wallpaper_path_clear(state, ctx),
+        Msg::SettingsKey(ev) => handle_settings_key(state, ev, ctx),
+        Msg::SettingsIme(ev) => handle_settings_ime(state, ev, ctx),
+        Msg::SettingsPreviewSound => handle_preview_sound(state, ctx),
+        Msg::SettingsResetDefaults => handle_reset_defaults(state, ctx),
+        Msg::SettingsCycleMetricPlacement(id) => handle_cycle_metric_placement(state, id, ctx),
+        Msg::SettingsMoveMetric { id, delta } => handle_move_metric(state, id, delta, ctx),
         Msg::DesktopSpriteFadeTick => state.desktop_sprite.step_fade(ctx),
         Msg::DesktopSpriteBlinkTick => state.desktop_sprite.step_blink(),
         Msg::DesktopSpriteMouthTick => state.desktop_sprite.step_mouth(),

@@ -2,7 +2,10 @@
 
 use waywi::prelude::*;
 
-use crate::app::state::{AudioControlTarget, State, TrayEntry, TrayMenuPopup, resolve_tray_icon};
+use crate::app::config::DesktopPoseMode;
+use crate::app::state::{
+    AudioControlTarget, SoundCue, State, TrayEntry, TrayMenuPopup, resolve_tray_icon,
+};
 
 /// Returns Wayland vertical scroll step (`< 0` = scroll up, `> 0` = scroll down).
 #[must_use]
@@ -29,11 +32,15 @@ fn refresh_active_client(state: &mut State, ctx: &EffectCtx<'_>) {
                 state.drun.ensure_scanned();
             }
             state.window_info.set_client(Some(c), &state.drun.entries);
-            state.booster.on_focus_change(
-                state.window_info.cgroup.as_ref(),
-                state.memory.as_ref(),
-                ctx,
-            );
+            if state.config.general.foreground_booster {
+                state.booster.on_focus_change(
+                    state.window_info.cgroup.as_ref(),
+                    state.memory.as_ref(),
+                    ctx,
+                );
+            } else {
+                state.booster.clear_active(ctx);
+            }
         }
         Ok(None) => {
             state.scroller.set_window(String::new(), String::new());
@@ -44,17 +51,31 @@ fn refresh_active_client(state: &mut State, ctx: &EffectCtx<'_>) {
     }
 }
 
+fn refresh_workspaces(state: &mut State, ctx: &EffectCtx<'_>) {
+    if let Ok(hc) = ctx.hyprland()
+        && let Ok(list) = hc.workspaces()
+    {
+        if let Some(focused) = list.iter().find(|w| w.focused && !w.is_special() && w.id.get() > 0) {
+            state.active_ws_id = focused.id.get();
+        }
+        state.workspaces = list;
+    }
+}
+
 pub fn handle_hypr_event(state: &mut State, ev: HyprlandEvent, ctx: &mut EffectCtx<'_>) {
     match ev {
         HyprlandEvent::ActiveWindow { class, title } => {
             state.scroller.set_window(class, title);
             refresh_active_client(state, ctx);
         }
-        HyprlandEvent::ActiveWindowV2 { .. }
+        HyprlandEvent::ActiveWindowV2 { .. } | HyprlandEvent::WindowTitle { .. } => {
+            refresh_active_client(state, ctx);
+        }
+        HyprlandEvent::OpenWindow { .. }
         | HyprlandEvent::CloseWindow { .. }
-        | HyprlandEvent::WindowTitle { .. }
         | HyprlandEvent::MoveWindowV2 { .. }
         | HyprlandEvent::Fullscreen(_) => {
+            refresh_workspaces(state, ctx);
             refresh_active_client(state, ctx);
         }
         HyprlandEvent::WindowTitleV2 { address, title } => {
@@ -76,29 +97,52 @@ pub fn handle_hypr_event(state: &mut State, ev: HyprlandEvent, ctx: &mut EffectC
             workspace_id: id, ..
         } => {
             let prev_ws = state.active_ws_id;
-            state.active_ws_id = id.get();
-            if prev_ws != state.active_ws_id {
-                state.desktop_sprite.rotate_instant(ctx);
+            if id.get() > 0 {
+                state.active_ws_id = id.get();
             }
-            if let Ok(hc) = ctx.hyprland() {
-                if let Ok(list) = hc.workspaces() {
-                    state.workspaces = list;
+            if prev_ws != state.active_ws_id {
+                state.prev_ws_id = prev_ws;
+                if state.config.sprite.rotate_on_workspace
+                    && state.config.sprite.desktop_pose == DesktopPoseMode::Auto
+                {
+                    state.desktop_sprite.rotate_instant(ctx);
                 }
+            }
+            if ctx.hyprland().is_ok() {
+                refresh_workspaces(state, ctx);
                 refresh_active_client(state, ctx);
-            } else {
+            } else if id.get() > 0 {
                 for w in &mut state.workspaces {
-                    w.focused = w.id == id;
+                    w.focused = !w.is_special() && w.id == id;
                 }
             }
         }
+        HyprlandEvent::ActiveSpecial { workspace_name, .. }
+        | HyprlandEvent::ActiveSpecialV2 { workspace_name, .. } => {
+            let trimmed = workspace_name.trim();
+            state.active_special = if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_owned())
+            };
+            refresh_workspaces(state, ctx);
+        }
         HyprlandEvent::CreateWorkspaceV2 { .. }
         | HyprlandEvent::DestroyWorkspaceV2 { .. }
-        | HyprlandEvent::MoveWorkspaceV2 { .. } => {
-            if let Ok(hc) = ctx.hyprland()
-                && let Ok(list) = hc.workspaces()
-            {
-                state.workspaces = list;
-            }
+        | HyprlandEvent::MoveWorkspaceV2 { .. }
+        | HyprlandEvent::RenameWorkspace { .. }
+        | HyprlandEvent::ConfigReloaded
+        | HyprlandEvent::Reconnected => {
+            refresh_workspaces(state, ctx);
+        }
+        HyprlandEvent::Bell { .. } => {
+            state.play_sound(SoundCue::Bell, ctx);
+        }
+        HyprlandEvent::Urgent { .. } => {
+            state.play_sound(SoundCue::WindowUrgent, ctx);
+        }
+        HyprlandEvent::Unknown { name, .. } if name.to_ascii_lowercase().contains("layout") => {
+            refresh_workspaces(state, ctx);
         }
         _ => {}
     }
@@ -200,5 +244,12 @@ pub fn handle_audio_scroll(state: &mut State, sc: ScrollEvent, ctx: &EffectCtx<'
                 audio.source_linear = next;
             }
         }
+    }
+    let muted = state.audio.as_ref().is_some_and(|a| match state.audio_target {
+        AudioControlTarget::Sink => a.muted,
+        AudioControlTarget::Source => a.source_muted,
+    });
+    if !muted {
+        state.play_sound(SoundCue::VolumeChange, ctx);
     }
 }

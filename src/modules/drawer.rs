@@ -1,15 +1,14 @@
-//! Expandable monitoring drawer (`exp` + `\u{e114}`, Disk, and Bluetooth).
+//! Dynamic expandable monitoring drawer (`exp` + `\u{e114}`) rendering whichever right-side
+//! metrics are assigned to `MetricPlacement::Drawer` in the user's configured order.
 
 use waywi::prelude::*;
 
+use crate::app::config::RightMetricId;
 use crate::app::state::{HoverTarget, Msg, State};
-use crate::theme::{
-    BAR_HEIGHT, BT_EXPANDED_WIDTH, DISK_EXPANDED_WIDTH, DRAWER_REVEALED_WIDTH, EXPAND_SIGN_WIDTH,
-    GPU_EXPANDED_WIDTH, MANTLE, MODULE_PAD_H, SUBTEXT0, TEMP_EXPANDED_WIDTH, font_ui,
-};
-use crate::widgets::metric::{MetricModuleConfig, metric_module};
+use crate::modules::right::build_right_metric;
+use crate::theme::{BAR_HEIGHT, EXPAND_SIGN_WIDTH, MANTLE, MODULE_PAD_H, SUBTEXT0, font_ui};
 
-pub fn build_expandable_mon(state: &State) -> Element<Msg> {
+pub fn build_expandable_mon(state: &State, metrics: &[RightMetricId]) -> Element<Msg> {
     let p = state.drawer_progress.clamp(0.0, 1.0);
     let mut drawer_row = Row::new()
         .key("expandable-mon")
@@ -46,70 +45,20 @@ pub fn build_expandable_mon(state: &State) -> Element<Msg> {
         );
     }
 
-    let revealed_w = (p * DRAWER_REVEALED_WIDTH).round();
-    if revealed_w >= 1.0 {
-        let gpu_el = metric_module(MetricModuleConfig {
-            key: "mod-gpu",
-            metric: state.gpu_metric(),
-            target: HoverTarget::Gpu,
-            hovered: state.hovered == HoverTarget::Gpu,
-            fixed_width: Some(GPU_EXPANDED_WIDTH),
-            on_pointer_down: Some(|ev| {
-                if ev.button == Some(MouseButton::Right) {
-                    Msg::SpawnBtop
-                } else {
-                    Msg::Hover(HoverTarget::Gpu)
-                }
-            }),
-            on_scroll: None,
-        });
-
-        let temp_el = metric_module(MetricModuleConfig {
-            key: "mod-temp",
-            metric: state.temp_metric(),
-            target: HoverTarget::Temp,
-            hovered: state.hovered == HoverTarget::Temp,
-            fixed_width: Some(TEMP_EXPANDED_WIDTH),
-            on_pointer_down: Some(|ev| {
-                if ev.button == Some(MouseButton::Right) {
-                    Msg::SpawnBtop
-                } else {
-                    Msg::Hover(HoverTarget::Temp)
-                }
-            }),
-            on_scroll: None,
-        });
-
-        let disk_el = metric_module(MetricModuleConfig {
-            key: "mod-disk",
-            metric: state.disk_metric(),
-            target: HoverTarget::Disk,
-            hovered: state.hovered == HoverTarget::Disk,
-            fixed_width: Some(DISK_EXPANDED_WIDTH),
-            on_pointer_down: Some(Msg::DiskBarPointerDown),
-            on_scroll: None,
-        });
-
-        let bt_el = metric_module(MetricModuleConfig {
-            key: "mod-bluetooth",
-            metric: state.bluetooth_metric(),
-            target: HoverTarget::Bluetooth,
-            hovered: state.hovered == HoverTarget::Bluetooth,
-            fixed_width: Some(BT_EXPANDED_WIDTH),
-            on_pointer_down: Some(Msg::BtBarPointerDown),
-            on_scroll: None,
-        });
-
-        let inner_revealed = Row::new()
+    let total_revealed_w: f32 = metrics.iter().map(|id| id.drawer_width()).sum();
+    let revealed_w = (p * total_revealed_w).round();
+    if revealed_w >= 1.0 && total_revealed_w >= 1.0 {
+        let mut inner_revealed = Row::new()
             .size(Size::px(
-                DRAWER_REVEALED_WIDTH.logical_px(),
+                total_revealed_w.logical_px(),
                 BAR_HEIGHT.logical_px(),
             ))
-            .align(Align::Center)
-            .child(gpu_el)
-            .child(temp_el)
-            .child(disk_el)
-            .child(bt_el);
+            .align(Align::Center);
+
+        for &id in metrics {
+            inner_revealed =
+                inner_revealed.child(build_right_metric(state, id, Some(id.drawer_width())));
+        }
 
         drawer_row = drawer_row.child(
             Clip::new(inner_revealed)
