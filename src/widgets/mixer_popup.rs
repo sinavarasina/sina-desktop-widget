@@ -1,16 +1,21 @@
-//! Minimalist per-app volume mixer popup (master + per-app playback/capture rows).
+//! Minimalist per-app volume mixer popup (master, expandable device/port/profile & balance
+//! routing card, and per-app playback/capture rows).
+
+pub mod routing;
 
 use waywi::prelude::*;
 
 use crate::app::state::{AudioControlTarget, HoverTarget, Msg, State};
 use crate::theme::{
-    BAR_HEIGHT, CRUST, MANTLE, MAUVE, MIXER_POPUP_WIDTH, MIXER_TRACK_WIDTH,
+    BAR_HEIGHT, BLUE, CRUST, MANTLE, MAUVE, MIXER_POPUP_WIDTH, MIXER_TRACK_WIDTH,
     NOTIF_CENTER_TOP_MARGIN, OVERLAY0, SUBTEXT1, SURFACE0, SURFACE1, TEXT, font_ui, font_ui_bold,
     font_ui_semibold,
 };
 use crate::widgets::text::marquee_slice;
 
-const MASTER_CARD_HEIGHT: f32 = 56.0;
+use routing::{build_routing_card, format_balance_short, port_icon, target_supports_balance};
+
+const MASTER_CARD_HEIGHT: f32 = 80.0;
 const APPS_HEADER_HEIGHT: f32 = 24.0;
 const ROW_HEIGHT: f32 = 36.0;
 const ROW_GAP: f32 = 4.0;
@@ -33,27 +38,45 @@ pub fn build_mixer_popup_surface(state: &State) -> Surface<Msg> {
     };
     let left_x = raw_left.clamp(8.0, (state.bar_width - MIXER_POPUP_WIDTH - 8.0).max(8.0));
 
-    let max_total_height = (state.screen_height - NOTIF_CENTER_TOP_MARGIN - 16.0).max(200.0);
-    let max_body_height =
-        (max_total_height - MASTER_CARD_HEIGHT - 6.0 - APPS_HEADER_HEIGHT - 14.0).max(ROW_HEIGHT);
+    let routing_card = if state.audio_ui.routing_open {
+        Some(build_routing_card(state))
+    } else {
+        None
+    };
+    let routing_extra_h = routing_card.as_ref().map_or(0.0, |(_, h)| *h + 6.0);
+
+    let max_total_height = (state.screen_height - NOTIF_CENTER_TOP_MARGIN - 16.0).max(240.0);
+    let max_body_height = (max_total_height
+        - MASTER_CARD_HEIGHT
+        - routing_extra_h
+        - 6.0
+        - APPS_HEADER_HEIGHT
+        - 14.0)
+        .max(ROW_HEIGHT);
 
     let (rows, body_height) = build_app_rows(state, max_body_height);
 
     let master_card = build_master_card(state);
     let apps_card = build_apps_card(rows, body_height);
 
-    let full_height = MASTER_CARD_HEIGHT + 6.0 + APPS_HEADER_HEIGHT + body_height;
+    let full_height =
+        MASTER_CARD_HEIGHT + routing_extra_h + 6.0 + APPS_HEADER_HEIGHT + body_height;
     let animated_h = (full_height * ease).max(1.0);
     let animated_y = (BAR_HEIGHT - 8.0) + (NOTIF_CENTER_TOP_MARGIN - (BAR_HEIGHT - 8.0)) * ease;
 
-    let popup_col = Column::new()
+    let mut popup_col = Column::new()
         .size(Size::new(
             MIXER_POPUP_WIDTH.logical_px(),
             full_height.logical_px(),
         ))
         .gap(6.logical_px())
-        .child(master_card)
-        .child(apps_card);
+        .child(master_card);
+
+    if let Some((card, _)) = routing_card {
+        popup_col = popup_col.child(card);
+    }
+
+    popup_col = popup_col.child(apps_card);
 
     let animated_popup = Clip::new(popup_col)
         .key("mixer-popup-column")
@@ -142,6 +165,7 @@ fn build_master_card(state: &State) -> Element<Msg> {
     };
     let pct = (master_linear * 100.0).clamp(0.0, 150.0).round() as u16;
     let fill_w = MIXER_TRACK_WIDTH * master_linear.clamp(0.0, 1.0);
+    let footer_row = build_master_footer(state, !out_active);
 
     Group::new()
         .key("mixer-master-card")
@@ -229,9 +253,166 @@ fn build_master_card(state: &State) -> Element<Msg> {
                             .font_size(10.logical_px())
                             .color(SUBTEXT1),
                         ),
-                ),
+                )
+                .child(footer_row),
         )
         .into()
+}
+
+/// Compact master footer showing active port/routing toggle on the left and L/R balance readout
+/// on the right (scroll to nudge balance, right-click to snap center).
+fn build_master_footer(state: &State, is_source: bool) -> Element<Msg> {
+    let active_port = state.audio.as_ref().and_then(|a| {
+        if is_source {
+            a.active_source_port()
+        } else {
+            a.active_port()
+        }
+    });
+    let (route_icon, route_label) = match active_port {
+        Some(p) => {
+            let desc = if p.description.is_empty() {
+                p.name.as_str()
+            } else {
+                p.description.as_str()
+            };
+            (port_icon(&p.name, is_source), desc)
+        }
+        None => (
+            if is_source { "\u{f130}" } else { "\u{f028}" },
+            "Devices & Ports",
+        ),
+    };
+
+    let open = state.audio_ui.routing_open;
+    let route_hovered = state.hovered == HoverTarget::MixerRoutingToggle;
+    let route_border = if open {
+        MAUVE
+    } else if route_hovered {
+        SURFACE1
+    } else {
+        SURFACE0
+    };
+    let route_fg = if open {
+        MAUVE
+    } else if route_hovered {
+        TEXT
+    } else {
+        SUBTEXT1
+    };
+    let caret = if open { "\u{f0d8}" } else { "\u{f0d7}" };
+    let short_label = marquee_slice(route_label, 22, state.audio_ui.marquee_tick);
+    let inner_w = MIXER_POPUP_WIDTH - CARD_PAD_H * 2.0;
+
+    let route_btn = Group::new()
+        .key("mixer-routing-toggle")
+        .position(Position::absolute(0.logical_px(), 0.logical_px()))
+        .size(Size::auto())
+        .on_hover(Msg::Hover(HoverTarget::MixerRoutingToggle))
+        .on_leave(Msg::Leave(HoverTarget::MixerRoutingToggle))
+        .on_click(Msg::MixerToggleRouting)
+        .child(
+            Rect::new()
+                .size(Size::fill())
+                .fill(if open || route_hovered {
+                    SURFACE0
+                } else {
+                    MANTLE
+                })
+                .corner_radius(0.logical_px())
+                .border(1.logical_px(), route_border),
+        )
+        .child(
+            Row::new()
+                .padding(Edges::symmetric(2.logical_px(), 7.logical_px()))
+                .gap(5.logical_px())
+                .align(Align::Center)
+                .child(
+                    Text::new(route_icon)
+                        .font(font_ui())
+                        .font_size(9.5.logical_px())
+                        .optical_bounds(true)
+                        .color(route_fg),
+                )
+                .child(
+                    Text::new(short_label)
+                        .font(font_ui_semibold())
+                        .font_size(9.logical_px())
+                        .color(route_fg),
+                )
+                .child(
+                    Text::new(caret)
+                        .font(font_ui())
+                        .font_size(8.5.logical_px())
+                        .optical_bounds(true)
+                        .color(route_fg),
+                ),
+        );
+
+    let mut bar = Group::new()
+        .size(Size::px(inner_w.logical_px(), 20.logical_px()))
+        .child(route_btn);
+
+    if target_supports_balance(state) {
+        let bal = match (state.audio.as_ref(), is_source) {
+            (Some(a), false) => a.balance(),
+            (Some(a), true) => a.source_balance(),
+            (None, _) => 0.0,
+        };
+        let panned = bal.abs() >= 0.01;
+        let bal_hovered = state.hovered == HoverTarget::MixerBalanceBar;
+        let bal_text = format!("Bal {}", format_balance_short(bal));
+        let bal_col = if panned {
+            BLUE
+        } else if bal_hovered {
+            TEXT
+        } else {
+            SUBTEXT1
+        };
+
+        let bal_pill = Group::new()
+            .key("mixer-balance-pill")
+            .position(Position::absolute(inner_w.logical_px(), 0.logical_px()))
+            .anchor(ElementAnchor::TopRight)
+            .size(Size::auto())
+            .on_hover(Msg::Hover(HoverTarget::MixerBalanceBar))
+            .on_leave(Msg::Leave(HoverTarget::MixerBalanceBar))
+            .on_pointer_down(|ev| match ev.button {
+                Some(MouseButton::Right | MouseButton::Middle) => Msg::MixerBalanceSeekClick(ev),
+                _ => Msg::MixerToggleRouting,
+            })
+            .on_scroll(Msg::MixerBalanceScroll)
+            .child(
+                Rect::new()
+                    .size(Size::fill())
+                    .fill(if bal_hovered { SURFACE0 } else { MANTLE })
+                    .corner_radius(0.logical_px())
+                    .border(
+                        1.logical_px(),
+                        if panned {
+                            BLUE
+                        } else if bal_hovered {
+                            SURFACE1
+                        } else {
+                            SURFACE0
+                        },
+                    ),
+            )
+            .child(
+                Row::new()
+                    .padding(Edges::symmetric(2.logical_px(), 7.logical_px()))
+                    .align(Align::Center)
+                    .child(
+                        Text::new(bal_text)
+                            .font(font_ui_semibold())
+                            .font_size(9.logical_px())
+                            .color(bal_col),
+                    ),
+            );
+        bar = bar.child(bal_pill);
+    }
+
+    bar.into()
 }
 
 /// Output/input pill toggle matching the bluetooth popup button style and hover feedback.

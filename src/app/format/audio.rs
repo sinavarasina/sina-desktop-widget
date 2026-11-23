@@ -38,6 +38,18 @@ impl State {
             })
             .unwrap_or("Default Sink");
 
+        let dev_line = match audio.active_port() {
+            Some(port) => {
+                let port_label = if port.description.is_empty() {
+                    port.name.as_str()
+                } else {
+                    port.description.as_str()
+                };
+                format!("Device: {dev} ({port_label})")
+            }
+            None => format!("Device: {dev}"),
+        };
+
         let src_dev = audio
             .default_source
             .as_ref()
@@ -49,6 +61,18 @@ impl State {
                 }
             })
             .unwrap_or("Default Source");
+
+        let src_line_tip = match audio.active_source_port() {
+            Some(port) => {
+                let port_label = if port.description.is_empty() {
+                    port.name.as_str()
+                } else {
+                    port.description.as_str()
+                };
+                format!("Mic: {src_dev} ({port_label})")
+            }
+            None => format!("Mic: {src_dev}"),
+        };
 
         let sink_active = self.audio_target == AudioControlTarget::Sink;
         let sink_line = if audio.muted {
@@ -74,9 +98,22 @@ impl State {
             "Control: Mic (Middle-click: Speaker)"
         };
 
+        let bal = if sink_active {
+            audio.balance()
+        } else {
+            audio.source_balance()
+        };
+        let tooltip = if bal.abs() >= 0.01 {
+            let bal_pct = (bal.abs() * 100.0).round() as u8;
+            let side = if bal < 0.0 { "L" } else { "R" };
+            format!("{dev_line}\n{src_line_tip}\nBalance: {side} {bal_pct}%\n{control_hint}")
+        } else {
+            format!("{dev_line}\n{src_line_tip}\n{control_hint}")
+        };
+
         ModuleMetric {
             lines: vec![sink_line, src_line],
-            tooltip: format!("Device: {dev}\nMic: {src_dev}\n{control_hint}"),
+            tooltip,
             inactive: if sink_active {
                 audio.muted
             } else {

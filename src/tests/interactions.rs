@@ -137,14 +137,14 @@ fn workspace_click_switches_active_workspace() {
 #[test]
 fn audio_scroll_up_increases_and_down_decreases() {
     let mut rt = synthetic_rt();
-    rt.enqueue(Msg::AudioUpdated(AudioSnapshot {
+    rt.enqueue(Msg::AudioUpdated(Box::new(AudioSnapshot {
         linear: 0.50,
         db: None,
         muted: false,
         default_sink: None,
         devices: Vec::new(),
         ..AudioSnapshot::default()
-    }));
+    })));
     rt.step().unwrap();
 
     let scroll = |delta_y: f32, discrete_y: i32| {
@@ -674,26 +674,23 @@ fn mixer_popup_bar_click_opens_right_click_mutes_and_tracks_set_volume() {
     use waywi::audio::AudioStream;
 
     let mut rt = synthetic_rt();
-    rt.enqueue(Msg::AudioUpdated(AudioSnapshot {
+    rt.enqueue(Msg::AudioUpdated(Box::new(AudioSnapshot {
         linear: 0.50,
         default_sink: Some(AudioDevice {
             id: 1,
             name: String::from("alsa_output.pci-0000_00_1f.3"),
             description: String::from("Built-in Audio Analog Stereo"),
+            ..AudioDevice::default()
         }),
         streams: vec![AudioStream {
             id: 7,
             name: String::from("Firefox"),
-            binary: None,
-            icon_name: None,
-            app_id: None,
             sink_id: Some(1),
             linear: 0.40,
-            db: None,
-            muted: false,
+            ..AudioStream::default()
         }],
         ..AudioSnapshot::default()
-    }));
+    })));
     rt.step().unwrap();
     assert!(!rt.state().audio_ui.is_popup_visible());
 
@@ -1290,4 +1287,273 @@ fn quick_menu_settings_drawer_controls_persist_toml_and_apply_live() {
     assert!(rt.state().is_drawer_target(HoverTarget::Bluetooth));
 
     let _ = std::fs::remove_file(&saved_path);
+}
+
+#[test]
+fn mixer_popup_routing_card_switches_devices_ports_profiles_and_balance() {
+    use waywi::audio::{
+        AudioCard, AudioChannelPosition, AudioPort, AudioPortAvailability, AudioProfile,
+    };
+
+    let mut rt = synthetic_rt();
+    let analog_sink = AudioDevice {
+        id: 57,
+        name: String::from("alsa_output.pci-0000_0c_00.6.analog-stereo"),
+        description: String::from("ALC1220 Analog"),
+        card_id: Some(45),
+        active_port: Some(String::from("analog-output-headphones")),
+        ports: vec![
+            AudioPort {
+                name: String::from("analog-output-headphones"),
+                description: String::from("Headphones"),
+                availability: AudioPortAvailability::Available,
+                priority: 9900,
+                ..AudioPort::default()
+            },
+            AudioPort {
+                name: String::from("analog-output-lineout"),
+                description: String::from("Line Out"),
+                availability: AudioPortAvailability::Unavailable,
+                priority: 9000,
+                ..AudioPort::default()
+            },
+        ],
+        ..AudioDevice::default()
+    };
+    let hdmi_sink = AudioDevice {
+        id: 55,
+        name: String::from("alsa_output.pci-0000_01_00.1.hdmi-stereo"),
+        description: String::from("HDMI Monitor"),
+        card_id: Some(46),
+        active_port: Some(String::from("hdmi-output-0")),
+        ports: vec![AudioPort {
+            name: String::from("hdmi-output-0"),
+            description: String::from("HDMI / DisplayPort"),
+            availability: AudioPortAvailability::Available,
+            priority: 5900,
+            ..AudioPort::default()
+        }],
+        ..AudioDevice::default()
+    };
+    let mic_source = AudioDevice {
+        id: 61,
+        name: String::from("alsa_input.pci-0000_0c_00.6.analog-stereo"),
+        description: String::from("Built-in Mic"),
+        card_id: Some(45),
+        active_port: Some(String::from("analog-input-front-mic")),
+        ports: vec![
+            AudioPort {
+                name: String::from("analog-input-front-mic"),
+                description: String::from("Front Microphone"),
+                availability: AudioPortAvailability::Available,
+                priority: 8500,
+                ..AudioPort::default()
+            },
+            AudioPort {
+                name: String::from("analog-input-rear-mic"),
+                description: String::from("Rear Microphone"),
+                availability: AudioPortAvailability::Unknown,
+                priority: 8200,
+                ..AudioPort::default()
+            },
+        ],
+        ..AudioDevice::default()
+    };
+
+    rt.enqueue(Msg::AudioUpdated(Box::new(AudioSnapshot {
+        linear: 0.60,
+        channels: vec![0.60, 0.60],
+        channel_map: vec![
+            AudioChannelPosition::FrontLeft,
+            AudioChannelPosition::FrontRight,
+        ],
+        default_sink: Some(analog_sink.clone()),
+        devices: vec![analog_sink, hdmi_sink],
+        source_linear: 0.80,
+        source_channels: vec![0.80, 0.80],
+        source_channel_map: vec![
+            AudioChannelPosition::FrontLeft,
+            AudioChannelPosition::FrontRight,
+        ],
+        default_source: Some(mic_source.clone()),
+        sources: vec![mic_source],
+        cards: vec![AudioCard {
+            id: 45,
+            name: String::from("alsa_card.pci-0000_0c_00.6"),
+            description: String::from("Starship/Matisse HD Audio Controller"),
+            active_profile: Some(String::from("output:analog-stereo+input:analog-stereo")),
+            profiles: vec![
+                AudioProfile {
+                    index: 1,
+                    name: String::from("output:analog-stereo+input:analog-stereo"),
+                    description: String::from("Analog Stereo Duplex"),
+                    available: true,
+                    priority: 6565,
+                },
+                AudioProfile {
+                    index: 2,
+                    name: String::from("pro-audio"),
+                    description: String::from("Pro Audio"),
+                    available: true,
+                    priority: 1,
+                },
+                AudioProfile {
+                    index: 3,
+                    name: String::from("output:iec958-stereo"),
+                    description: String::from("Digital Stereo (IEC958)"),
+                    available: false,
+                    priority: 5500,
+                },
+            ],
+        }],
+        ..AudioSnapshot::default()
+    })));
+    rt.step().unwrap();
+
+    // Tooltip shows active port `(Headphones)` and omits Balance when centered.
+    let tip = rt.state().wireplumber_metric().tooltip;
+    assert!(tip.contains("(Headphones)"), "got tooltip: {tip}");
+    assert!(!tip.contains("Balance:"), "got tooltip: {tip}");
+
+    // Open Mixer Popup and expand the Routing & Balance card.
+    rt.enqueue(Msg::MixerBarPointerDown(PointerEvent {
+        position: Point::new(1650.logical_px(), 12.logical_px()),
+        local_position: Point::ZERO,
+        button: Some(MouseButton::Left),
+        modifiers: Modifiers::empty(),
+    }));
+    rt.enqueue(Msg::MixerToggleRouting);
+    for _ in 0..20 {
+        rt.enqueue(Msg::MixerPopupAnimTick);
+    }
+    rt.step().unwrap();
+    assert!(rt.state().audio_ui.routing_open);
+    assert!(rt.rendered_buffer("bar-mixer-popup").is_some());
+
+    // Switch port to Line Out and verify optimistic state + tooltip update.
+    rt.enqueue(Msg::MixerSelectPort(String::from("analog-output-lineout")));
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state()
+            .audio
+            .as_ref()
+            .unwrap()
+            .default_sink
+            .as_ref()
+            .unwrap()
+            .active_port
+            .as_deref(),
+        Some("analog-output-lineout")
+    );
+    assert!(
+        rt.state()
+            .wireplumber_metric()
+            .tooltip
+            .contains("(Line Out)")
+    );
+
+    // Toggle Card Profile dropdown, render, then select `pro-audio`.
+    rt.enqueue(Msg::MixerToggleProfiles);
+    rt.step().unwrap();
+    assert!(rt.state().audio_ui.profiles_open);
+    assert!(rt.rendered_buffer("bar-mixer-popup").is_some());
+
+    // Scroll inside the expanded routing list (profile dropdown pushes content over viewport).
+    rt.enqueue(Msg::MixerRoutingScroll(ScrollEvent {
+        position: Point::ZERO,
+        local_position: Point::ZERO,
+        delta_x: 0.0,
+        delta_y: 120.0,
+        discrete_x: 0,
+        discrete_y: 2,
+        modifiers: Modifiers::empty(),
+    }));
+    rt.step().unwrap();
+    assert!(rt.state().audio_ui.routing_scroll_y > 0.0);
+
+    rt.enqueue(Msg::MixerSelectProfile {
+        card_id: 45,
+        profile_name: String::from("pro-audio"),
+    });
+    rt.step().unwrap();
+    assert!(!rt.state().audio_ui.profiles_open);
+    assert_eq!(
+        rt.state().audio.as_ref().unwrap().cards[0]
+            .active_profile
+            .as_deref(),
+        Some("pro-audio")
+    );
+
+    // Balance seek to 25% of track (balance = -0.50 -> Left 50%), then scroll right, then reset.
+    let bal_w = crate::widgets::mixer_popup::routing::BALANCE_TRACK_W;
+    rt.enqueue(Msg::MixerBalanceSeekClick(PointerEvent {
+        position: Point::ZERO,
+        local_position: Point::new((bal_w * 0.25).logical_px(), 9.logical_px()),
+        button: Some(MouseButton::Left),
+        modifiers: Modifiers::empty(),
+    }));
+    rt.step().unwrap();
+    let bal_left = rt.state().audio.as_ref().unwrap().balance();
+    assert!(
+        (bal_left - (-0.50)).abs() < 1e-2,
+        "expected -0.50 balance, got {bal_left}"
+    );
+    let bal_tip = rt.state().wireplumber_metric().tooltip;
+    assert!(bal_tip.contains("Balance: L 50%"), "got tooltip: {bal_tip}");
+    assert!(rt.rendered_buffer("bar-mixer-popup").is_some());
+
+    rt.enqueue(Msg::MixerBalanceScroll(ScrollEvent {
+        position: Point::ZERO,
+        local_position: Point::ZERO,
+        delta_x: 0.0,
+        delta_y: -1.0,
+        discrete_x: 0,
+        discrete_y: -1,
+        modifiers: Modifiers::empty(),
+    }));
+    rt.step().unwrap();
+    let bal_nudged = rt.state().audio.as_ref().unwrap().balance();
+    assert!(
+        (bal_nudged - (-0.45)).abs() < 1e-2,
+        "expected -0.45 balance after scroll up, got {bal_nudged}"
+    );
+
+    // Right-click resets balance back to dead center (0.0).
+    rt.enqueue(Msg::MixerBalanceSeekClick(PointerEvent {
+        position: Point::ZERO,
+        local_position: Point::ZERO,
+        button: Some(MouseButton::Right),
+        modifiers: Modifiers::empty(),
+    }));
+    rt.step().unwrap();
+    assert!(rt.state().audio.as_ref().unwrap().balance().abs() < 1e-3);
+
+    // Switch default output device to HDMI Monitor (id 55).
+    rt.enqueue(Msg::MixerSelectDevice(55));
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state()
+            .audio
+            .as_ref()
+            .unwrap()
+            .default_sink
+            .as_ref()
+            .unwrap()
+            .id,
+        55
+    );
+
+    // Switch target to Input (Source) and render cleanly.
+    rt.enqueue(Msg::MixerSetTarget(AudioControlTarget::Source));
+    rt.step().unwrap();
+    assert_eq!(rt.state().audio_target, AudioControlTarget::Source);
+    assert_eq!(rt.state().audio_ui.routing_scroll_y, 0.0);
+    assert!(rt.rendered_buffer("bar-mixer-popup").is_some());
+
+    // Closing mixer popup resets routing panel state cleanly.
+    rt.enqueue(Msg::CloseMixerPopup);
+    rt.step().unwrap();
+    assert!(!rt.state().audio_ui.routing_open);
+    assert!(!rt.state().audio_ui.profiles_open);
+    assert_eq!(rt.state().audio_ui.routing_scroll_y, 0.0);
 }

@@ -7,9 +7,12 @@ use crate::app::config::DesktopPoseMode;
 use crate::app::state::{AudioControlTarget, Msg, SoundCue, State};
 
 use super::audio::{
-    handle_audio_updated, handle_mixer_bar_pointer, handle_mixer_capture_scroll,
-    handle_mixer_capture_seek_click, handle_mixer_master_seek_click, handle_mixer_set_target,
-    handle_mixer_stream_scroll, handle_mixer_stream_seek_click,
+    handle_audio_updated, handle_mixer_balance_scroll, handle_mixer_balance_seek,
+    handle_mixer_bar_pointer, handle_mixer_capture_scroll, handle_mixer_capture_seek_click,
+    handle_mixer_master_seek_click, handle_mixer_routing_scroll, handle_mixer_select_device,
+    handle_mixer_select_port, handle_mixer_select_profile, handle_mixer_set_target,
+    handle_mixer_stream_scroll, handle_mixer_stream_seek_click, handle_mixer_toggle_profiles,
+    handle_mixer_toggle_routing,
 };
 use super::bluetooth::{
     handle_bluetooth_agent_event, handle_bt_agent_decision, handle_bt_bar_pointer,
@@ -338,7 +341,7 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
         Msg::TrayBlinkTick => {
             state.blink_phase = !state.blink_phase;
         }
-        Msg::AudioUpdated(snap) => handle_audio_updated(state, snap, ctx),
+        Msg::AudioUpdated(snap) => handle_audio_updated(state, *snap, ctx),
         Msg::AudioPointerDown(ev) => match ev.button {
             Some(MouseButton::Middle) => {
                 state.audio_target = match state.audio_target {
@@ -381,7 +384,18 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
                 state.play_sound(SoundCue::MenuPopdown, ctx);
             }
         }
-        Msg::MixerSetTarget(target) => handle_mixer_set_target(state, target),
+        Msg::MixerSetTarget(target) => handle_mixer_set_target(state, target, ctx),
+        Msg::MixerToggleRouting => handle_mixer_toggle_routing(state, ctx),
+        Msg::MixerToggleProfiles => handle_mixer_toggle_profiles(state, ctx),
+        Msg::MixerRoutingScroll(sc) => handle_mixer_routing_scroll(state, sc),
+        Msg::MixerSelectDevice(id) => handle_mixer_select_device(state, id, ctx),
+        Msg::MixerSelectPort(port) => handle_mixer_select_port(state, port, ctx),
+        Msg::MixerSelectProfile {
+            card_id,
+            profile_name,
+        } => handle_mixer_select_profile(state, card_id, profile_name, ctx),
+        Msg::MixerBalanceSeekClick(ev) => handle_mixer_balance_seek(state, ev, ctx),
+        Msg::MixerBalanceScroll(sc) => handle_mixer_balance_scroll(state, sc, ctx),
         Msg::MixerMasterScroll(sc) => handle_audio_scroll(state, sc, ctx),
         Msg::MixerMasterSeekClick(ev) => handle_mixer_master_seek_click(state, ev, ctx),
         Msg::MixerStreamScroll { id, sc } => handle_mixer_stream_scroll(state, id, sc, ctx),

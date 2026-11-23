@@ -11,6 +11,12 @@ pub struct AudioUiState {
     pub popup_target: bool,
     pub popup_progress: f32,
     pub popup_left_x: f32,
+    /// Expandable Routing & Balance card visibility (device/port/profile + L/R balance).
+    pub routing_open: bool,
+    /// Inline card profile dropdown inside the Routing card.
+    pub profiles_open: bool,
+    /// Vertical scroll offset inside the Routing card viewport.
+    pub routing_scroll_y: f32,
     /// First visible per-app row (scroll window over `streams`/`captures`).
     pub scroll_index: usize,
     pub marquee_tick: u32,
@@ -46,13 +52,20 @@ impl AudioUiState {
     pub fn toggle_popup(&mut self) {
         self.popup_target = !self.popup_target;
         if !self.popup_target {
-            self.scroll_index = 0;
+            self.reset_panel_state();
         }
     }
 
     pub fn close_popup(&mut self) {
         self.popup_target = false;
+        self.reset_panel_state();
+    }
+
+    fn reset_panel_state(&mut self) {
         self.scroll_index = 0;
+        self.routing_open = false;
+        self.profiles_open = false;
+        self.routing_scroll_y = 0.0;
     }
 
     pub fn advance_marquee(&mut self) {

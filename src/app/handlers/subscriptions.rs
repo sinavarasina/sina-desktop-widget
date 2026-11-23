@@ -36,7 +36,7 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
     ));
     subs.push(Dbus::mpris(|ev| Msg::MprisEvent(Box::new(ev))));
     subs.push(Dbus::action_results(Msg::DbusActionOutcome));
-    subs.push(Audio::subscribe(Msg::AudioUpdated));
+    subs.push(Audio::subscribe(|snap| Msg::AudioUpdated(Box::new(snap))));
     subs.push(System::cpu().every(Duration::from_secs(1), Msg::CpuSampled));
     subs.push(System::gpu().every(Duration::from_secs(2), Msg::GpuSampled));
     subs.push(System::sensors().every(Duration::from_secs(2), Msg::SensorsSampled));

@@ -61,7 +61,7 @@ fn gpu_metric_formats_clock_and_power_with_memclock_fallback() {
 #[test]
 fn tooltip_auto_sizing_accommodates_long_text_without_truncation() {
     let mut rt = synthetic_rt();
-    rt.enqueue(Msg::AudioUpdated(AudioSnapshot {
+    rt.enqueue(Msg::AudioUpdated(Box::new(AudioSnapshot {
         linear: 0.72,
         db: None,
         muted: false,
@@ -71,10 +71,11 @@ fn tooltip_auto_sizing_accommodates_long_text_without_truncation() {
             description: String::from(
                 "Ryzen HD Audio Controller Realtek ALC1220 Analog Line-Out (Hardware Route Volume)",
             ),
+            ..AudioDevice::default()
         }),
         devices: Vec::new(),
         ..AudioSnapshot::default()
-    }));
+    })));
     rt.enqueue(Msg::Hover(HoverTarget::Wireplumber));
     rt.step().unwrap();
 
@@ -120,14 +121,14 @@ fn workspaces_audio_muted_network_disconnected_and_drawer_formatting() {
         total_write_bytes_per_sec: 0.0,
         timestamp: Instant::now(),
     }));
-    rt.enqueue(Msg::AudioUpdated(AudioSnapshot {
+    rt.enqueue(Msg::AudioUpdated(Box::new(AudioSnapshot {
         linear: 0.5,
         db: None,
         muted: true,
         default_sink: None,
         devices: Vec::new(),
         ..AudioSnapshot::default()
-    }));
+    })));
     rt.enqueue(Msg::NetworkSampled(NetworkSnapshot {
         interfaces: vec![NetInterfaceSnapshot {
             name: String::from("wlan0"),
