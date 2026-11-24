@@ -8,7 +8,7 @@ use crate::app::state::{SoundCue, State};
 use super::drun::resolve_visible_drun_icons;
 use super::quick_menu::refresh_power_capabilities_if_empty;
 
-fn play_overlay_transition(state: &mut State, was_open: bool, now_open: bool, ctx: &EffectCtx<'_>) {
+fn play_overlay_transition(state: &mut State, was_open: bool, now_open: bool, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     if was_open != now_open {
         state.play_sound(
             if now_open {
@@ -58,7 +58,7 @@ pub fn handle_ipc_control(
     state: &mut State,
     action: IpcAction,
     target: IpcTarget,
-    ctx: &mut EffectCtx<'_>,
+    ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     match target {
         IpcTarget::All => {
@@ -148,7 +148,7 @@ pub fn handle_ipc_control(
                 }
                 if state.udisks.block_devices.is_empty()
                     && let Ok(dbus) = ctx.dbus()
-                    && let Ok(snap) = dbus.udisks_snapshot()
+                    && let Ok(snap) = dbus.udisks().cached_snapshot().map_or_else(|| dbus.udisks().snapshot_blocking(), Ok)
                 {
                     state.udisks = snap;
                 }

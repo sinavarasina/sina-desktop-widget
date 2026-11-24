@@ -35,13 +35,13 @@ pub fn build_clock_group(state: &State) -> Element<Msg> {
     if reveal_w > 0.5 {
         let menu_body = Group::new()
             .key("mod-clock-menu-body")
-            .size(Size::px(MENU_BODY_W.logical_px(), BAR_HEIGHT.logical_px()))
+            .size(Size::new(MENU_BODY_W.logical_px(), BAR_HEIGHT.logical_px()))
             .child(Rect::new().size(Size::fill()).fill(menu_bg))
             .child(
                 Text::new("\u{f0c9}")
                     .font(font_ui())
                     .font_size(11.logical_px())
-                    .optical_bounds(true)
+                    .bounds_mode(TextBoundsMode::Optical)
                     .color(menu_icon_col)
                     .position(Position::relative_to_parent(
                         Percent::new(50.0),
@@ -52,7 +52,7 @@ pub fn build_clock_group(state: &State) -> Element<Msg> {
 
         let menu_pill = Row::new()
             .key("mod-clock-menu")
-            .size(Size::px(MENU_FULL_W.logical_px(), BAR_HEIGHT.logical_px()))
+            .size(Size::new(MENU_FULL_W.logical_px(), BAR_HEIGHT.logical_px()))
             .align(Align::Center)
             .on_hover(Msg::Hover(HoverTarget::ClockMenu))
             .on_leave(Msg::Leave(HoverTarget::ClockMenu))
@@ -67,7 +67,7 @@ pub fn build_clock_group(state: &State) -> Element<Msg> {
 
         let clipped_menu = Clip::new(menu_pill)
             .key("mod-clock-menu-clip")
-            .size(Size::px(reveal_w.logical_px(), BAR_HEIGHT.logical_px()));
+            .size(Size::new(reveal_w.logical_px(), BAR_HEIGHT.logical_px()));
 
         row = row.child(clipped_menu).child(separator(
             "sep-r-4",

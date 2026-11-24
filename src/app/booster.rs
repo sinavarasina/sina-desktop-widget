@@ -80,7 +80,7 @@ impl ForegroundBooster {
         &mut self,
         cgroup: Option<&ProcessCgroupInfo>,
         memory: Option<&MemorySnapshot>,
-        ctx: &EffectCtx<'_>,
+        ctx: &EffectCtx<'_, crate::app::msg::Msg>,
     ) {
         let Some(info) = cgroup.filter(|c| is_boostable_cgroup(c)) else {
             self.clear_active(ctx);
@@ -120,7 +120,7 @@ impl ForegroundBooster {
         }
     }
 
-    pub fn clear_active(&mut self, ctx: &EffectCtx<'_>) {
+    pub fn clear_active(&mut self, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
         let Some(prev) = self.active.take() else {
             return;
         };
@@ -271,7 +271,7 @@ pub fn build_set_unit_properties_args(
 }
 
 fn enqueue_systemd_unit_props(
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
     unit: &str,
     cpu_weight: u64,
     memory_low_bytes: u64,

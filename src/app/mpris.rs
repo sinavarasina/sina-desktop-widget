@@ -98,7 +98,7 @@ impl MprisState {
         &mut self,
         list: Vec<MprisSnapshot>,
         path_cache: &mut PathAssetCache,
-        ctx: &mut EffectCtx<'_>,
+        ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
     ) {
         self.players = list;
         self.sync_selection_and_art(path_cache, ctx);
@@ -108,7 +108,7 @@ impl MprisState {
         &mut self,
         snap: MprisSnapshot,
         path_cache: &mut PathAssetCache,
-        ctx: &mut EffectCtx<'_>,
+        ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
     ) {
         if let Some(slot) = self
             .players
@@ -126,7 +126,7 @@ impl MprisState {
         &mut self,
         service_name: &str,
         path_cache: &mut PathAssetCache,
-        ctx: &mut EffectCtx<'_>,
+        ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
     ) {
         self.players.retain(|p| p.service_name != service_name);
         if self.selected_service.as_deref() == Some(service_name) {
@@ -158,7 +158,7 @@ impl MprisState {
         }
     }
 
-    fn sync_selection_and_art(&mut self, path_cache: &mut PathAssetCache, ctx: &mut EffectCtx<'_>) {
+    fn sync_selection_and_art(&mut self, path_cache: &mut PathAssetCache, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
         if let Some(playing) = self
             .players
             .iter()
@@ -187,7 +187,7 @@ impl MprisState {
 fn resolve_art_url(
     art_url: &str,
     path_cache: &mut PathAssetCache,
-    ctx: &mut EffectCtx<'_>,
+    ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
 ) -> Option<ImageAsset> {
     if art_url.is_empty() {
         return None;

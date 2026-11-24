@@ -1,10 +1,12 @@
 //! Core application state, hover tracking, and drawer animation.
 
+use std::sync::Arc;
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime};
 
 use waywi::desktop::icons::XdgIconLookup;
 use waywi::prelude::*;
+use waywi::dbus::TrayStatus;
 use waywi::system::{
     CpuSnapshot, DiskMount, DiskSnapshot, GpuSnapshot, LocalDateTime, MemorySnapshot,
     NetworkSnapshot, TimeFormat, shift_year_month,
@@ -62,7 +64,7 @@ pub struct State {
     pub tray_menu: Option<TrayMenuPopup>,
     pub blink_phase: bool,
 
-    pub audio: Option<AudioSnapshot>,
+    pub audio: Option<Arc<AudioSnapshot>>,
     pub audio_target: AudioControlTarget,
     pub audio_ui: AudioUiState,
 
@@ -108,7 +110,7 @@ pub struct State {
 
 impl State {
     /// Plays a standard XDG Sound Theme cue via the O(1)-cached [`SoundEngine`], honoring DND.
-    pub fn play_sound(&mut self, cue: SoundCue, ctx: &EffectCtx<'_>) {
+    pub fn play_sound(&mut self, cue: SoundCue, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
         self.sounds.play(cue, self.notifications.dnd, ctx);
     }
 

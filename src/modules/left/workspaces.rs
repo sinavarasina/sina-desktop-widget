@@ -322,7 +322,7 @@ pub fn build_workspaces(state: &State) -> Element<Msg> {
     if !specials.is_empty() {
         strip = strip.child(
             Rect::new()
-                .size(Size::px(1.logical_px(), 10.logical_px()))
+                .size(Size::new(1.logical_px(), 10.logical_px()))
                 .fill(SURFACE1),
         );
         for (idx, ws) in specials.iter().enumerate() {
@@ -363,7 +363,7 @@ pub fn build_workspaces(state: &State) -> Element<Msg> {
                             Text::new("\u{f005}")
                                 .font(font_ui())
                                 .font_size(10.logical_px())
-                                .optical_bounds(true)
+                                .bounds_mode(TextBoundsMode::Optical)
                                 .color(fg),
                         ),
                 );
@@ -400,7 +400,7 @@ pub fn build_workspaces(state: &State) -> Element<Msg> {
 
 fn fullscreen_dot(color: Color) -> Element<Msg> {
     Rect::new()
-        .size(Size::px(
+        .size(Size::new(
             FULLSCREEN_DOT_SIZE.logical_px(),
             FULLSCREEN_DOT_SIZE.logical_px(),
         ))
@@ -418,8 +418,7 @@ fn fullscreen_dot(color: Color) -> Element<Msg> {
 
 fn active_triangle(key: (&'static str, i32), color: Color) -> Element<Msg> {
     Canvas::new(
-        Size::px(ACTIVE_TRI_W.logical_px(), ACTIVE_TRI_H.logical_px()),
-        (key, color),
+        Size::new(ACTIVE_TRI_W.logical_px(), ACTIVE_TRI_H.logical_px()),
         move |p| {
             let mut pb = PathBuilder::new();
             pb.move_to(0.0.logical_px(), ACTIVE_TRI_H.logical_px())
@@ -429,6 +428,7 @@ fn active_triangle(key: (&'static str, i32), color: Color) -> Element<Msg> {
             p.fill_path(&pb, color);
         },
     )
+    .cache_key((key, color))
     .key(key)
     .position(Position::relative_to_parent(
         Percent::new(50.0),

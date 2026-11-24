@@ -69,7 +69,7 @@ pub fn build_reel_slot_accented(
     if items.is_empty() {
         return Group::new()
             .key(key)
-            .size(Size::px(width.logical_px(), height.logical_px()))
+            .size(Size::new(width.logical_px(), height.logical_px()))
             .into();
     }
 
@@ -86,7 +86,7 @@ pub fn build_reel_slot_accented(
 
     let inner: Element<Msg> = if !reel.animating || items.len() <= 1 {
         Group::new()
-            .size(Size::px(width.logical_px(), height.logical_px()))
+            .size(Size::new(width.logical_px(), height.logical_px()))
             .child(build_reel_line(
                 &current,
                 font,
@@ -114,7 +114,7 @@ pub fn build_reel_slot_accented(
         let next_alpha = (0.45 + ease * 0.55).clamp(0.0, 1.0);
 
         Group::new()
-            .size(Size::px(width.logical_px(), height.logical_px()))
+            .size(Size::new(width.logical_px(), height.logical_px()))
             .child(build_reel_line(
                 &current,
                 font.clone(),
@@ -150,7 +150,7 @@ pub fn build_reel_slot_accented(
 
     Clip::new(inner)
         .key(key)
-        .size(Size::px(width.logical_px(), height.logical_px()))
+        .size(Size::new(width.logical_px(), height.logical_px()))
         .into()
 }
 

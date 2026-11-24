@@ -1,7 +1,9 @@
-//! Mixer popup state (open/animation, per-row scrolling, per-app icon cache).
+//! Mixer popup state (open/animation, per-row scrolling, per-app icon cache), plus helpers over
+//! the waywi audio snapshot model.
 
 use std::collections::HashMap;
 
+use waywi::audio::compute_balance_with_map;
 use waywi::prelude::*;
 
 const POPUP_ANIM_STEP: f32 = 16.0 / 180.0;
@@ -71,4 +73,85 @@ impl AudioUiState {
     pub fn advance_marquee(&mut self) {
         self.marquee_tick = self.marquee_tick.wrapping_add(1);
     }
+}
+
+/// App-side helpers over [`AudioSnapshot`] that preserve the flat default-device access the UI
+/// was built against before waywi unified sinks/sources into device lists.
+pub(crate) trait AudioSnapshotExt {
+    /// The default sink (`is_source: false`) or source device.
+    fn target_device(&self, is_source: bool) -> Option<&AudioDevice>;
+    /// Volume of the default sink (input `is_source`) or `None` when absent.
+    fn target_volume(&self, is_source: bool) -> Option<&AudioVolume>;
+    /// The default device for the direction, mutable.
+    fn default_device_mut(&mut self, is_source: bool) -> Option<&mut AudioDevice>;
+    /// L/R balance of the target direction's default device (`0.0` centered or mono).
+    fn target_balance(&self, is_source: bool) -> f32;
+    /// The sound card backing the default device, when it can be identified.
+    fn target_card(&self, is_source: bool) -> Option<&AudioCard>;
+}
+
+impl AudioSnapshotExt for AudioSnapshot {
+    fn target_device(&self, is_source: bool) -> Option<&AudioDevice> {
+        if is_source {
+            self.default_source()
+        } else {
+            self.default_sink()
+        }
+    }
+
+    fn target_volume(&self, is_source: bool) -> Option<&AudioVolume> {
+        self.target_device(is_source).map(|d| &d.volume)
+    }
+
+    fn default_device_mut(&mut self, is_source: bool) -> Option<&mut AudioDevice> {
+        let default_id = if is_source {
+            self.default_source_id
+        } else {
+            self.default_sink_id
+        };
+        let devices = if is_source {
+            &mut self.sources
+        } else {
+            &mut self.sinks
+        };
+        if let Some(id) = default_id
+            && let Some(dev) = devices.iter_mut().find(|d| d.id == id)
+        {
+            return Some(dev);
+        }
+        devices.iter_mut().find(|d| d.is_default)
+    }
+
+    fn target_balance(&self, is_source: bool) -> f32 {
+        match self.target_volume(is_source) {
+            Some(v) => compute_balance_with_map(&v.channels, &v.channel_map),
+            None => 0.0,
+        }
+    }
+
+    fn target_card(&self, is_source: bool) -> Option<&AudioCard> {
+        let device = if is_source {
+            self.default_source()?
+        } else {
+            self.default_sink()?
+        };
+        if self.cards.is_empty() {
+            return None;
+        }
+        // backends no longer link devices to their card; match the shared ALSA/Bluez UID instead
+        // (`alsa_card.pci-…` ↔ `alsa_output.pci-….analog-stereo`), falling back to a single card.
+        let uid = card_uid(&device.name, &["alsa_output.", "alsa_input.", "bluez_output."])?;
+        self.cards
+            .iter()
+            .find(|c| card_uid(&c.name, &["alsa_card.", "bluez_card."]).is_some_and(|u| u == uid))
+            .or_else(|| (self.cards.len() == 1).then(|| &self.cards[0]))
+    }
+}
+
+/// Strips the well-known direction prefix of a PulseAudio-style name, if present.
+fn card_uid<'a>(name: &'a str, prefixes: &[&str]) -> Option<&'a str> {
+    prefixes
+        .iter()
+        .find_map(|p| name.strip_prefix(p))
+        .filter(|uid| !uid.is_empty())
 }

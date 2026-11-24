@@ -1,6 +1,6 @@
 //! Crisp vector Powerline, curve-notch, and slant separators matching `MesloLGS Nerd Font`.
 
-use waywi::geometry::Rect as GeoRect;
+use waywi::geometry::Bounds as GeoRect;
 use waywi::prelude::*;
 
 use crate::theme::{BAR_HEIGHT, SEP_WIDTH};
@@ -50,10 +50,10 @@ pub fn separator_sized<M: 'static>(
     height: f32,
 ) -> Element<M> {
     Canvas::new(
-        Size::px(SEP_WIDTH.logical_px(), height.logical_px()),
-        (key, shape, fg, bg, height.to_bits()),
+        Size::new(SEP_WIDTH.logical_px(), height.logical_px()),
         move |p| draw_separator(p, shape, fg, bg, height),
     )
+    .cache_key((key, shape, fg, bg, height.to_bits()))
     .key(key)
     .into()
 }
@@ -66,8 +66,7 @@ pub fn slanted_join<M: 'static>(
     stroke: Color,
 ) -> Element<M> {
     Canvas::new(
-        Size::px(SEP_WIDTH.logical_px(), BAR_HEIGHT.logical_px()),
-        (key, left_bg, right_bg, stroke),
+        Size::new(SEP_WIDTH.logical_px(), BAR_HEIGHT.logical_px()),
         move |p| {
             let w = SEP_WIDTH;
             let h = BAR_HEIGHT;
@@ -79,6 +78,7 @@ pub fn slanted_join<M: 'static>(
             p.stroke_path(&pb, 1.1.logical_px(), stroke);
         },
     )
+    .cache_key((key, left_bg, right_bg, stroke))
     .key(key)
     .into()
 }

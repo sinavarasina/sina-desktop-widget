@@ -59,7 +59,7 @@ impl DrunState {
         }
     }
 
-    pub fn open(&mut self, ctx: &mut EffectCtx<'_>) {
+    pub fn open(&mut self, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
         self.target = true;
         self.input.clear();
         self.selected = 0;
@@ -86,7 +86,7 @@ impl DrunState {
         self.scroll_start = 0;
     }
 
-    pub fn remeasure_input(&mut self, ctx: &mut EffectCtx<'_>) {
+    pub fn remeasure_input(&mut self, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
         let display = self.input.display_text();
         let cursor_byte = self.input.display_cursor_bytes();
         let metrics = ctx.measure_text_cursor(&display, &font_ui(), 11.5.logical_px(), cursor_byte);
@@ -138,12 +138,12 @@ impl DrunState {
     }
 
     #[must_use]
-    pub fn ime_cursor_rect(&self, bar_width: f32) -> GeoRect {
+    pub fn ime_cursor_rect(&self, bar_width: f32) -> Bounds {
         let input_w = self.input_box_width(bar_width);
         let max_inner = (input_w - 12.0).max(16.0);
         let rel_x = self.cursor_x.min(max_inner);
         // Offset: runner pill (28) + ArrowR(CRUST->MANTLE) (11) + inner padding (6) = 45px.
-        GeoRect::new(
+        Bounds::new(
             (39.0 + 6.0 + rel_x).logical_px(),
             (POPUP_TOP_MARGIN + 3.0).logical_px(),
             2.logical_px(),
@@ -155,7 +155,7 @@ impl DrunState {
         entry: &DesktopEntry,
         icon_lookup: &mut XdgIconLookup,
         path_cache: &mut PathAssetCache,
-        ctx: &mut EffectCtx<'_>,
+        ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
     ) -> Option<ImageAsset> {
         let icon_name = entry
             .icon

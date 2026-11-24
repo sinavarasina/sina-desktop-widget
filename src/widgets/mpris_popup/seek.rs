@@ -21,7 +21,7 @@ pub fn build_seek_box(state: &State) -> Element<Msg> {
 
     let track = Group::new()
         .key("mpris-seek-track")
-        .size(Size::px(
+        .size(Size::new(
             MPRIS_SEEK_TRACK_WIDTH.logical_px(),
             6.logical_px(),
         ))
@@ -32,7 +32,7 @@ pub fn build_seek_box(state: &State) -> Element<Msg> {
         .child(Rect::new().size(Size::fill()).fill(SURFACE0))
         .child(
             Rect::new()
-                .size(Size::px(fill_w.logical_px(), 6.logical_px()))
+                .size(Size::new(fill_w.logical_px(), 6.logical_px()))
                 .fill(MAUVE),
         );
 

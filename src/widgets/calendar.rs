@@ -65,7 +65,7 @@ pub fn build_calendar_tooltip_surface(state: &State) -> Surface<Msg> {
     Surface::floating("bar-calendar-popup", Output::Primary)
         .layer(Layer::Overlay)
         .ignore_exclusive_zone()
-        .anchor(Anchor::Top | Anchor::Right)
+        .anchor(Anchor::TOP | Anchor::RIGHT)
         .margin(Edges::top_right(
             POPUP_TOP_MARGIN.logical_px(),
             8.logical_px(),
@@ -92,7 +92,7 @@ fn calendar_cell(
     color: Color,
     bg: Option<Color>,
 ) -> Element<Msg> {
-    let mut cell = Group::new().size(Size::px(width.logical_px(), 16.logical_px()));
+    let mut cell = Group::new().size(Size::new(width.logical_px(), 16.logical_px()));
     if let Some(fill) = bg {
         cell = cell.child(
             Rect::new()

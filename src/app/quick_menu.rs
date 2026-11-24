@@ -4,6 +4,7 @@
 use std::time::Duration;
 
 use waywi::prelude::*;
+use waywi::dbus::{LogindPowerCapabilities, PowerActionSupport};
 
 use crate::theme::{BLUE, MAUVE, RED, SUBTEXT1, TEXT};
 
@@ -155,7 +156,7 @@ pub struct YukiSpriteAssets {
 
 impl YukiSpriteAssets {
     /// Lazily decodes the embedded PNGs for `spec` and builds timed blink & mouth `SpriteSheet`s.
-    pub fn load(spec: &WitchPoseSpec, ctx: &mut EffectCtx<'_>) -> Option<Self> {
+    pub fn load(spec: &WitchPoseSpec, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Option<Self> {
         let base = ctx.load_image_bytes(spec.base_png).ok()?;
         let eye_fwd_asset = ctx.load_image_bytes(spec.eye_primary_png).ok()?;
         let eye_glc_asset = ctx.load_image_bytes(spec.eye_alt_png).ok()?;
@@ -163,7 +164,7 @@ impl YukiSpriteAssets {
 
         let make_mouth_sheet = |asset: ImageAsset| {
             SpriteSheet::new(asset)
-                .frame_size(spec.mouth_w.logical_px(), spec.mouth_h.logical_px())
+                .frame_size(spec.mouth_w.logical_px().ceil_u32().max(1), spec.mouth_h.logical_px().ceil_u32().max(1))
                 .timed_animation(
                     "react",
                     [
@@ -182,7 +183,7 @@ impl YukiSpriteAssets {
         };
 
         let eye_forward = SpriteSheet::new(eye_fwd_asset)
-            .frame_size(spec.eye_w.logical_px(), spec.eye_h.logical_px())
+            .frame_size(spec.eye_w.logical_px().ceil_u32().max(1), spec.eye_h.logical_px().ceil_u32().max(1))
             .timed_animation(
                 "blink",
                 [
@@ -195,7 +196,7 @@ impl YukiSpriteAssets {
             );
 
         let eye_glance = SpriteSheet::new(eye_glc_asset)
-            .frame_size(spec.eye_w.logical_px(), spec.eye_h.logical_px())
+            .frame_size(spec.eye_w.logical_px().ceil_u32().max(1), spec.eye_h.logical_px().ceil_u32().max(1))
             .timed_animation(
                 "blink",
                 [
@@ -216,13 +217,13 @@ impl YukiSpriteAssets {
         })
     }
 
-    pub fn evict_pixels(&self, ctx: &mut EffectCtx<'_>) {
-        let _ = ctx.evict_asset_pixels(self.base);
-        let _ = ctx.evict_asset_pixels(self.eye_forward.asset);
-        let _ = ctx.evict_asset_pixels(self.eye_glance.asset);
-        let _ = ctx.evict_asset_pixels(self.mouth.asset);
+    pub fn evict_pixels(&self, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
+        let _ = ctx.evict_image_pixels(self.base);
+        let _ = ctx.evict_image_pixels(self.eye_forward.asset);
+        let _ = ctx.evict_image_pixels(self.eye_glance.asset);
+        let _ = ctx.evict_image_pixels(self.mouth.asset);
         if let Some(ref alt) = self.mouth_alt {
-            let _ = ctx.evict_asset_pixels(alt.asset);
+            let _ = ctx.evict_image_pixels(alt.asset);
         }
     }
 }
@@ -412,7 +413,7 @@ impl QuickMenuState {
     fn load_or_cached_pose(
         &mut self,
         idx: usize,
-        ctx: &mut EffectCtx<'_>,
+        ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
     ) -> Option<YukiSpriteAssets> {
         let slot = idx % WITCH_POSES.len();
         if let Some(ref cached) = self.cached_sprite_poses[slot] {
@@ -423,7 +424,7 @@ impl QuickMenuState {
         Some(loaded)
     }
 
-    pub fn ensure_sprite_loaded(&mut self, ctx: &mut EffectCtx<'_>) {
+    pub fn ensure_sprite_loaded(&mut self, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
         if self.sprite_assets.is_none() {
             let idx = self.sprite_pose_idx % WITCH_POSES.len();
             self.sprite_assets = self.load_or_cached_pose(idx, ctx);
@@ -432,7 +433,7 @@ impl QuickMenuState {
 
     /// Scrolls through the 3 witch poses (`21_profile` ↔ `20_3q` ↔ `19_front`), lazily decoding
     /// the newly active pose and immediately evicting the previous pose's RGBA8 pixels.
-    pub fn scroll_sprite_pose(&mut self, delta: i32, ctx: &mut EffectCtx<'_>) {
+    pub fn scroll_sprite_pose(&mut self, delta: i32, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
         if delta == 0 {
             return;
         }
@@ -454,7 +455,7 @@ impl QuickMenuState {
     }
 
     /// Sets the active Quick Menu witch pose by index (`0..=2`), evicting old pixels when loaded.
-    pub fn set_sprite_pose(&mut self, idx: usize, ctx: &mut EffectCtx<'_>) {
+    pub fn set_sprite_pose(&mut self, idx: usize, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
         let target = idx % WITCH_POSES.len();
         if target == self.sprite_pose_idx {
             return;
@@ -471,13 +472,13 @@ impl QuickMenuState {
 
     /// Evicts decoded RGBA8 sprite pixels back to their compressed PNG bytes while Quick Status
     /// is closed; `waywi` re-decodes them transparently on next open.
-    pub fn evict_sprite_pixels(&self, ctx: &mut EffectCtx<'_>) {
+    pub fn evict_sprite_pixels(&self, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
         if let Some(ref assets) = self.sprite_assets {
             assets.evict_pixels(ctx);
         }
     }
 
-    pub fn open_popup(&mut self, ctx: &mut EffectCtx<'_>) {
+    pub fn open_popup(&mut self, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
         self.popup_target = true;
         self.power_error = None;
         self.ensure_sprite_loaded(ctx);

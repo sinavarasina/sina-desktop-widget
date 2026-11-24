@@ -44,7 +44,7 @@ pub fn build_notification_segment(state: &State) -> Element<Msg> {
             content = content.child(
                 Group::new()
                     .key(("notif-bar-icon", idx))
-                    .size(Size::px(
+                    .size(Size::new(
                         NOTIF_ICON_SIZE.logical_px(),
                         NOTIF_ICON_SIZE.logical_px(),
                     ))
@@ -71,7 +71,7 @@ pub fn build_notification_segment(state: &State) -> Element<Msg> {
             Text::new("\u{f009b}")
                 .font(font_ui())
                 .font_size(12.logical_px())
-                .optical_bounds(true)
+                .bounds_mode(TextBoundsMode::Optical)
                 .color(RED),
         );
     }

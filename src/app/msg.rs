@@ -1,5 +1,7 @@
 //! Application message types.
 
+use std::sync::Arc;
+
 use waywi::prelude::*;
 use waywi::system::{
     CpuSnapshot, DiskSnapshot, GpuSnapshot, MemorySnapshot, NetworkSnapshot, TimeSnapshot,
@@ -111,6 +113,8 @@ pub enum Msg {
     DiskMarqueeTick,
     CloseDiskPopup,
     Noop,
+    /// Compositor user-idle notification; `Idled` schedules a `trim_memory()` sweep.
+    UserIdle(IdleEvent),
     TrayEvent(Box<TrayEvent>),
     TrayClick {
         index: usize,
@@ -121,7 +125,7 @@ pub enum Msg {
     },
     CloseTrayMenu,
     TrayBlinkTick,
-    AudioUpdated(Box<AudioSnapshot>),
+    AudioUpdated(Arc<AudioSnapshot>),
     AudioPointerDown(PointerEvent),
     AudioScroll(ScrollEvent),
     MixerBarPointerDown(PointerEvent),

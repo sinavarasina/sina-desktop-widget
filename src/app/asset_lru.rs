@@ -20,6 +20,7 @@ pub const PATH_ASSET_CACHE_CAP: usize = 256;
 pub struct LruCache<V> {
     map: HashMap<String, V>,
     order: VecDeque<String>,
+    cap: usize,
 }
 
 /// Cache of image assets for tray/notification icons and media art.
@@ -27,14 +28,21 @@ pub type PathAssetCache = LruCache<ImageAsset>;
 
 impl<V> Default for LruCache<V> {
     fn default() -> Self {
-        Self {
-            map: HashMap::new(),
-            order: VecDeque::new(),
-        }
+        Self::with_cap(PATH_ASSET_CACHE_CAP)
     }
 }
 
 impl<V> LruCache<V> {
+    /// Creates a cache bounded at `cap` entries.
+    #[must_use]
+    pub fn with_cap(cap: usize) -> Self {
+        Self {
+            map: HashMap::new(),
+            order: VecDeque::new(),
+            cap: cap.max(1),
+        }
+    }
+
     /// Returns the cached value for `sig` without mutating recency order (for `&State` view reads).
     #[must_use]
     pub fn peek(&self, sig: &str) -> Option<&V> {
@@ -48,7 +56,7 @@ impl<V> LruCache<V> {
     }
 
     /// Caches `value` under `sig`, evicting the least-recently-used entry when
-    /// the cache exceeds `PATH_ASSET_CACHE_CAP`.
+    /// the cache exceeds its cap.
     pub fn insert(&mut self, sig: impl Into<String>, value: V) {
         let sig = sig.into();
         let is_new = !self.map.contains_key(&sig);
@@ -61,7 +69,7 @@ impl<V> LruCache<V> {
             self.order.len(),
             "LruCache map and recency order diverged"
         );
-        if self.order.len() > PATH_ASSET_CACHE_CAP
+        if self.order.len() > self.cap
             && let Some(oldest) = self.order.pop_front()
         {
             self.map.remove(&oldest);
@@ -143,5 +151,22 @@ mod tests {
         assert_eq!(cache.get("none"), None);
         assert!(cache.order.is_empty());
         assert!(cache.map.is_empty());
+    }
+
+    #[test]
+    fn with_cap_scopes_eviction_without_touching_default() {
+        let mut cache: LruCache<u64> = LruCache::with_cap(2);
+        cache.insert("a", 1);
+        cache.insert("b", 2);
+        // Touch "a" so "b" becomes the least recently used entry.
+        assert_eq!(cache.get("a"), Some(&1));
+        cache.insert("c", 3);
+
+        assert_eq!(cache.get("b"), None, "lru entry evicted at the custom cap");
+        assert_eq!(cache.get("a"), Some(&1));
+        assert_eq!(cache.get("c"), Some(&3));
+
+        // The default cap is untouched for `PathAssetCache` semantics.
+        assert_eq!(LruCache::<u64>::default().cap, PATH_ASSET_CACHE_CAP);
     }
 }

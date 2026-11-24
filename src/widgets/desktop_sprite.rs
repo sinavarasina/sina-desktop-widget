@@ -34,7 +34,7 @@ pub fn build_desktop_sprite_surface(state: &State) -> Option<Surface<Msg>> {
         Image::new(asset)
             .key(key)
             .position(Position::absolute(x0.logical_px(), y0.logical_px()))
-            .size(Size::px(w.logical_px(), h.logical_px()))
+            .size(Size::new(w.logical_px(), h.logical_px()))
             .filter(ImageFilter::Bicubic)
             .opacity(alpha)
     };
@@ -49,14 +49,14 @@ pub fn build_desktop_sprite_surface(state: &State) -> Option<Surface<Msg>> {
         Surface::floating("desktop-yuki-sprite", Output::All)
             .layer(Layer::Bottom)
             .ignore_exclusive_zone()
-            .anchor(Anchor::Bottom | Anchor::Right)
+            .anchor(Anchor::BOTTOM | Anchor::RIGHT)
             .margin(Edges::new(
                 0.logical_px(),
                 margin_right.logical_px(),
                 0.logical_px(),
                 0.logical_px(),
             ))
-            .size(Size::px(sprite_w.logical_px(), sprite_h.logical_px()))
+            .size(Size::new(sprite_w.logical_px(), sprite_h.logical_px()))
             .input_mode(InputMode::PassThrough)
             .keyboard_interactivity(KeyboardInteractivity::None)
             .buffer_retention(retention)
@@ -64,7 +64,7 @@ pub fn build_desktop_sprite_surface(state: &State) -> Option<Surface<Msg>> {
             .child(
                 Group::new()
                     .key(("desktop-yuki-pose", state.desktop_sprite.active_idx))
-                    .size(Size::px(sprite_w.logical_px(), sprite_h.logical_px()))
+                    .size(Size::new(sprite_w.logical_px(), sprite_h.logical_px()))
                     .child(slice_el("yuki-d-top", assets.top_hair, geom.top_hair))
                     .child(slice_el("yuki-d-eyes", eye_asset, geom.eyes))
                     .child(slice_el("yuki-d-mouth", mouth_asset, geom.mouth))

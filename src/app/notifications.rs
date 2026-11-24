@@ -93,7 +93,7 @@ impl NotificationStore {
         icon_lookup: &mut XdgIconLookup,
         path_cache: &mut PathAssetCache,
         sounds: &mut crate::app::sounds::SoundEngine,
-        ctx: &mut EffectCtx<'_>,
+        ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
     ) {
         let sound_plan = resolve_notification_sound(&notif, self.dnd);
         play_notification_sound(&sound_plan, sounds, ctx);
@@ -194,7 +194,7 @@ impl NotificationStore {
         count: usize,
         icon_lookup: &mut XdgIconLookup,
         path_cache: &mut PathAssetCache,
-        ctx: &mut EffectCtx<'_>,
+        ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
     ) {
         let end = (start + count).min(self.items.len());
         for item in &mut self.items[start.min(end)..end] {
@@ -352,11 +352,13 @@ impl NotificationStore {
         self.persist();
     }
 
-    pub fn toggle_dnd(&mut self, ctx: &EffectCtx<'_>) {
+    pub fn toggle_dnd(&mut self, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
         self.dnd = !self.dnd;
         if self.dnd {
             self.active_ticker = None;
-            ctx.stop_sounds();
+            if let Ok(player) = ctx.player() {
+                player.stop_all();
+            }
         }
         self.persist();
     }

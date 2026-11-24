@@ -20,7 +20,7 @@ pub fn build_mpris(state: &State) -> Element<Msg> {
         // Clip for the same reason as the popup art: non-1:1 Cover art overflows its box.
         Clip::new(
             Image::new(img)
-                .size(Size::px(
+                .size(Size::new(
                     MPRIS_ART_SIZE.logical_px(),
                     MPRIS_ART_SIZE.logical_px(),
                 ))
@@ -32,7 +32,7 @@ pub fn build_mpris(state: &State) -> Element<Msg> {
             offset_x: 0.logical_px(),
             offset_y: 0.logical_px(),
         })
-        .size(Size::px(
+        .size(Size::new(
             MPRIS_ART_SIZE.logical_px(),
             MPRIS_ART_SIZE.logical_px(),
         ))
@@ -47,7 +47,7 @@ pub fn build_mpris(state: &State) -> Element<Msg> {
         Text::new("\u{f001}")
             .font(font_ui())
             .font_size(11.logical_px())
-            .optical_bounds(true)
+            .bounds_mode(TextBoundsMode::Optical)
             .color(icon_col)
             .position(Position::relative_to_parent(
                 Percent::new(50.0),
@@ -59,7 +59,7 @@ pub fn build_mpris(state: &State) -> Element<Msg> {
 
     let album_box = Group::new()
         .key("mpris-art-box")
-        .size(Size::px(24.logical_px(), BAR_HEIGHT.logical_px()))
+        .size(Size::new(24.logical_px(), BAR_HEIGHT.logical_px()))
         .child(Rect::new().size(Size::fill()).fill(badge_bg))
         .child(album_inner);
 
@@ -101,7 +101,7 @@ pub fn build_mpris(state: &State) -> Element<Msg> {
         let bot_text = marquee_slice(bot_raw, MAX_BAR_META_COLS, state.mpris.marquee_tick);
 
         let text_col = Column::new()
-            .size(Size::px(
+            .size(Size::new(
                 MPRIS_BAR_TEXT_WIDTH.logical_px(),
                 BAR_HEIGHT.logical_px(),
             ))
@@ -127,7 +127,7 @@ pub fn build_mpris(state: &State) -> Element<Msg> {
 
         let meta_pill = Group::new()
             .key("mpris-meta-pill")
-            .size(Size::px(
+            .size(Size::new(
                 MPRIS_BAR_TEXT_WIDTH.logical_px(),
                 BAR_HEIGHT.logical_px(),
             ))

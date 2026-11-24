@@ -5,6 +5,7 @@ use std::path::Path;
 use crate::app::asset_lru::PathAssetCache;
 use waywi::desktop::icons::XdgIconLookup;
 use waywi::prelude::*;
+use waywi::dbus::NotificationImageData;
 
 use super::storage::load_cached_icon;
 
@@ -19,7 +20,7 @@ pub fn resolve_notification_icon(
     image_data: Option<&NotificationImageData>,
     icon_lookup: &mut XdgIconLookup,
     path_cache: &mut PathAssetCache,
-    ctx: &mut EffectCtx<'_>,
+    ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
 ) -> Option<ImageAsset> {
     if let Some(raw) = image_data
         && raw.width > 0

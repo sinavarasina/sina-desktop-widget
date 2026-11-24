@@ -1,6 +1,10 @@
 //! Hyprland, tray, and audio input event handlers.
 
+use std::sync::Arc;
+
 use waywi::prelude::*;
+
+use crate::app::audio::AudioSnapshotExt;
 
 use crate::app::config::DesktopPoseMode;
 use crate::app::state::{
@@ -21,7 +25,7 @@ pub fn scroll_direction_y(sc: ScrollEvent) -> i32 {
     }
 }
 
-fn refresh_active_client(state: &mut State, ctx: &EffectCtx<'_>) {
+fn refresh_active_client(state: &mut State, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     let Ok(hc) = ctx.hyprland() else {
         return;
     };
@@ -51,7 +55,7 @@ fn refresh_active_client(state: &mut State, ctx: &EffectCtx<'_>) {
     }
 }
 
-fn refresh_workspaces(state: &mut State, ctx: &EffectCtx<'_>) {
+fn refresh_workspaces(state: &mut State, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     if let Ok(hc) = ctx.hyprland()
         && let Ok(list) = hc.workspaces()
     {
@@ -62,7 +66,7 @@ fn refresh_workspaces(state: &mut State, ctx: &EffectCtx<'_>) {
     }
 }
 
-pub fn handle_hypr_event(state: &mut State, ev: HyprlandEvent, ctx: &mut EffectCtx<'_>) {
+pub fn handle_hypr_event(state: &mut State, ev: HyprlandEvent, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     match ev {
         HyprlandEvent::ActiveWindow { class, title } => {
             state.scroller.set_window(class, title);
@@ -148,7 +152,7 @@ pub fn handle_hypr_event(state: &mut State, ev: HyprlandEvent, ctx: &mut EffectC
     }
 }
 
-pub fn handle_tray_event(state: &mut State, ev: TrayEvent, ctx: &mut EffectCtx<'_>) {
+pub fn handle_tray_event(state: &mut State, ev: TrayEvent, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     match ev {
         TrayEvent::ItemRegistered(snap) | TrayEvent::ItemUpdated(snap) => {
             let (icon, sig) = resolve_tray_icon(
@@ -170,12 +174,13 @@ pub fn handle_tray_event(state: &mut State, ev: TrayEvent, ctx: &mut EffectCtx<'
     }
 }
 
-pub fn handle_tray_click(state: &mut State, index: usize, ev: PointerEvent, ctx: &EffectCtx<'_>) {
+pub fn handle_tray_click(state: &mut State, index: usize, ev: PointerEvent, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     let Some(entry) = state.tray_items.get(index) else {
         return;
     };
     let service = entry.snapshot.service.clone();
     let bus_name = entry.snapshot.bus_name.clone();
+    let object_path = entry.snapshot.object_path.clone();
     let menu_path = entry.snapshot.menu_path.clone();
     let anchor_x = ev.position.x.get();
     let Ok(dbus) = ctx.dbus() else {
@@ -184,11 +189,11 @@ pub fn handle_tray_click(state: &mut State, index: usize, ev: PointerEvent, ctx:
 
     match ev.button {
         Some(MouseButton::Middle) => {
-            let _ = dbus.tray_secondary_activate(&service, 0, 0);
+            let _ = dbus.tray().secondary_activate(&bus_name, &object_path, 0, 0);
         }
         Some(MouseButton::Right) => {
             if let Some(path) = menu_path
-                && let Ok(items) = dbus.tray_menu_layout(&bus_name, &path)
+                && let Ok(items) = dbus.tray().menu_layout_blocking(&bus_name, &path)
                 && !items.is_empty()
             {
                 let toggle_same = state
@@ -208,16 +213,16 @@ pub fn handle_tray_click(state: &mut State, index: usize, ev: PointerEvent, ctx:
                 };
                 return;
             }
-            let _ = dbus.tray_context_menu(&service, 0, 0);
+            let _ = dbus.tray().context_menu(&bus_name, &object_path, 0, 0);
         }
         _ => {
             state.tray_menu = None;
-            let _ = dbus.tray_activate(&service, 0, 0);
+            let _ = dbus.tray().activate(&bus_name, &object_path, 0, 0);
         }
     }
 }
 
-pub fn handle_audio_scroll(state: &mut State, sc: ScrollEvent, ctx: &EffectCtx<'_>) {
+pub fn handle_audio_scroll(state: &mut State, sc: ScrollEvent, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     // Wayland vertical scroll UP produces negative delta_y / discrete_y; negate to raise volume.
     let step = -scroll_direction_y(sc);
     if step == 0 {
@@ -225,30 +230,43 @@ pub fn handle_audio_scroll(state: &mut State, sc: ScrollEvent, ctx: &EffectCtx<'
     }
     match state.audio_target {
         AudioControlTarget::Sink => {
-            let current = state.audio.as_ref().map_or(0.5, |a| a.linear);
+            let current = state
+                .audio
+                .as_ref()
+                .and_then(|a| a.target_volume(false))
+                .map_or(0.5, |v| v.linear);
             let next = (current + (step as f32) * 0.01).clamp(0.0, 1.5);
             if let Ok(ac) = ctx.audio() {
-                let _ = ac.set_volume_linear(next);
+                let _ = ac.set_volume(AudioTarget::DefaultSink, next);
             }
-            if let Some(audio) = &mut state.audio {
-                audio.linear = next;
+            if let Some(audio) = &mut state.audio
+                && let Some(dev) = Arc::make_mut(audio).default_device_mut(false)
+            {
+                dev.volume.linear = next;
             }
         }
         AudioControlTarget::Source => {
-            let current = state.audio.as_ref().map_or(0.5, |a| a.source_linear);
+            let current = state
+                .audio
+                .as_ref()
+                .and_then(|a| a.target_volume(true))
+                .map_or(0.5, |v| v.linear);
             let next = (current + (step as f32) * 0.01).clamp(0.0, 1.5);
             if let Ok(ac) = ctx.audio() {
-                let _ = ac.set_source_volume_linear(next);
+                let _ = ac.set_volume(AudioTarget::DefaultSource, next);
             }
-            if let Some(audio) = &mut state.audio {
-                audio.source_linear = next;
+            if let Some(audio) = &mut state.audio
+                && let Some(dev) = Arc::make_mut(audio).default_device_mut(true)
+            {
+                dev.volume.linear = next;
             }
         }
     }
-    let muted = state.audio.as_ref().is_some_and(|a| match state.audio_target {
-        AudioControlTarget::Sink => a.muted,
-        AudioControlTarget::Source => a.source_muted,
-    });
+    let muted = state
+        .audio
+        .as_ref()
+        .and_then(|a| a.target_volume(state.audio_target == AudioControlTarget::Source))
+        .is_some_and(|v| v.muted);
     if !muted {
         state.play_sound(SoundCue::VolumeChange, ctx);
     }

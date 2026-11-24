@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use waywi::prelude::*;
+use waywi::dbus::UDisksBlockDevice;
 
 use crate::theme::font_ui;
 
@@ -150,7 +151,7 @@ impl DiskUiState {
         self.unlock_cursor_x = 0.0;
     }
 
-    pub fn remeasure_unlock_input(&mut self, ctx: &mut EffectCtx<'_>) {
+    pub fn remeasure_unlock_input(&mut self, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
         let masked = self.masked_unlock_text();
         let char_count = self
             .unlock_input

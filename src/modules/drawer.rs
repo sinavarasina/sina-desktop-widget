@@ -18,7 +18,7 @@ pub fn build_expandable_mon(state: &State, metrics: &[RightMetricId]) -> Element
     let sign_w = ((1.0 - p) * EXPAND_SIGN_WIDTH).round();
     if sign_w >= 1.0 {
         let sign_inner = Group::new()
-            .size(Size::px(
+            .size(Size::new(
                 EXPAND_SIGN_WIDTH.logical_px(),
                 BAR_HEIGHT.logical_px(),
             ))
@@ -41,7 +41,7 @@ pub fn build_expandable_mon(state: &State, metrics: &[RightMetricId]) -> Element
         drawer_row = drawer_row.child(
             Clip::new(sign_inner)
                 .key("expand-sign-clip")
-                .size(Size::px(sign_w.logical_px(), BAR_HEIGHT.logical_px())),
+                .size(Size::new(sign_w.logical_px(), BAR_HEIGHT.logical_px())),
         );
     }
 
@@ -49,7 +49,7 @@ pub fn build_expandable_mon(state: &State, metrics: &[RightMetricId]) -> Element
     let revealed_w = (p * total_revealed_w).round();
     if revealed_w >= 1.0 && total_revealed_w >= 1.0 {
         let mut inner_revealed = Row::new()
-            .size(Size::px(
+            .size(Size::new(
                 total_revealed_w.logical_px(),
                 BAR_HEIGHT.logical_px(),
             ))
@@ -63,7 +63,7 @@ pub fn build_expandable_mon(state: &State, metrics: &[RightMetricId]) -> Element
         drawer_row = drawer_row.child(
             Clip::new(inner_revealed)
                 .key("drawer-reveal-clip")
-                .size(Size::px(revealed_w.logical_px(), BAR_HEIGHT.logical_px())),
+                .size(Size::new(revealed_w.logical_px(), BAR_HEIGHT.logical_px())),
         );
     }
 

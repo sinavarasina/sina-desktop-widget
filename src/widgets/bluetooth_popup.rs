@@ -1,6 +1,7 @@
 //! Minimalist Bluetooth Management Popup overlay on the right side of the screen.
 
 use waywi::prelude::*;
+use waywi::dbus::BluetoothDevice;
 
 use crate::app::bluetooth::BtDeviceMenuAction;
 use crate::app::state::{HoverTarget, Msg, State};
@@ -163,7 +164,7 @@ pub fn build_bluetooth_popup_surface(state: &State) -> Surface<Msg> {
     Surface::floating("bar-bluetooth-popup", Output::Primary)
         .layer(Layer::Overlay)
         .ignore_exclusive_zone()
-        .anchor(Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right)
+        .anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT)
         .size(Size::fill())
         .input_mode(InputMode::Full)
         .keyboard_interactivity(KeyboardInteractivity::OnDemand)
@@ -442,7 +443,7 @@ fn build_device_row(state: &State, dev: &BluetoothDevice, idx: usize) -> Element
                     })
                     .font(font_ui())
                     .font_size(12.logical_px())
-                    .optical_bounds(true)
+                    .bounds_mode(TextBoundsMode::Optical)
                     .color(if dev.connected { MAUVE } else { OVERLAY0 }),
                 )
                 .child(
@@ -452,7 +453,7 @@ fn build_device_row(state: &State, dev: &BluetoothDevice, idx: usize) -> Element
                             .font_size(11.logical_px())
                             .color(TEXT),
                     )
-                    .size(Size::px(168.logical_px(), 16.logical_px())),
+                    .size(Size::new(168.logical_px(), 16.logical_px())),
                 )
                 .child(
                     Text::new(status_text)
@@ -464,7 +465,7 @@ fn build_device_row(state: &State, dev: &BluetoothDevice, idx: usize) -> Element
                     Text::new("\u{f00c}")
                         .font(font_ui())
                         .font_size(9.logical_px())
-                        .optical_bounds(true)
+                        .bounds_mode(TextBoundsMode::Optical)
                         .color(MAUVE)
                         .visible(dev.trusted),
                 ),
@@ -541,7 +542,7 @@ fn build_device_menu(state: &State, dev: &BluetoothDevice, idx: usize) -> Elemen
                     })
                     .font(font_ui())
                     .font_size(12.logical_px())
-                    .optical_bounds(true)
+                    .bounds_mode(TextBoundsMode::Optical)
                     .color(if dev.connected { MAUVE } else { OVERLAY0 }),
                 )
                 .child(
@@ -551,7 +552,7 @@ fn build_device_menu(state: &State, dev: &BluetoothDevice, idx: usize) -> Elemen
                             .font_size(11.logical_px())
                             .color(TEXT),
                     )
-                    .size(Size::px(72.logical_px(), 16.logical_px())),
+                    .size(Size::new(72.logical_px(), 16.logical_px())),
                 )
                 .child(menu_btn(
                     "bt-menu-connect",

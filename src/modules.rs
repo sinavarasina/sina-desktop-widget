@@ -83,7 +83,7 @@ fn build_main_panel(state: &State) -> Surface<Msg> {
 
     Surface::panel("bar", Output::Primary)
         .layer(Layer::Bottom)
-        .anchor(Anchor::Top | Anchor::Left | Anchor::Right)
+        .anchor(Anchor::TOP | Anchor::LEFT | Anchor::RIGHT)
         .size(Size::new(Length::Fill, BAR_HEIGHT.logical_px()))
         .exclusive_zone(BAR_HEIGHT.logical_px())
         .input_mode(InputMode::Selective)

@@ -1,6 +1,6 @@
 //! Bluetooth adapter and connected device formatting.
 
-use waywi::prelude::BluetoothDevice;
+use waywi::dbus::BluetoothDevice;
 
 use crate::app::state::State;
 

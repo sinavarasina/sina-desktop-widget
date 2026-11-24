@@ -1,8 +1,10 @@
 //! Metric formatting, tooltip sizing, window scroller, and datetime tests.
 
+use std::sync::Arc;
 use std::time::Instant;
 
 use waywi::prelude::*;
+use waywi::dbus::{BluetoothAdapter, BluetoothDevice};
 use waywi::system::{
     ByteSize, DiskSnapshot, GpuDeviceSnapshot, GpuSnapshot, GpuVendor, NetInterfaceKind,
     NetInterfaceSnapshot, NetLinkState, NetworkSnapshot, days_in_month,
@@ -61,19 +63,21 @@ fn gpu_metric_formats_clock_and_power_with_memclock_fallback() {
 #[test]
 fn tooltip_auto_sizing_accommodates_long_text_without_truncation() {
     let mut rt = synthetic_rt();
-    rt.enqueue(Msg::AudioUpdated(Box::new(AudioSnapshot {
-        linear: 0.72,
-        db: None,
-        muted: false,
-        default_sink: Some(AudioDevice {
+    rt.enqueue(Msg::AudioUpdated(Arc::new(AudioSnapshot {
+        default_sink_id: Some(45),
+        sinks: vec![AudioDevice {
             id: 45,
             name: String::from("alsa_output.pci-0000_0c_00.6.analog-stereo"),
             description: String::from(
                 "Ryzen HD Audio Controller Realtek ALC1220 Analog Line-Out (Hardware Route Volume)",
             ),
+            is_default: true,
+            volume: AudioVolume {
+                linear: 0.72,
+                ..AudioVolume::default()
+            },
             ..AudioDevice::default()
-        }),
-        devices: Vec::new(),
+        }],
         ..AudioSnapshot::default()
     })));
     rt.enqueue(Msg::Hover(HoverTarget::Wireplumber));
@@ -117,16 +121,24 @@ fn workspaces_audio_muted_network_disconnected_and_drawer_formatting() {
             used: ByteSize::from_bytes(180_000_000_000),
         }],
         io: Vec::new(),
-        total_read_bytes_per_sec: 0.0,
-        total_write_bytes_per_sec: 0.0,
+        total_read_rate: waywi::system::DataRate::ZERO,
+        total_write_rate: waywi::system::DataRate::ZERO,
         timestamp: Instant::now(),
     }));
-    rt.enqueue(Msg::AudioUpdated(Box::new(AudioSnapshot {
-        linear: 0.5,
-        db: None,
-        muted: true,
-        default_sink: None,
-        devices: Vec::new(),
+    rt.enqueue(Msg::AudioUpdated(Arc::new(AudioSnapshot {
+        default_sink_id: Some(1),
+        sinks: vec![AudioDevice {
+            id: 1,
+            name: String::from("alsa_output.pci-0000_0c_00.6.analog-stereo"),
+            description: String::from("Ryzen HD Audio Controller Line Out"),
+            is_default: true,
+            volume: AudioVolume {
+                linear: 0.5,
+                muted: true,
+                ..AudioVolume::default()
+            },
+            ..AudioDevice::default()
+        }],
         ..AudioSnapshot::default()
     })));
     rt.enqueue(Msg::NetworkSampled(NetworkSnapshot {

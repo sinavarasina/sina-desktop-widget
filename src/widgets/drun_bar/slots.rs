@@ -45,7 +45,7 @@ pub fn build_hidden_count_pill(
         .child(
             Group::new()
                 .key((key_prefix, 0usize))
-                .size(Size::px(COUNT_PILL_W.logical_px(), BAR_HEIGHT.logical_px()))
+                .size(Size::new(COUNT_PILL_W.logical_px(), BAR_HEIGHT.logical_px()))
                 .child(Rect::new().size(Size::fill()).fill(CRUST))
                 .child(
                     Text::new(count.to_string())
@@ -96,7 +96,7 @@ pub fn build_results_section(state: &State, total_w: f32) -> Element<Msg> {
 
     let mut row = Row::new()
         .key("drun-results-row")
-        .size(Size::px(total_w.logical_px(), BAR_HEIGHT.logical_px()))
+        .size(Size::new(total_w.logical_px(), BAR_HEIGHT.logical_px()))
         .align(Align::Center)
         .child(separator(
             "sep-drun-res-l",
@@ -158,7 +158,7 @@ fn build_empty_results(state: &State, total_w: f32, inner_total: f32) -> Element
 
     Row::new()
         .key("drun-empty-row")
-        .size(Size::px(total_w.logical_px(), BAR_HEIGHT.logical_px()))
+        .size(Size::new(total_w.logical_px(), BAR_HEIGHT.logical_px()))
         .align(Align::Center)
         .child(separator(
             "sep-drun-empty-l",
@@ -169,7 +169,7 @@ fn build_empty_results(state: &State, total_w: f32, inner_total: f32) -> Element
         .child(
             Group::new()
                 .key("drun-empty-body")
-                .size(Size::px(inner_total.logical_px(), BAR_HEIGHT.logical_px()))
+                .size(Size::new(inner_total.logical_px(), BAR_HEIGHT.logical_px()))
                 .child(Rect::new().size(Size::fill()).fill(bg))
                 .child(
                     Text::new(msg)
@@ -206,7 +206,7 @@ fn build_app_slot(
     let Some(entry) = state.drun.entries.get(entry_idx) else {
         return Group::new()
             .key(("drun-slot-missing", slot_idx))
-            .size(Size::px(slot_w.logical_px(), BAR_HEIGHT.logical_px()))
+            .size(Size::new(slot_w.logical_px(), BAR_HEIGHT.logical_px()))
             .child(Rect::new().size(Size::fill()).fill(bg))
             .into();
     };
@@ -225,7 +225,7 @@ fn build_app_slot(
 
     let icon_el: Element<Msg> = if let Some(img) = icon_asset {
         Image::new(img)
-            .size(Size::px(
+            .size(Size::new(
                 DRUN_ICON_SIZE.logical_px(),
                 DRUN_ICON_SIZE.logical_px(),
             ))
@@ -233,7 +233,7 @@ fn build_app_slot(
             .into()
     } else {
         Group::new()
-            .size(Size::px(
+            .size(Size::new(
                 DRUN_ICON_SIZE.logical_px(),
                 DRUN_ICON_SIZE.logical_px(),
             ))
@@ -241,7 +241,7 @@ fn build_app_slot(
                 Text::new("\u{f135}")
                     .font(font_ui())
                     .font_size(11.logical_px())
-                    .optical_bounds(true)
+                    .bounds_mode(TextBoundsMode::Optical)
                     .color(if is_selected { MAUVE } else { OVERLAY0 })
                     .position(Position::relative_to_parent(
                         Percent::new(50.0),
@@ -268,7 +268,7 @@ fn build_app_slot(
 
     let mut slot = Group::new()
         .key(("drun-slot", slot_idx))
-        .size(Size::px(slot_w.logical_px(), BAR_HEIGHT.logical_px()))
+        .size(Size::new(slot_w.logical_px(), BAR_HEIGHT.logical_px()))
         .on_hover(Msg::Hover(HoverTarget::DrunEntry(slot_idx)))
         .on_leave(Msg::Leave(HoverTarget::DrunEntry(slot_idx)))
         .on_click(Msg::DrunLaunchIndex(match_pos))
@@ -291,7 +291,7 @@ fn build_app_slot(
     if is_selected {
         slot = slot.child(
             Rect::new()
-                .size(Size::px(slot_w.logical_px(), 1.5.logical_px()))
+                .size(Size::new(slot_w.logical_px(), 1.5.logical_px()))
                 .fill(MAUVE)
                 .position(Position::relative_to_parent(
                     Percent::new(0.0),

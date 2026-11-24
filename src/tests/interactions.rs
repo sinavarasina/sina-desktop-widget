@@ -1,9 +1,12 @@
 //! Pointer, scroll, hover, drawer animation, and tray menu interaction tests.
 
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use waywi::prelude::*;
+use waywi::dbus::{BluetoothAdapter, BluetoothDevice, LogindPowerCapabilities, PowerActionSupport, TrayMenuItem, UDisksBlockDevice, UDisksDrive};
 
+use crate::app::audio::AudioSnapshotExt;
 use crate::app::Msg;
 use crate::app::state::{AudioControlTarget, HoverTarget, TrayMenuPopup};
 use crate::widgets::tray_menu::tray_menu_left_and_width;
@@ -137,12 +140,31 @@ fn workspace_click_switches_active_workspace() {
 #[test]
 fn audio_scroll_up_increases_and_down_decreases() {
     let mut rt = synthetic_rt();
-    rt.enqueue(Msg::AudioUpdated(Box::new(AudioSnapshot {
-        linear: 0.50,
-        db: None,
-        muted: false,
-        default_sink: None,
-        devices: Vec::new(),
+    rt.enqueue(Msg::AudioUpdated(Arc::new(AudioSnapshot {
+        default_sink_id: Some(1),
+        sinks: vec![AudioDevice {
+            id: 1,
+            name: String::from("alsa_output.pci-0000_0c_00.6.analog-stereo"),
+            description: String::from("Ryzen HD Audio Controller Line Out"),
+            is_default: true,
+            volume: AudioVolume {
+                linear: 0.50,
+                ..AudioVolume::default()
+            },
+            ..AudioDevice::default()
+        }],
+        default_source_id: Some(2),
+        sources: vec![AudioDevice {
+            id: 2,
+            name: String::from("alsa_input.pci-0000_0c_00.6.analog-stereo"),
+            description: String::from("Ryzen HD Audio Controller Line In"),
+            is_default: true,
+            volume: AudioVolume {
+                linear: 0.00,
+                ..AudioVolume::default()
+            },
+            ..AudioDevice::default()
+        }],
         ..AudioSnapshot::default()
     })));
     rt.step().unwrap();
@@ -162,14 +184,28 @@ fn audio_scroll_up_increases_and_down_decreases() {
     // Wayland scroll UP -> delta_y < 0 / discrete_y < 0 => volume must INCREASE.
     rt.enqueue(scroll(-1.0, -1));
     rt.step().unwrap();
-    let up_vol = rt.state().audio.as_ref().unwrap().linear;
+    let up_vol = rt
+        .state()
+        .audio
+        .as_ref()
+        .unwrap()
+        .target_volume(false)
+        .unwrap()
+        .linear;
     assert!((up_vol - 0.51).abs() < 1e-4, "expected 0.51, got {up_vol}");
 
     // Wayland scroll DOWN -> delta_y > 0 / discrete_y > 0 => volume must DECREASE.
     rt.enqueue(scroll(1.0, 1));
     rt.enqueue(scroll(1.0, 1));
     rt.step().unwrap();
-    let down_vol = rt.state().audio.as_ref().unwrap().linear;
+    let down_vol = rt
+        .state()
+        .audio
+        .as_ref()
+        .unwrap()
+        .target_volume(false)
+        .unwrap()
+        .linear;
     assert!(
         (down_vol - 0.49).abs() < 1e-4,
         "expected 0.49, got {down_vol}"
@@ -187,7 +223,7 @@ fn audio_scroll_up_increases_and_down_decreases() {
 
     rt.enqueue(scroll(-1.0, -1));
     rt.step().unwrap();
-    let src_vol = rt.state().audio.as_ref().unwrap().source_linear;
+    let src_vol = rt.state().audio.as_ref().unwrap().target_volume(true).expect("source volume").linear;
     assert!(
         (src_vol - 0.01).abs() < 1e-4,
         "expected 0.01, got {src_vol}"
@@ -674,19 +710,28 @@ fn mixer_popup_bar_click_opens_right_click_mutes_and_tracks_set_volume() {
     use waywi::audio::AudioStream;
 
     let mut rt = synthetic_rt();
-    rt.enqueue(Msg::AudioUpdated(Box::new(AudioSnapshot {
-        linear: 0.50,
-        default_sink: Some(AudioDevice {
+    rt.enqueue(Msg::AudioUpdated(Arc::new(AudioSnapshot {
+        default_sink_id: Some(1),
+        sinks: vec![AudioDevice {
             id: 1,
             name: String::from("alsa_output.pci-0000_00_1f.3"),
             description: String::from("Built-in Audio Analog Stereo"),
+            is_default: true,
+            volume: AudioVolume {
+                linear: 0.50,
+                ..AudioVolume::default()
+            },
             ..AudioDevice::default()
-        }),
+        }],
         streams: vec![AudioStream {
             id: 7,
+            direction: AudioDirection::Output,
             name: String::from("Firefox"),
-            sink_id: Some(1),
-            linear: 0.40,
+            device_id: Some(1),
+            volume: AudioVolume {
+                linear: 0.40,
+                ..AudioVolume::default()
+            },
             ..AudioStream::default()
         }],
         ..AudioSnapshot::default()
@@ -713,7 +758,14 @@ fn mixer_popup_bar_click_opens_right_click_mutes_and_tracks_set_volume() {
         modifiers: Modifiers::empty(),
     }));
     rt.step().unwrap();
-    assert!(rt.state().audio.as_ref().unwrap().muted);
+    assert!(rt
+        .state()
+        .audio
+        .as_ref()
+        .unwrap()
+        .target_volume(false)
+        .unwrap()
+        .muted);
     rt.enqueue(Msg::MixerBarPointerDown(PointerEvent {
         position: Point::new(1650.logical_px(), 12.logical_px()),
         local_position: Point::ZERO,
@@ -721,7 +773,14 @@ fn mixer_popup_bar_click_opens_right_click_mutes_and_tracks_set_volume() {
         modifiers: Modifiers::empty(),
     }));
     rt.step().unwrap();
-    assert!(!rt.state().audio.as_ref().unwrap().muted);
+    assert!(!rt
+        .state()
+        .audio
+        .as_ref()
+        .unwrap()
+        .target_volume(false)
+        .unwrap()
+        .muted);
 
     let scroll_on_master = |delta_y: f32, discrete_y: i32| {
         Msg::MixerMasterScroll(ScrollEvent {
@@ -738,7 +797,14 @@ fn mixer_popup_bar_click_opens_right_click_mutes_and_tracks_set_volume() {
     // Scroll up on the master track raises the sink volume (same 0.01 step as the bar module).
     rt.enqueue(scroll_on_master(-1.0, -1));
     rt.step().unwrap();
-    let vol = rt.state().audio.as_ref().unwrap().linear;
+    let vol = rt
+        .state()
+        .audio
+        .as_ref()
+        .unwrap()
+        .target_volume(false)
+        .unwrap()
+        .linear;
     assert!((vol - 0.51).abs() < 1e-4, "expected 0.51, got {vol}");
 
     // Clicking the middle of the master track pins the volume at exactly 50%.
@@ -752,7 +818,14 @@ fn mixer_popup_bar_click_opens_right_click_mutes_and_tracks_set_volume() {
         modifiers: Modifiers::empty(),
     }));
     rt.step().unwrap();
-    let vol = rt.state().audio.as_ref().unwrap().linear;
+    let vol = rt
+        .state()
+        .audio
+        .as_ref()
+        .unwrap()
+        .target_volume(false)
+        .unwrap()
+        .linear;
     assert!((vol - 0.50).abs() < 1e-4, "expected 0.50, got {vol}");
 
     // Per-app stream: scroll adjusts and click pins row volume.
@@ -769,7 +842,15 @@ fn mixer_popup_bar_click_opens_right_click_mutes_and_tracks_set_volume() {
         },
     });
     rt.step().unwrap();
-    let row_vol = rt.state().audio.as_ref().unwrap().stream_percent(7);
+    let row_vol = rt
+        .state()
+        .audio
+        .as_ref()
+        .and_then(|a| a.playback_streams().find(|s| s.id == 7))
+        .unwrap()
+        .volume
+        .linear
+        * 100.0;
     assert!((row_vol - 39.0).abs() < 1e-3, "expected 39%, got {row_vol}");
 
     rt.enqueue(Msg::MixerStreamSeekClick {
@@ -785,7 +866,15 @@ fn mixer_popup_bar_click_opens_right_click_mutes_and_tracks_set_volume() {
         },
     });
     rt.step().unwrap();
-    let row_vol = rt.state().audio.as_ref().unwrap().stream_percent(7);
+    let row_vol = rt
+        .state()
+        .audio
+        .as_ref()
+        .and_then(|a| a.playback_streams().find(|s| s.id == 7))
+        .unwrap()
+        .volume
+        .linear
+        * 100.0;
     assert!((row_vol - 25.0).abs() < 1e-3, "expected 25%, got {row_vol}");
 
     // Let the open animation finish, then render the popup headless.
@@ -856,8 +945,8 @@ fn disk_popup_mounts_cycles_middle_click_luks_unlock_and_pending_animation() {
             },
         ],
         io: Vec::new(),
-        total_read_bytes_per_sec: 1_048_576.0,
-        total_write_bytes_per_sec: 524_288.0,
+        total_read_rate: waywi::system::DataRate::from_bytes_per_sec(1_048_576.0),
+        total_write_rate: waywi::system::DataRate::from_bytes_per_sec(524_288.0),
         timestamp: Instant::now(),
     }));
     rt.enqueue(Msg::UDisksUpdated(UDisksSnapshot {
@@ -1041,9 +1130,7 @@ fn disk_popup_mounts_cycles_middle_click_luks_unlock_and_pending_animation() {
         bus: DbusBus::System,
         operation: String::from("Filesystem.Mount"),
         target: String::from("/org/freedesktop/UDisks2/block_devices/sdb1"),
-        reply_object_path: None,
-        count: None,
-        reply: Vec::new(),
+        reply: waywi::dbus::DbusActionReply::Unit,
         error: Some(String::from(
             "Filesystem.Mount failed: org.freedesktop.UDisks2.Error.NotAuthorizedDismissed: Polkit authentication dismissed",
         )),
@@ -1300,7 +1387,16 @@ fn mixer_popup_routing_card_switches_devices_ports_profiles_and_balance() {
         id: 57,
         name: String::from("alsa_output.pci-0000_0c_00.6.analog-stereo"),
         description: String::from("ALC1220 Analog"),
-        card_id: Some(45),
+        is_default: true,
+        volume: AudioVolume {
+            linear: 0.60,
+            channels: vec![0.60, 0.60],
+            channel_map: vec![
+                AudioChannelPosition::FrontLeft,
+                AudioChannelPosition::FrontRight,
+            ],
+            ..AudioVolume::default()
+        },
         active_port: Some(String::from("analog-output-headphones")),
         ports: vec![
             AudioPort {
@@ -1318,13 +1414,11 @@ fn mixer_popup_routing_card_switches_devices_ports_profiles_and_balance() {
                 ..AudioPort::default()
             },
         ],
-        ..AudioDevice::default()
     };
     let hdmi_sink = AudioDevice {
         id: 55,
         name: String::from("alsa_output.pci-0000_01_00.1.hdmi-stereo"),
         description: String::from("HDMI Monitor"),
-        card_id: Some(46),
         active_port: Some(String::from("hdmi-output-0")),
         ports: vec![AudioPort {
             name: String::from("hdmi-output-0"),
@@ -1339,7 +1433,16 @@ fn mixer_popup_routing_card_switches_devices_ports_profiles_and_balance() {
         id: 61,
         name: String::from("alsa_input.pci-0000_0c_00.6.analog-stereo"),
         description: String::from("Built-in Mic"),
-        card_id: Some(45),
+        is_default: true,
+        volume: AudioVolume {
+            linear: 0.80,
+            channels: vec![0.80, 0.80],
+            channel_map: vec![
+                AudioChannelPosition::FrontLeft,
+                AudioChannelPosition::FrontRight,
+            ],
+            ..AudioVolume::default()
+        },
         active_port: Some(String::from("analog-input-front-mic")),
         ports: vec![
             AudioPort {
@@ -1357,25 +1460,12 @@ fn mixer_popup_routing_card_switches_devices_ports_profiles_and_balance() {
                 ..AudioPort::default()
             },
         ],
-        ..AudioDevice::default()
     };
 
-    rt.enqueue(Msg::AudioUpdated(Box::new(AudioSnapshot {
-        linear: 0.60,
-        channels: vec![0.60, 0.60],
-        channel_map: vec![
-            AudioChannelPosition::FrontLeft,
-            AudioChannelPosition::FrontRight,
-        ],
-        default_sink: Some(analog_sink.clone()),
-        devices: vec![analog_sink, hdmi_sink],
-        source_linear: 0.80,
-        source_channels: vec![0.80, 0.80],
-        source_channel_map: vec![
-            AudioChannelPosition::FrontLeft,
-            AudioChannelPosition::FrontRight,
-        ],
-        default_source: Some(mic_source.clone()),
+    rt.enqueue(Msg::AudioUpdated(Arc::new(AudioSnapshot {
+        default_sink_id: Some(57),
+        sinks: vec![analog_sink.clone(), hdmi_sink],
+        default_source_id: Some(61),
         sources: vec![mic_source],
         cards: vec![AudioCard {
             id: 45,
@@ -1438,8 +1528,7 @@ fn mixer_popup_routing_card_switches_devices_ports_profiles_and_balance() {
             .audio
             .as_ref()
             .unwrap()
-            .default_sink
-            .as_ref()
+            .default_sink()
             .unwrap()
             .active_port
             .as_deref(),
@@ -1493,7 +1582,7 @@ fn mixer_popup_routing_card_switches_devices_ports_profiles_and_balance() {
         modifiers: Modifiers::empty(),
     }));
     rt.step().unwrap();
-    let bal_left = rt.state().audio.as_ref().unwrap().balance();
+    let bal_left = rt.state().audio.as_ref().unwrap().target_balance(false);
     assert!(
         (bal_left - (-0.50)).abs() < 1e-2,
         "expected -0.50 balance, got {bal_left}"
@@ -1512,7 +1601,7 @@ fn mixer_popup_routing_card_switches_devices_ports_profiles_and_balance() {
         modifiers: Modifiers::empty(),
     }));
     rt.step().unwrap();
-    let bal_nudged = rt.state().audio.as_ref().unwrap().balance();
+    let bal_nudged = rt.state().audio.as_ref().unwrap().target_balance(false);
     assert!(
         (bal_nudged - (-0.45)).abs() < 1e-2,
         "expected -0.45 balance after scroll up, got {bal_nudged}"
@@ -1526,7 +1615,14 @@ fn mixer_popup_routing_card_switches_devices_ports_profiles_and_balance() {
         modifiers: Modifiers::empty(),
     }));
     rt.step().unwrap();
-    assert!(rt.state().audio.as_ref().unwrap().balance().abs() < 1e-3);
+    assert!(rt
+        .state()
+        .audio
+        .as_ref()
+        .unwrap()
+        .target_balance(false)
+        .abs()
+        < 1e-3);
 
     // Switch default output device to HDMI Monitor (id 55).
     rt.enqueue(Msg::MixerSelectDevice(55));
@@ -1536,8 +1632,7 @@ fn mixer_popup_routing_card_switches_devices_ports_profiles_and_balance() {
             .audio
             .as_ref()
             .unwrap()
-            .default_sink
-            .as_ref()
+            .default_sink()
             .unwrap()
             .id,
         55

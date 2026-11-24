@@ -1,12 +1,22 @@
 //! PipeWire audio sink/source formatting.
 
+use waywi::prelude::*;
+
+use crate::app::audio::AudioSnapshotExt;
 use crate::app::state::{AudioControlTarget, State};
 
 use super::{MetricLine, ModuleMetric};
 
+/// The currently selected port/route on a device, resolved for its description.
+fn active_port_of(dev: &AudioDevice) -> Option<&AudioPort> {
+    let name = dev.active_port.as_deref()?;
+    dev.ports.iter().find(|p| p.name == name)
+}
+
 impl State {
     #[must_use]
     pub fn wireplumber_metric(&self) -> ModuleMetric {
+        let is_source = self.audio_target == AudioControlTarget::Source;
         let Some(audio) = &self.audio else {
             return ModuleMetric {
                 lines: vec![
@@ -17,8 +27,10 @@ impl State {
                 inactive: false,
             };
         };
-        let sink_pct = audio.percent().round() as u16;
-        let src_pct = audio.source_percent().round() as u16;
+        let sink_vol = audio.target_volume(false);
+        let src_vol = audio.target_volume(true);
+        let sink_pct = sink_vol.map_or(0.0, |v| v.percent()).round() as u16;
+        let src_pct = src_vol.map_or(0.0, |v| v.percent()).round() as u16;
         let sink_icon = if sink_pct <= 33 {
             "\u{f026}"
         } else if sink_pct <= 66 {
@@ -27,8 +39,7 @@ impl State {
             "\u{f028}"
         };
         let dev = audio
-            .default_sink
-            .as_ref()
+            .default_sink()
             .map(|d| {
                 if d.description.is_empty() {
                     d.name.as_str()
@@ -38,7 +49,7 @@ impl State {
             })
             .unwrap_or("Default Sink");
 
-        let dev_line = match audio.active_port() {
+        let dev_line = match audio.default_sink().and_then(active_port_of) {
             Some(port) => {
                 let port_label = if port.description.is_empty() {
                     port.name.as_str()
@@ -51,8 +62,7 @@ impl State {
         };
 
         let src_dev = audio
-            .default_source
-            .as_ref()
+            .default_source()
             .map(|d| {
                 if d.description.is_empty() {
                     d.name.as_str()
@@ -62,7 +72,7 @@ impl State {
             })
             .unwrap_or("Default Source");
 
-        let src_line_tip = match audio.active_source_port() {
+        let src_line_tip = match audio.default_source().and_then(active_port_of) {
             Some(port) => {
                 let port_label = if port.description.is_empty() {
                     port.name.as_str()
@@ -74,13 +84,15 @@ impl State {
             None => format!("Mic: {src_dev}"),
         };
 
-        let sink_active = self.audio_target == AudioControlTarget::Sink;
-        let sink_line = if audio.muted {
+        let sink_active = !is_source;
+        let sink_muted = sink_vol.is_some_and(|v| v.muted);
+        let src_muted = src_vol.is_some_and(|v| v.muted);
+        let sink_line = if sink_muted {
             MetricLine::new("\u{f075f}", "0%").strikethrough()
         } else {
             MetricLine::new(sink_icon, format!("{sink_pct}%"))
         };
-        let src_line = if audio.source_muted {
+        let src_line = if src_muted {
             MetricLine::new("\u{f036d}", if sink_active { "0%" } else { "0%*" }).strikethrough()
         } else {
             MetricLine::new(
@@ -98,11 +110,7 @@ impl State {
             "Control: Mic (Middle-click: Speaker)"
         };
 
-        let bal = if sink_active {
-            audio.balance()
-        } else {
-            audio.source_balance()
-        };
+        let bal = audio.target_balance(is_source);
         let tooltip = if bal.abs() >= 0.01 {
             let bal_pct = (bal.abs() * 100.0).round() as u8;
             let side = if bal < 0.0 { "L" } else { "R" };
@@ -114,11 +122,7 @@ impl State {
         ModuleMetric {
             lines: vec![sink_line, src_line],
             tooltip,
-            inactive: if sink_active {
-                audio.muted
-            } else {
-                audio.source_muted
-            },
+            inactive: if sink_active { sink_muted } else { src_muted },
         }
     }
 

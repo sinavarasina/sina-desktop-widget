@@ -18,7 +18,7 @@ pub fn build_incoming_ticker(ticker: &IncomingTicker) -> Element<Msg> {
 
     let scrolling_clip = Clip::new(
         Group::new()
-            .size(Size::px(
+            .size(Size::new(
                 NOTIF_TICKER_WIDTH.logical_px(),
                 BAR_HEIGHT.logical_px(),
             ))
@@ -32,7 +32,7 @@ pub fn build_incoming_ticker(ticker: &IncomingTicker) -> Element<Msg> {
                     .anchor(ElementAnchor::CenterLeft),
             ),
     )
-    .size(Size::px(
+    .size(Size::new(
         NOTIF_TICKER_WIDTH.logical_px(),
         BAR_HEIGHT.logical_px(),
     ));

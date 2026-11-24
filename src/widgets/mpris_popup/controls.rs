@@ -29,20 +29,20 @@ pub fn build_control_box(state: &State) -> Element<Msg> {
         // overflow, unclipped); Clip keeps the spill inside the square frame.
         Clip::new(
             Image::new(img)
-                .size(Size::px(
+                .size(Size::new(
                     ART_POPUP_SIZE.logical_px(),
                     ART_POPUP_SIZE.logical_px(),
                 ))
                 .fit(ImageFit::Cover),
         )
-        .size(Size::px(
+        .size(Size::new(
             ART_POPUP_SIZE.logical_px(),
             ART_POPUP_SIZE.logical_px(),
         ))
         .into()
     } else {
         Group::new()
-            .size(Size::px(
+            .size(Size::new(
                 ART_POPUP_SIZE.logical_px(),
                 ART_POPUP_SIZE.logical_px(),
             ))
@@ -56,7 +56,7 @@ pub fn build_control_box(state: &State) -> Element<Msg> {
                 Text::new("\u{f001}")
                     .font(font_ui())
                     .font_size(20.logical_px())
-                    .optical_bounds(true)
+                    .bounds_mode(TextBoundsMode::Optical)
                     .color(MAUVE)
                     .position(Position::relative_to_parent(
                         Percent::new(50.0),
@@ -190,7 +190,7 @@ fn icon_btn(
     };
     Group::new()
         .key(key)
-        .size(Size::px(18.logical_px(), 18.logical_px()))
+        .size(Size::new(18.logical_px(), 18.logical_px()))
         .on_hover(Msg::Hover(target))
         .on_leave(Msg::Leave(target))
         .on_click(Msg::MprisAction(action))
@@ -198,7 +198,7 @@ fn icon_btn(
             Text::new(glyph)
                 .font(font_ui())
                 .font_size(13.logical_px())
-                .optical_bounds(true)
+                .bounds_mode(TextBoundsMode::Optical)
                 .color(fg)
                 .position(Position::relative_to_parent(
                     Percent::new(50.0),

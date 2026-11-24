@@ -1,6 +1,7 @@
 //! StatusNotifierItem tray bar widget with passive dimming, attention blink, and hover fill.
 
 use waywi::prelude::*;
+use waywi::dbus::TrayStatus;
 
 use crate::app::state::{HoverTarget, Msg, State};
 use crate::theme::{
@@ -12,7 +13,7 @@ pub fn build_tray(state: &State) -> Element<Msg> {
     if state.tray_items.is_empty() {
         return Rect::new()
             .key("mod-tray")
-            .size(Size::px(0.logical_px(), BAR_HEIGHT.logical_px()))
+            .size(Size::new(0.logical_px(), BAR_HEIGHT.logical_px()))
             .into();
     }
 
@@ -38,7 +39,7 @@ pub fn build_tray(state: &State) -> Element<Msg> {
         };
         let icon_el: Element<Msg> = if let Some(asset) = entry.icon {
             Image::new(asset)
-                .size(Size::px(
+                .size(Size::new(
                     TRAY_ICON_SIZE.logical_px(),
                     TRAY_ICON_SIZE.logical_px(),
                 ))
@@ -68,7 +69,7 @@ pub fn build_tray(state: &State) -> Element<Msg> {
         items_row = items_row.child(
             Group::new()
                 .key(("tray-item", idx))
-                .size(Size::px(18.logical_px(), 18.logical_px()))
+                .size(Size::new(18.logical_px(), 18.logical_px()))
                 .opacity(opacity)
                 .on_hover(Msg::Hover(HoverTarget::TrayItem(idx)))
                 .on_leave(Msg::Leave(HoverTarget::TrayItem(idx)))
@@ -90,7 +91,7 @@ pub fn build_tray(state: &State) -> Element<Msg> {
         .child(items_row)
         .child(
             Rect::new()
-                .size(Size::px(2.logical_px(), BAR_HEIGHT.logical_px()))
+                .size(Size::new(2.logical_px(), BAR_HEIGHT.logical_px()))
                 .fill(SURFACE0),
         );
 

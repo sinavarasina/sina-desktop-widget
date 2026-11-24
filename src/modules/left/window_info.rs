@@ -37,7 +37,7 @@ pub fn build_window_info(state: &State) -> Element<Msg> {
     };
     let cat_line = Clip::new(
         Group::new()
-            .size(Size::px(cat_w.logical_px(), ROW_HEIGHT.logical_px()))
+            .size(Size::new(cat_w.logical_px(), ROW_HEIGHT.logical_px()))
             .child(
                 Text::new(state.window_info.category.clone())
                     .font(font_ui_semibold())
@@ -51,14 +51,14 @@ pub fn build_window_info(state: &State) -> Element<Msg> {
                     .anchor(ElementAnchor::CenterLeft),
             ),
     )
-    .size(Size::px(cat_w.logical_px(), ROW_HEIGHT.logical_px()))
+    .size(Size::new(cat_w.logical_px(), ROW_HEIGHT.logical_px()))
     .position(Position::absolute(
         TOP_SLANT_INDENT.logical_px(),
         1.logical_px(),
     ));
 
     let info_line = Group::new()
-        .size(Size::px(info_w.logical_px(), ROW_HEIGHT.logical_px()))
+        .size(Size::new(info_w.logical_px(), ROW_HEIGHT.logical_px()))
         .position(Position::absolute(0.logical_px(), 12.logical_px()))
         .child(build_reel_slot(
             "win-info-reel",
@@ -76,7 +76,7 @@ pub fn build_window_info(state: &State) -> Element<Msg> {
 
     let body = Group::new()
         .key("mod-window-info-body")
-        .size(Size::px(body_w.logical_px(), BAR_HEIGHT.logical_px()))
+        .size(Size::new(body_w.logical_px(), BAR_HEIGHT.logical_px()))
         .child(Rect::new().size(Size::fill()).fill(bg))
         .child(cat_line)
         .child(info_line);

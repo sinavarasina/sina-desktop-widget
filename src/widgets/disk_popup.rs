@@ -3,6 +3,7 @@
 //! are hidden by default and rendered in a separate card when toggled on.
 
 use waywi::prelude::*;
+use waywi::dbus::{UDisksBlockDevice, UDisksDrive};
 
 use crate::app::disk::{DiskMenuAction, DiskUiState};
 use crate::app::state::{HoverTarget, Msg, State};
@@ -83,7 +84,7 @@ pub fn build_disk_popup_surface(state: &State) -> Surface<Msg> {
     let mut surface = Surface::floating("bar-disk-popup", Output::Primary)
         .layer(Layer::Overlay)
         .ignore_exclusive_zone()
-        .anchor(Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right)
+        .anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT)
         .size(Size::fill())
         .input_mode(InputMode::Full)
         .keyboard_interactivity(if state.disk_ui.unlock_target.is_some() {
@@ -96,7 +97,7 @@ pub fn build_disk_popup_surface(state: &State) -> Surface<Msg> {
         .on_ime(|ev| Some(Msg::DiskUnlockIme(ev)));
 
     if state.disk_ui.unlock_target.is_some() {
-        let cursor_rect = GeoRect::new(
+        let cursor_rect = Bounds::new(
             (left_x + DISK_PAD + 24.0 + state.disk_ui.unlock_cursor_x).logical_px(),
             (animated_y + DISK_PAD + DISK_HEADER_HEIGHT + 6.0).logical_px(),
             2.0.logical_px(),
@@ -258,7 +259,7 @@ fn build_system_card(state: &State, sys_blocks: &[&UDisksBlockDevice]) -> (Eleme
                     Text::new("\u{f071}")
                         .font(font_ui())
                         .font_size(10.5.logical_px())
-                        .optical_bounds(true)
+                        .bounds_mode(TextBoundsMode::Optical)
                         .color(RED),
                 )
                 .child(
@@ -299,7 +300,7 @@ fn build_header(
     let refresh_hovered = state.hovered == HoverTarget::DiskRefresh;
     let refresh_btn = Group::new()
         .key("disk-refresh-btn")
-        .size(Size::px(24.logical_px(), 24.logical_px()))
+        .size(Size::new(24.logical_px(), 24.logical_px()))
         .position(Position::relative_to_parent(
             Percent::new(100.0),
             Percent::new(50.0),
@@ -322,7 +323,7 @@ fn build_header(
             Text::new("\u{f021}")
                 .font(font_ui())
                 .font_size(11.logical_px())
-                .optical_bounds(true)
+                .bounds_mode(TextBoundsMode::Optical)
                 .color(if refresh_hovered { MAUVE } else { SUBTEXT1 })
                 .position(Position::relative_to_parent(
                     Percent::new(50.0),
@@ -411,7 +412,7 @@ fn build_unlock_bar(state: &State) -> Element<Msg> {
                     Text::new("\u{f023}")
                         .font(font_ui())
                         .font_size(11.logical_px())
-                        .optical_bounds(true)
+                        .bounds_mode(TextBoundsMode::Optical)
                         .color(MAUVE),
                 )
                 .child(
@@ -438,7 +439,7 @@ fn build_unlock_bar(state: &State) -> Element<Msg> {
                                     state.disk_ui.unlock_cursor_x.logical_px(),
                                     3.logical_px(),
                                 ))
-                                .size(Size::px(1.5.logical_px(), 12.logical_px()))
+                                .size(Size::new(1.5.logical_px(), 12.logical_px()))
                                 .fill(MAUVE),
                         ),
                 )
@@ -638,7 +639,7 @@ fn build_device_row(state: &State, block: &UDisksBlockDevice, idx: usize) -> Ele
                     Text::new(icon)
                         .font(font_ui())
                         .font_size(12.logical_px())
-                        .optical_bounds(true)
+                        .bounds_mode(TextBoundsMode::Optical)
                         .color(if block.is_mounted() || is_removable {
                             MAUVE
                         } else {
@@ -652,7 +653,7 @@ fn build_device_row(state: &State, block: &UDisksBlockDevice, idx: usize) -> Ele
                             .font_size(11.logical_px())
                             .color(TEXT),
                     )
-                    .size(Size::px(184.logical_px(), 16.logical_px())),
+                    .size(Size::new(184.logical_px(), 16.logical_px())),
                 )
                 .child(
                     Text::new(status_text)
@@ -691,7 +692,7 @@ fn build_device_menu(state: &State, block: &UDisksBlockDevice, idx: usize) -> El
                     .font_size(10.5.logical_px())
                     .color(TEXT),
             )
-            .size(Size::px(58.logical_px(), 16.logical_px())),
+            .size(Size::new(58.logical_px(), 16.logical_px())),
         );
 
     if block.has_filesystem {

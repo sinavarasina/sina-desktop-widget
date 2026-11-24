@@ -1,8 +1,10 @@
 //! Shared headless runtime and fixture builders for tests.
 
+use std::sync::Arc;
 use std::time::Instant;
 
 use waywi::prelude::*;
+use waywi::dbus::{TrayCategory, TrayStatus};
 use waywi::system::{
     ByteSize, CpuSnapshot, LoadAverage, MemorySnapshot, NetInterfaceKind, NetInterfaceSnapshot,
     NetLinkState, NetworkSnapshot,
@@ -51,17 +53,19 @@ pub fn populate_sample_metrics(rt: &mut HeadlessRuntime<SinaDesktopWidget>) {
         class: String::from("foot"),
         title: String::from("foot"),
     }));
-    rt.enqueue(Msg::AudioUpdated(Box::new(AudioSnapshot {
-        linear: 0.24,
-        db: None,
-        muted: false,
-        default_sink: Some(AudioDevice {
+    rt.enqueue(Msg::AudioUpdated(Arc::new(AudioSnapshot {
+        default_sink_id: Some(1),
+        sinks: vec![AudioDevice {
             id: 1,
             name: String::from("alsa_output.pci-0000_0c_00.6.analog-stereo"),
             description: String::from("Ryzen HD Audio Controller Line Out"),
+            is_default: true,
+            volume: AudioVolume {
+                linear: 0.24,
+                ..AudioVolume::default()
+            },
             ..AudioDevice::default()
-        }),
-        devices: Vec::new(),
+        }],
         ..AudioSnapshot::default()
     })));
     rt.enqueue(Msg::CpuSampled(CpuSnapshot {

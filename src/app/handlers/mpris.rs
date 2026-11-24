@@ -10,7 +10,7 @@ use super::events::scroll_direction_y;
 
 const SEEK_STEP_US: i64 = 5_000_000;
 
-pub fn handle_mpris_event(state: &mut State, ev: MprisEvent, ctx: &mut EffectCtx<'_>) {
+pub fn handle_mpris_event(state: &mut State, ev: MprisEvent, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     match ev {
         MprisEvent::PlayersUpdated(list) => {
             state
@@ -23,12 +23,25 @@ pub fn handle_mpris_event(state: &mut State, ev: MprisEvent, ctx: &mut EffectCtx
                 .upsert_player(*snap, &mut state.path_asset_cache, ctx);
         }
         MprisEvent::PlayerAdded { service_name } => {
-            if let Ok(dbus) = ctx.dbus()
-                && let Ok(snap) = dbus.mpris_snapshot(&service_name)
-            {
-                state
-                    .mpris
-                    .upsert_player(snap, &mut state.path_asset_cache, ctx);
+            if let Ok(dbus) = ctx.dbus() {
+                let mpris = dbus.mpris();
+                let snap = mpris
+                    .cached_snapshots()
+                    .and_then(|list| list.into_iter().find(|s| s.service_name == service_name))
+                    .map_or_else(
+                        || {
+                            mpris
+                                .snapshots_blocking()
+                                .ok()
+                                .and_then(|list| list.into_iter().find(|s| s.service_name == service_name))
+                        },
+                        Some,
+                    );
+                if let Some(snap) = snap {
+                    state
+                        .mpris
+                        .upsert_player(snap, &mut state.path_asset_cache, ctx);
+                }
             }
         }
         MprisEvent::PlayerRemoved { service_name } => {
@@ -46,7 +59,7 @@ pub fn handle_mpris_event(state: &mut State, ev: MprisEvent, ctx: &mut EffectCtx
     }
 }
 
-pub fn handle_mpris_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &EffectCtx<'_>) {
+pub fn handle_mpris_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     match ev.button {
         Some(MouseButton::Left) => {
             let module_left = ev.position.x.get() - ev.local_position.x.get();
@@ -62,7 +75,7 @@ pub fn handle_mpris_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &Effec
         Some(MouseButton::Right) => {
             if let Some(svc) = state.mpris.active_player().map(|p| p.service_name.clone()) {
                 if let Ok(dbus) = ctx.dbus() {
-                    let _ = dbus.mpris_play_pause(&svc);
+                    let _ = dbus.mpris().play_pause(&svc);
                 }
                 if let Some(p) = state.mpris.active_player_mut() {
                     p.status = match p.status {
@@ -76,7 +89,7 @@ pub fn handle_mpris_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &Effec
     }
 }
 
-pub fn handle_mpris_scroll(state: &mut State, sc: ScrollEvent, ctx: &EffectCtx<'_>) {
+pub fn handle_mpris_scroll(state: &mut State, sc: ScrollEvent, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     let step = -scroll_direction_y(sc);
     if step == 0 {
         return;
@@ -86,7 +99,7 @@ pub fn handle_mpris_scroll(state: &mut State, sc: ScrollEvent, ctx: &EffectCtx<'
     };
     let delta_us = i64::from(step) * SEEK_STEP_US;
     if let Ok(dbus) = ctx.dbus() {
-        let _ = dbus.mpris_seek(&svc, delta_us);
+        let _ = dbus.mpris().seek(&svc, delta_us);
     }
     if let Some(p) = state.mpris.active_player_mut() {
         let cur = p.position_us.unwrap_or(0);
@@ -95,7 +108,7 @@ pub fn handle_mpris_scroll(state: &mut State, sc: ScrollEvent, ctx: &EffectCtx<'
     }
 }
 
-pub fn handle_mpris_action(state: &mut State, action: MprisControlAction, ctx: &EffectCtx<'_>) {
+pub fn handle_mpris_action(state: &mut State, action: MprisControlAction, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     let Some(snap) = state.mpris.active_player().cloned() else {
         return;
     };
@@ -103,7 +116,7 @@ pub fn handle_mpris_action(state: &mut State, action: MprisControlAction, ctx: &
     match action {
         MprisControlAction::PlayPause => {
             if let Ok(dbus) = ctx.dbus() {
-                let _ = dbus.mpris_play_pause(svc);
+                let _ = dbus.mpris().play_pause(svc);
             }
             if let Some(p) = state.mpris.active_player_mut() {
                 p.status = match p.status {
@@ -114,7 +127,7 @@ pub fn handle_mpris_action(state: &mut State, action: MprisControlAction, ctx: &
         }
         MprisControlAction::Stop => {
             if let Ok(dbus) = ctx.dbus() {
-                let _ = dbus.mpris_stop(svc);
+                let _ = dbus.mpris().stop(svc);
             }
             if let Some(p) = state.mpris.active_player_mut() {
                 p.status = MprisPlaybackStatus::Stopped;
@@ -123,18 +136,18 @@ pub fn handle_mpris_action(state: &mut State, action: MprisControlAction, ctx: &
         }
         MprisControlAction::Previous => {
             if let Ok(dbus) = ctx.dbus() {
-                let _ = dbus.mpris_previous(svc);
+                let _ = dbus.mpris().previous(svc);
             }
         }
         MprisControlAction::Next => {
             if let Ok(dbus) = ctx.dbus() {
-                let _ = dbus.mpris_next(svc);
+                let _ = dbus.mpris().next(svc);
             }
         }
         MprisControlAction::ToggleShuffle => {
             let next = !snap.shuffle;
             if let Ok(dbus) = ctx.dbus() {
-                let _ = dbus.mpris_set_shuffle(svc, next);
+                let _ = dbus.mpris().set_shuffle(svc, next);
             }
             if let Some(p) = state.mpris.active_player_mut() {
                 p.shuffle = next;
@@ -147,7 +160,7 @@ pub fn handle_mpris_action(state: &mut State, action: MprisControlAction, ctx: &
                 MprisLoopStatus::Track => MprisLoopStatus::None,
             };
             if let Ok(dbus) = ctx.dbus() {
-                let _ = dbus.mpris_set_loop_status(svc, next);
+                let _ = dbus.mpris().set_loop_status(svc, next);
             }
             if let Some(p) = state.mpris.active_player_mut() {
                 p.loop_status = next;
@@ -156,7 +169,7 @@ pub fn handle_mpris_action(state: &mut State, action: MprisControlAction, ctx: &
     }
 }
 
-pub fn handle_mpris_seek_click(state: &mut State, ev: PointerEvent, ctx: &EffectCtx<'_>) {
+pub fn handle_mpris_seek_click(state: &mut State, ev: PointerEvent, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     if ev.button != Some(MouseButton::Left) {
         return;
     }
@@ -170,9 +183,9 @@ pub fn handle_mpris_seek_click(state: &mut State, ev: PointerEvent, ctx: &Effect
     let target_us = ((len_us as f64) * f64::from(ratio)).round() as i64;
     if let Ok(dbus) = ctx.dbus() {
         if let Some(track_id) = &snap.track_id {
-            let _ = dbus.mpris_set_position(&snap.service_name, track_id, target_us);
+            let _ = dbus.mpris().set_position(&snap.service_name, track_id, target_us);
         } else if let Some(cur) = snap.position_us {
-            let _ = dbus.mpris_seek(&snap.service_name, target_us - cur);
+            let _ = dbus.mpris().seek(&snap.service_name, target_us - cur);
         }
     }
     if let Some(p) = state.mpris.active_player_mut() {

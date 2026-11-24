@@ -51,7 +51,7 @@ pub fn build_drun_surface(state: &State) -> Surface<Msg> {
 
     let strip = Row::new()
         .key("drun-strip-row")
-        .size(Size::px(
+        .size(Size::new(
             state.bar_width.logical_px(),
             BAR_HEIGHT.logical_px(),
         ))
@@ -81,7 +81,7 @@ pub fn build_drun_surface(state: &State) -> Surface<Msg> {
             0.logical_px(),
             POPUP_TOP_MARGIN.logical_px(),
         ))
-        .size(Size::px(
+        .size(Size::new(
             state.bar_width.logical_px(),
             animated_h.logical_px(),
         ))
@@ -100,7 +100,7 @@ pub fn build_drun_surface(state: &State) -> Surface<Msg> {
     Surface::floating("bar-drun", Output::Primary)
         .layer(Layer::Overlay)
         .ignore_exclusive_zone()
-        .anchor(Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right)
+        .anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT)
         .size(Size::fill())
         .input_mode(InputMode::Full)
         .keyboard_interactivity(KeyboardInteractivity::Exclusive)
@@ -114,7 +114,7 @@ pub fn build_drun_surface(state: &State) -> Surface<Msg> {
 fn build_runner_pill() -> Element<Msg> {
     Group::new()
         .key("drun-runner-pill")
-        .size(Size::px(
+        .size(Size::new(
             RUNNER_PILL_W.logical_px(),
             BAR_HEIGHT.logical_px(),
         ))
@@ -123,7 +123,7 @@ fn build_runner_pill() -> Element<Msg> {
             Text::new(">_")
                 .font(font_ui_semibold())
                 .font_size(11.logical_px())
-                .optical_bounds(true)
+                .bounds_mode(TextBoundsMode::Optical)
                 .color(MAUVE)
                 .position(Position::relative_to_parent(
                     Percent::new(50.0),
@@ -170,7 +170,7 @@ fn build_input_field(state: &State, input_w: f32) -> Element<Msg> {
     };
 
     let cursor_el = Rect::new()
-        .size(Size::px(1.5.logical_px(), 13.logical_px()))
+        .size(Size::new(1.5.logical_px(), 13.logical_px()))
         .fill(MAUVE)
         .position(Position::RelativeToParent {
             x: Percent::new(0.0),
@@ -182,12 +182,12 @@ fn build_input_field(state: &State, input_w: f32) -> Element<Msg> {
 
     Group::new()
         .key("drun-input-field")
-        .size(Size::px(input_w.logical_px(), BAR_HEIGHT.logical_px()))
+        .size(Size::new(input_w.logical_px(), BAR_HEIGHT.logical_px()))
         .child(Rect::new().size(Size::fill()).fill(MANTLE))
         .child(
             Clip::new(
                 Group::new()
-                    .size(Size::px(inner_w.logical_px(), BAR_HEIGHT.logical_px()))
+                    .size(Size::new(inner_w.logical_px(), BAR_HEIGHT.logical_px()))
                     .child(text_el)
                     .child(cursor_el),
             )
@@ -196,7 +196,7 @@ fn build_input_field(state: &State, input_w: f32) -> Element<Msg> {
                 Percent::new(50.0),
             ))
             .anchor(ElementAnchor::Center)
-            .size(Size::px(inner_w.logical_px(), BAR_HEIGHT.logical_px())),
+            .size(Size::new(inner_w.logical_px(), BAR_HEIGHT.logical_px())),
         )
         .into()
 }

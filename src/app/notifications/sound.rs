@@ -148,7 +148,7 @@ const fn preset_for_urgency(urgency: NotificationUrgency) -> SoundPreset {
 pub fn play_notification_sound(
     plan: &NotificationSoundPlan,
     sounds: &mut SoundEngine,
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     if !sounds.event_sounds_enabled || !sounds.notification_sounds_enabled {
         return;
@@ -157,18 +157,22 @@ pub fn play_notification_sound(
     match plan {
         NotificationSoundPlan::Silent => {}
         NotificationSoundPlan::File(path) => {
-            if let Ok(asset) = ctx.load_sound(path) {
-                ctx.play_sound_volume(asset, vol);
-            } else {
-                ctx.play_sound_preset(SoundPreset::Notification, vol);
+            if let Ok(player) = ctx.player() {
+                if let Ok(asset) = player.load_file(path) {
+                    player.play_at(asset, vol);
+                } else {
+                    player.play_preset(SoundPreset::Notification, vol);
+                }
             }
         }
         NotificationSoundPlan::CustomThemeName {
             name,
             fallback_preset,
         } => {
-            if !sounds.play_theme_name_cached(name, vol, ctx) {
-                ctx.play_sound_preset(*fallback_preset, vol);
+            if !sounds.play_theme_name_cached(name, vol, ctx)
+                && let Ok(player) = ctx.player()
+            {
+                player.play_preset(*fallback_preset, vol);
             }
         }
         NotificationSoundPlan::ThemeName {
@@ -184,7 +188,9 @@ pub fn play_notification_sound(
             {
                 return;
             }
-            ctx.play_sound_preset(*fallback_preset, vol);
+            if let Ok(player) = ctx.player() {
+                player.play_preset(*fallback_preset, vol);
+            }
         }
     }
 }
@@ -193,7 +199,7 @@ pub fn play_notification_sound(
 pub fn play_notification_sound(
     _plan: &NotificationSoundPlan,
     _sounds: &mut SoundEngine,
-    _ctx: &EffectCtx<'_>,
+    _ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     let _ = NOTIF_SOUND_VOLUME;
 }

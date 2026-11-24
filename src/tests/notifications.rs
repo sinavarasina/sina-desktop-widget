@@ -3,6 +3,7 @@
 use std::time::SystemTime;
 
 use waywi::prelude::*;
+use waywi::dbus::{BluetoothDevice, NmState, NotificationImageData, UDisksDrive};
 
 use crate::app::Msg;
 use crate::app::notifications::storage::MAX_RAM_NOTIFICATIONS;
@@ -471,9 +472,7 @@ fn xdg_sound_theme_engine_tracks_transitions_cooldowns_and_dnd() {
         bus: DbusBus::System,
         operation: String::from("Device1.Connect"),
         target: String::from("/org/bluez/hci0/dev_AA"),
-        reply_object_path: None,
-        count: None,
-        reply: Vec::new(),
+        reply: waywi::dbus::DbusActionReply::Unit,
         error: Some(String::from("Connection refused")),
     }));
     rt.step().unwrap();

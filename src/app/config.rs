@@ -1064,7 +1064,7 @@ impl SettingsUiState {
         self.wallpaper_focused = false;
     }
 
-    pub fn remeasure_wallpaper_cursor(&mut self, ctx: &mut EffectCtx<'_>) {
+    pub fn remeasure_wallpaper_cursor(&mut self, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
         let display = self.wallpaper_input.display_text();
         let cursor_byte = self.wallpaper_input.display_cursor_bytes();
         let metrics = ctx.measure_text_cursor(&display, &font_ui(), 9.5.logical_px(), cursor_byte);

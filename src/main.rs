@@ -18,11 +18,15 @@ impl Application for SinaDesktopWidget {
     type State = app::State;
     type Message = app::Msg;
 
-    fn init(ctx: &mut EffectCtx<'_>) -> Result<Self::State> {
+    fn init(ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Result<Self::State> {
         app::handlers::init_state(ctx)
     }
 
-    fn update(state: &mut Self::State, msg: Self::Message, ctx: &mut EffectCtx<'_>) -> Result<()> {
+    fn update(
+        state: &mut Self::State,
+        msg: Self::Message,
+        ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
+    ) -> Result<()> {
         app::handlers::update_state(state, msg, ctx)
     }
 
@@ -49,6 +53,7 @@ fn main() {
     if let Err(err) = App::new()
         .name("sina-desktop-widget")
         .renderer(RendererPreference::Software)
+        .memory(MemoryConfig::default())
         .run::<SinaDesktopWidget>()
     {
         eprintln!("sina-desktop-widget error: {err}");

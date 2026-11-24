@@ -1,6 +1,7 @@
 //! Shared UI and tray data types for application state.
 
 use waywi::prelude::*;
+use waywi::dbus::TrayMenuItem;
 
 use super::config::RightMetricId;
 use super::quick_menu::PowerAction;

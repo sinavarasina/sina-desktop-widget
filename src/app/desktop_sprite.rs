@@ -212,7 +212,7 @@ pub struct LoadedVariantAssets {
 }
 
 impl LoadedVariantAssets {
-    fn load(spec: &VariantSpec, ctx: &mut EffectCtx<'_>) -> Option<Self> {
+    fn load(spec: &VariantSpec, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Option<Self> {
         let mouth_half = match spec.mouth_half_bytes {
             Some(bytes) => Some(ctx.load_image_bytes(bytes).ok()?),
             None => None,
@@ -233,7 +233,7 @@ impl LoadedVariantAssets {
         })
     }
 
-    fn evict_unique_pixels(&self, next: Option<&Self>, ctx: &mut EffectCtx<'_>) {
+    fn evict_unique_pixels(&self, next: Option<&Self>, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
         let keep = |id: ImageAsset| {
             next.is_some_and(|n| {
                 n.top_hair.id == id.id
@@ -260,7 +260,7 @@ impl LoadedVariantAssets {
         .flatten()
         {
             if !keep(asset) {
-                let _ = ctx.evict_asset_pixels(asset);
+                let _ = ctx.evict_image_pixels(asset);
             }
         }
     }
@@ -347,7 +347,7 @@ impl Default for DesktopSpriteState {
 
 impl DesktopSpriteState {
     /// Initializes the first desktop sprite variant and starts a gentle initial fade-in.
-    pub fn ensure_loaded(&mut self, ctx: &mut EffectCtx<'_>) {
+    pub fn ensure_loaded(&mut self, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
         if self.active_assets.is_some() {
             return;
         }
@@ -362,7 +362,7 @@ impl DesktopSpriteState {
     fn load_or_cached(
         &mut self,
         idx: usize,
-        ctx: &mut EffectCtx<'_>,
+        ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
     ) -> Option<LoadedVariantAssets> {
         if let Some(cached) = self.cached_handles[idx] {
             return Some(cached);
@@ -404,7 +404,7 @@ impl DesktopSpriteState {
     }
 
     /// Evicts active decoded RGBA8 pixels and clears `active_assets` when the desktop sprite is disabled.
-    pub fn unload_and_evict(&mut self, ctx: &mut EffectCtx<'_>) {
+    pub fn unload_and_evict(&mut self, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
         if let Some(prev) = self.active_assets.take() {
             prev.evict_unique_pixels(None, ctx);
         }
@@ -413,7 +413,7 @@ impl DesktopSpriteState {
     }
 
     /// Immediately switches to an explicit pose index (`0..6`), evicting old variant pixels.
-    pub fn set_pose_instant(&mut self, target_idx: usize, ctx: &mut EffectCtx<'_>) {
+    pub fn set_pose_instant(&mut self, target_idx: usize, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
         let idx = target_idx % DESKTOP_VARIANTS.len();
         if !self.is_visible() {
             self.active_idx = idx;
@@ -532,7 +532,7 @@ impl DesktopSpriteState {
 
     /// Instantly switches to the next sprite variant with zero fade delay (used on workspace switch),
     /// evicting the outgoing variant's unique decoded RGBA8 pixels immediately.
-    pub fn rotate_instant(&mut self, ctx: &mut EffectCtx<'_>) {
+    pub fn rotate_instant(&mut self, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
         if !self.is_visible() {
             return;
         }
@@ -570,7 +570,7 @@ impl DesktopSpriteState {
     }
 
     /// Advances the 60fps fade animation, swapping and evicting old variant pixels at opacity 0.
-    pub fn step_fade(&mut self, ctx: &mut EffectCtx<'_>) {
+    pub fn step_fade(&mut self, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
         match self.phase {
             SpriteFadePhase::Hold { .. } => {}
             SpriteFadePhase::FadingOut { opacity, next_idx } => {

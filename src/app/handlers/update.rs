@@ -3,6 +3,8 @@
 use waywi::desktop::spawn_detached;
 use waywi::prelude::*;
 
+use crate::app::audio::AudioSnapshotExt;
+
 use crate::app::config::DesktopPoseMode;
 use crate::app::state::{AudioControlTarget, Msg, SoundCue, State};
 
@@ -54,10 +56,10 @@ use super::settings::{
     handle_wallpaper_path_clear, handle_wallpaper_path_focus,
 };
 
-pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Result<()> {
+pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Result<()> {
     match msg {
         Msg::SpawnBtop => {
-            let _ = spawn_detached("footclient", &["btop"]);
+            let _ = spawn_detached("footclient", ["btop"]);
         }
         Msg::SwitchWorkspace(id) => {
             let prev_ws = state.active_ws_id;
@@ -86,7 +88,7 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
         Msg::SwitchWorkspaceNamed(target) => {
             let prev_ws = state.active_ws_id;
             if let Ok(hc) = ctx.hyprland() {
-                let _ = hc.switch_workspace_name(&target);
+                let _ = hc.switch_workspace(waywi::compositor::WorkspaceTarget::Name(&target));
                 if let Ok(list) = hc.workspaces() {
                     state.workspaces = list;
                 }
@@ -108,7 +110,7 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
         Msg::SwitchWorkspacePrevious => {
             let prev_ws = state.active_ws_id;
             if let Ok(hc) = ctx.hyprland() {
-                let _ = hc.switch_workspace_previous();
+                let _ = hc.switch_workspace(waywi::compositor::WorkspaceTarget::Previous);
                 if let Ok(list) = hc.workspaces() {
                     if let Some(focused) = list
                         .iter()
@@ -141,7 +143,7 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
                 let step = if dir > 0 { 1 } else { -1 };
                 let prev_ws = state.active_ws_id;
                 if let Ok(hc) = ctx.hyprland() {
-                    let _ = hc.switch_workspace_relative(step, true);
+                    let _ = hc.switch_workspace(waywi::compositor::WorkspaceTarget::Relative { delta: step, existing_only: true });
                     if let Ok(list) = hc.workspaces() {
                         if let Some(focused) = list
                             .iter()
@@ -323,6 +325,8 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
                 state.play_sound(SoundCue::MenuPopdown, ctx);
             }
         }
+        Msg::UserIdle(IdleEvent::Idled(_)) => ctx.trim_memory(),
+        Msg::UserIdle(IdleEvent::Resumed(_)) => {}
         Msg::Noop => {}
         Msg::TrayEvent(ev) => handle_tray_event(state, *ev, ctx),
         Msg::TrayClick { index, ev } => handle_tray_click(state, index, ev, ctx),
@@ -330,7 +334,7 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
             if let Some(menu) = state.tray_menu.take()
                 && let Ok(dbus) = ctx.dbus()
             {
-                let _ = dbus.tray_menu_event(&menu.bus_name, &menu.menu_path, item_id, "clicked");
+                let _ = dbus.tray().trigger_menu_item(&menu.bus_name, &menu.menu_path, item_id);
             }
         }
         Msg::CloseTrayMenu => {
@@ -341,7 +345,7 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
         Msg::TrayBlinkTick => {
             state.blink_phase = !state.blink_phase;
         }
-        Msg::AudioUpdated(snap) => handle_audio_updated(state, *snap, ctx),
+        Msg::AudioUpdated(snap) => handle_audio_updated(state, snap, ctx),
         Msg::AudioPointerDown(ev) => match ev.button {
             Some(MouseButton::Middle) => {
                 state.audio_target = match state.audio_target {
@@ -354,17 +358,20 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_>) -> Res
                 if let Ok(ac) = ctx.audio() {
                     match state.audio_target {
                         AudioControlTarget::Sink => {
-                            let _ = ac.toggle_mute();
+                            let _ = ac.toggle_mute(AudioTarget::DefaultSink);
                         }
                         AudioControlTarget::Source => {
-                            let _ = ac.toggle_source_mute();
+                            let _ = ac.toggle_mute(AudioTarget::DefaultSource);
                         }
                     }
                 }
-                let was_muted = state.audio.as_ref().is_some_and(|a| match state.audio_target {
-                    AudioControlTarget::Sink => a.muted,
-                    AudioControlTarget::Source => a.source_muted,
-                });
+                let was_muted = state
+                    .audio
+                    .as_ref()
+                    .and_then(|a| {
+                        a.target_volume(state.audio_target == AudioControlTarget::Source)
+                    })
+                    .is_some_and(|v| v.muted);
                 let cue = if was_muted {
                     SoundCue::ToggleOn
                 } else {

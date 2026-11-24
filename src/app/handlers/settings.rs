@@ -21,7 +21,7 @@ const SCROLL_STEP_PX: f32 = 28.0;
 /// marks `AssetRetention::ReclaimAfterPresent` so idle RAM usage stays at 0 bytes after commit.
 pub fn load_configured_wallpaper(
     cfg: &WallpaperConfig,
-    ctx: &mut EffectCtx<'_>,
+    ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
 ) -> std::result::Result<Option<ImageAsset>, String> {
     if !cfg.enabled {
         return Ok(None);
@@ -39,20 +39,20 @@ pub fn load_configured_wallpaper(
     let wp = ctx
         .load_image(&resolved)
         .map_err(|e| format!("Load failed: {e}"))?;
-    let _ = ctx.set_asset_retention(wp, AssetRetention::ReclaimAfterPresent);
+    let _ = ctx.set_image_retention(wp, AssetRetention::ReclaimAfterPresent);
     Ok(Some(wp))
 }
 
-fn replace_wallpaper_asset(state: &mut State, next: Option<ImageAsset>, ctx: &mut EffectCtx<'_>) {
+fn replace_wallpaper_asset(state: &mut State, next: Option<ImageAsset>, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     if let Some(prev) = state.wallpaper_asset
         && next.is_none_or(|n| n.id != prev.id)
     {
-        let _ = ctx.evict_asset_pixels(prev);
+        let _ = ctx.evict_image_pixels(prev);
     }
     state.wallpaper_asset = next;
 }
 
-pub fn handle_toggle_settings(state: &mut State, ctx: &EffectCtx<'_>) {
+pub fn handle_toggle_settings(state: &mut State, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     state.quick_menu.toggle_settings_menu();
     if state.quick_menu.settings_open {
         state.settings_ui.wallpaper_error = None;
@@ -65,7 +65,7 @@ pub fn handle_toggle_settings(state: &mut State, ctx: &EffectCtx<'_>) {
     }
 }
 
-pub fn handle_select_section(state: &mut State, section: SettingsSection, ctx: &EffectCtx<'_>) {
+pub fn handle_select_section(state: &mut State, section: SettingsSection, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     if state.settings_ui.active_section != section {
         state.settings_ui.select_section(section);
         state.play_sound(SoundCue::TabChanged, ctx);
@@ -93,7 +93,7 @@ pub fn handle_list_scroll(state: &mut State, sc: ScrollEvent) {
         (state.settings_ui.list_scroll_y + (step as f32) * SCROLL_STEP_PX).clamp(0.0, max_scroll);
 }
 
-pub fn handle_toggle_setting(state: &mut State, id: SettingToggleId, ctx: &mut EffectCtx<'_>) {
+pub fn handle_toggle_setting(state: &mut State, id: SettingToggleId, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     state.settings_ui.unfocus_inputs();
     let new_val = match id {
         SettingToggleId::Clock24h => {
@@ -217,7 +217,7 @@ pub fn handle_toggle_setting(state: &mut State, id: SettingToggleId, ctx: &mut E
 pub fn handle_cycle_metric_placement(
     state: &mut State,
     id: RightMetricId,
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     state.settings_ui.unfocus_inputs();
     let next = state.config.widgets.cycle_metric_placement(id);
@@ -246,7 +246,7 @@ pub fn handle_move_metric(
     state: &mut State,
     id: RightMetricId,
     delta: i32,
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     state.settings_ui.unfocus_inputs();
     if state.config.widgets.move_metric(id, delta) {
@@ -259,7 +259,7 @@ pub fn handle_step_setting(
     state: &mut State,
     id: SettingStepperId,
     delta: i32,
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     state.settings_ui.unfocus_inputs();
     let changed = match id {
@@ -308,7 +308,7 @@ pub fn handle_step_setting(
 pub fn handle_toggle_dropdown(
     state: &mut State,
     dropdown: SettingsDropdown,
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     state.settings_ui.unfocus_inputs();
     if state.settings_ui.open_dropdown == Some(dropdown) {
@@ -327,7 +327,7 @@ pub fn handle_select_dropdown(
     state: &mut State,
     dropdown: SettingsDropdown,
     index: usize,
-    ctx: &mut EffectCtx<'_>,
+    ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     state.settings_ui.open_dropdown = None;
     match dropdown {
@@ -353,13 +353,13 @@ pub fn handle_select_dropdown(
     state.play_sound(SoundCue::TabChanged, ctx);
 }
 
-pub fn handle_wallpaper_path_focus(state: &mut State, ctx: &mut EffectCtx<'_>) {
+pub fn handle_wallpaper_path_focus(state: &mut State, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     state.settings_ui.open_dropdown = None;
     state.settings_ui.wallpaper_focused = true;
     state.settings_ui.remeasure_wallpaper_cursor(ctx);
 }
 
-pub fn handle_wallpaper_path_apply(state: &mut State, ctx: &mut EffectCtx<'_>) {
+pub fn handle_wallpaper_path_apply(state: &mut State, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     let candidate = state.settings_ui.wallpaper_input.text().trim().to_owned();
     let probe_cfg = WallpaperConfig {
         enabled: true,
@@ -398,7 +398,7 @@ pub fn handle_wallpaper_path_apply(state: &mut State, ctx: &mut EffectCtx<'_>) {
     }
 }
 
-pub fn handle_wallpaper_path_clear(state: &mut State, ctx: &mut EffectCtx<'_>) {
+pub fn handle_wallpaper_path_clear(state: &mut State, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     state.settings_ui.wallpaper_input = TextInputState::new();
     state.settings_ui.wallpaper_cursor_x = 0.0;
     state.settings_ui.wallpaper_focused = false;
@@ -412,7 +412,7 @@ pub fn handle_wallpaper_path_clear(state: &mut State, ctx: &mut EffectCtx<'_>) {
     state.play_sound(SoundCue::DialogCancel, ctx);
 }
 
-pub fn handle_settings_key(state: &mut State, ev: KeyEvent, ctx: &mut EffectCtx<'_>) {
+pub fn handle_settings_key(state: &mut State, ev: KeyEvent, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     if !state.quick_menu.settings_open || !state.settings_ui.wallpaper_focused {
         if ev.key == Key::Escape {
             if state.settings_ui.open_dropdown.is_some() {
@@ -454,7 +454,7 @@ pub fn handle_settings_key(state: &mut State, ev: KeyEvent, ctx: &mut EffectCtx<
     }
 }
 
-pub fn handle_settings_ime(state: &mut State, ev: ImeEvent, ctx: &mut EffectCtx<'_>) {
+pub fn handle_settings_ime(state: &mut State, ev: ImeEvent, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     if !state.quick_menu.settings_open || !state.settings_ui.wallpaper_focused {
         return;
     }
@@ -465,11 +465,11 @@ pub fn handle_settings_ime(state: &mut State, ev: ImeEvent, ctx: &mut EffectCtx<
     }
 }
 
-pub fn handle_preview_sound(state: &mut State, ctx: &EffectCtx<'_>) {
+pub fn handle_preview_sound(state: &mut State, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     state.play_sound(SoundCue::Bell, ctx);
 }
 
-pub fn handle_reset_defaults(state: &mut State, ctx: &mut EffectCtx<'_>) {
+pub fn handle_reset_defaults(state: &mut State, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     state.config = WidgetConfig::default();
     state.settings_ui.sync_from_config(&state.config);
     state.settings_ui.open_dropdown = None;

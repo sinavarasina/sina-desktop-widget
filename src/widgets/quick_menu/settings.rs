@@ -96,7 +96,7 @@ pub fn settings_list_content_height(state: &State) -> f32 {
 pub fn build_settings_panel(state: &State) -> Element<Msg> {
     Row::new()
         .key("quick-settings-panel")
-        .size(Size::px(
+        .size(Size::new(
             QUICK_MENU_WIDTH.logical_px(),
             SETTINGS_PANEL_HEIGHT.logical_px(),
         ))
@@ -146,7 +146,7 @@ fn build_section_rail(state: &State) -> Element<Msg> {
 
         let mut tab = Group::new()
             .key(("settings-tab", idx))
-            .size(Size::px(tab_w.logical_px(), RAIL_TAB_H.logical_px()))
+            .size(Size::new(tab_w.logical_px(), RAIL_TAB_H.logical_px()))
             .on_hover(Msg::Hover(HoverTarget::SettingsTab(idx)))
             .on_leave(Msg::Leave(HoverTarget::SettingsTab(idx)))
             .on_click(Msg::SettingsSelectSection(section))
@@ -162,7 +162,7 @@ fn build_section_rail(state: &State) -> Element<Msg> {
             tab = tab.child(
                 Rect::new()
                     .position(Position::absolute(0.logical_px(), 0.logical_px()))
-                    .size(Size::px(2.logical_px(), RAIL_TAB_H.logical_px()))
+                    .size(Size::new(2.logical_px(), RAIL_TAB_H.logical_px()))
                     .fill(MAUVE),
             );
         }
@@ -181,7 +181,7 @@ fn build_section_rail(state: &State) -> Element<Msg> {
                     Text::new(section.icon())
                         .font(font_ui())
                         .font_size(12.5.logical_px())
-                        .optical_bounds(true)
+                        .bounds_mode(TextBoundsMode::Optical)
                         .color(icon_col),
                 )
                 .child(
@@ -197,13 +197,13 @@ fn build_section_rail(state: &State) -> Element<Msg> {
 
     let viewport = Clip::new(
         Group::new()
-            .size(Size::px(
+            .size(Size::new(
                 tab_w.logical_px(),
                 SETTINGS_RAIL_VIEW_H.logical_px(),
             ))
             .child(tab_col),
     )
-    .size(Size::px(
+    .size(Size::new(
         tab_w.logical_px(),
         SETTINGS_RAIL_VIEW_H.logical_px(),
     ))
@@ -215,7 +215,7 @@ fn build_section_rail(state: &State) -> Element<Msg> {
 
     let mut rail = Group::new()
         .key("settings-section-rail")
-        .size(Size::px(
+        .size(Size::new(
             SETTINGS_RAIL_W.logical_px(),
             SETTINGS_PANEL_HEIGHT.logical_px(),
         ))
@@ -270,20 +270,20 @@ fn build_section_body(state: &State) -> Element<Msg> {
     }
 
     let mut viewport_group = Group::new()
-        .size(Size::px(
+        .size(Size::new(
             inner_w.logical_px(),
             SETTINGS_LIST_VIEW_H.logical_px(),
         ))
         .child(
             Clip::new(
                 Group::new()
-                    .size(Size::px(
+                    .size(Size::new(
                         LIST_CONTENT_W.logical_px(),
                         SETTINGS_LIST_VIEW_H.logical_px(),
                     ))
                     .child(list_col),
             )
-            .size(Size::px(
+            .size(Size::new(
                 LIST_CONTENT_W.logical_px(),
                 SETTINGS_LIST_VIEW_H.logical_px(),
             ))
@@ -309,7 +309,7 @@ fn build_section_body(state: &State) -> Element<Msg> {
 
     Group::new()
         .key("settings-section-body")
-        .size(Size::px(
+        .size(Size::new(
             SETTINGS_BODY_W.logical_px(),
             SETTINGS_PANEL_HEIGHT.logical_px(),
         ))
@@ -327,8 +327,7 @@ fn build_section_body(state: &State) -> Element<Msg> {
 /// Powerline-notched section title banner (`>  Section  <`) matching the bar's sharp chevron language.
 fn build_notched_section_banner(title: &'static str, width: f32) -> Element<Msg> {
     let ribbon_canvas = Canvas::new(
-        Size::px(width.logical_px(), HEADER_H.logical_px()),
-        ("settings-banner", title, width.to_bits()),
+        Size::new(width.logical_px(), HEADER_H.logical_px()),
         move |p| {
             let notch = 9.0_f32;
             let mid_y = HEADER_H * 0.5;
@@ -358,11 +357,12 @@ fn build_notched_section_banner(title: &'static str, width: f32) -> Element<Msg>
             p.stroke_path(&right_accent, 1.2.logical_px(), MAUVE);
         },
     )
+    .cache_key(("settings-banner", title, width.to_bits()))
     .key("settings-banner-bg");
 
     Group::new()
         .key(("settings-header", title))
-        .size(Size::px(width.logical_px(), HEADER_H.logical_px()))
+        .size(Size::new(width.logical_px(), HEADER_H.logical_px()))
         .child(ribbon_canvas)
         .child(
             Text::new(title)
@@ -393,7 +393,7 @@ fn build_scrollbar_thumb(
 
     Group::new()
         .position(Position::absolute(x.logical_px(), top_y.logical_px()))
-        .size(Size::px(2.logical_px(), view_h.logical_px()))
+        .size(Size::new(2.logical_px(), view_h.logical_px()))
         .child(Rect::new().size(Size::fill()).fill(SURFACE0))
         .child(
             Rect::new()
@@ -401,7 +401,7 @@ fn build_scrollbar_thumb(
                     0.logical_px(),
                     (thumb_y - top_y).logical_px(),
                 ))
-                .size(Size::px(2.logical_px(), thumb_h.logical_px()))
+                .size(Size::new(2.logical_px(), thumb_h.logical_px()))
                 .fill(MAUVE),
         )
         .into()
@@ -413,7 +413,7 @@ fn build_scrollbar_thumb(
 fn subsection_header(key: &'static str, title: &'static str) -> Element<Msg> {
     Row::new()
         .key(("settings-sub", key))
-        .size(Size::px(
+        .size(Size::new(
             LIST_CONTENT_W.logical_px(),
             SUBSECTION_H.logical_px(),
         ))
@@ -421,7 +421,7 @@ fn subsection_header(key: &'static str, title: &'static str) -> Element<Msg> {
         .align(Align::Center)
         .child(
             Rect::new()
-                .size(Size::px(2.logical_px(), 10.logical_px()))
+                .size(Size::new(2.logical_px(), 10.logical_px()))
                 .fill(MAUVE),
         )
         .child(
@@ -554,7 +554,7 @@ fn build_desktop_rows(state: &State) -> Vec<Element<Msg>> {
         rows.push(
             Row::new()
                 .key("settings-wp-err")
-                .size(Size::px(LIST_CONTENT_W.logical_px(), ERROR_LINE_H.logical_px()))
+                .size(Size::new(LIST_CONTENT_W.logical_px(), ERROR_LINE_H.logical_px()))
                 .padding(Edges::symmetric(0.logical_px(), 6.logical_px()))
                 .align(Align::Center)
                 .child(
@@ -746,7 +746,7 @@ fn metric_slot_row(
 
     let place_btn = Group::new()
         .key(("settings-metric-place", slot.id as usize))
-        .size(Size::px(56.logical_px(), 22.logical_px()))
+        .size(Size::new(56.logical_px(), 22.logical_px()))
         .on_hover(Msg::Hover(place_target))
         .on_leave(Msg::Leave(place_target))
         .on_click(Msg::SettingsCycleMetricPlacement(slot.id))
@@ -777,7 +777,7 @@ fn metric_slot_row(
                      delta: i32| {
         let mut g = Group::new()
             .key((key_tag, slot.id as usize))
-            .size(Size::px(20.logical_px(), 22.logical_px()))
+            .size(Size::new(20.logical_px(), 22.logical_px()))
             .child(
                 Rect::new()
                     .size(Size::fill())
@@ -798,7 +798,7 @@ fn metric_slot_row(
                 Text::new(glyph)
                     .font(font_ui())
                     .font_size(9.5.logical_px())
-                    .optical_bounds(true)
+                    .bounds_mode(TextBoundsMode::Optical)
                     .color(if !enabled {
                         SURFACE1
                     } else if hovered {
@@ -877,7 +877,7 @@ fn row_shell(
     let border = border_override.unwrap_or(if hovered { SURFACE1 } else { SURFACE0 });
     Group::new()
         .key(("settings-row", row_id))
-        .size(Size::px(LIST_CONTENT_W.logical_px(), ROW_H.logical_px()))
+        .size(Size::new(LIST_CONTENT_W.logical_px(), ROW_H.logical_px()))
         .child(
             Rect::new()
                 .size(Size::fill())
@@ -922,7 +922,7 @@ fn toggle_row(
             (ROW_H * 0.5).logical_px(),
         ))
         .anchor(ElementAnchor::CenterRight)
-        .size(Size::px(track_w.logical_px(), track_h.logical_px()))
+        .size(Size::new(track_w.logical_px(), track_h.logical_px()))
         .child(
             Rect::new()
                 .size(Size::fill())
@@ -933,7 +933,7 @@ fn toggle_row(
         .child(
             Rect::new()
                 .position(Position::absolute(thumb_x.logical_px(), 3.logical_px()))
-                .size(Size::px(thumb_w.logical_px(), thumb_h.logical_px()))
+                .size(Size::new(thumb_w.logical_px(), thumb_h.logical_px()))
                 .fill(thumb_col),
         );
 
@@ -970,7 +970,7 @@ fn build_wallpaper_path_row(state: &State, row_id: usize) -> Element<Msg> {
 
     let mut input_box = Group::new()
         .key("settings-wp-input")
-        .size(Size::px(input_w.logical_px(), input_h.logical_px()))
+        .size(Size::new(input_w.logical_px(), input_h.logical_px()))
         .on_click(Msg::SettingsWallpaperPathFocus)
         .child(
             Rect::new()
@@ -992,7 +992,7 @@ fn build_wallpaper_path_row(state: &State, row_id: usize) -> Element<Msg> {
                     .anchor(ElementAnchor::CenterLeft),
             )
             .position(Position::absolute(5.logical_px(), 0.logical_px()))
-            .size(Size::px((input_w - 10.0).logical_px(), input_h.logical_px())),
+            .size(Size::new((input_w - 10.0).logical_px(), input_h.logical_px())),
         );
 
     if focused {
@@ -1002,7 +1002,7 @@ fn build_wallpaper_path_row(state: &State, row_id: usize) -> Element<Msg> {
                     (5.0 + cursor_x).logical_px(),
                     5.logical_px(),
                 ))
-                .size(Size::px(1.5.logical_px(), 12.logical_px()))
+                .size(Size::new(1.5.logical_px(), 12.logical_px()))
                 .fill(MAUVE),
         );
     }
@@ -1010,7 +1010,7 @@ fn build_wallpaper_path_row(state: &State, row_id: usize) -> Element<Msg> {
     let apply_hovered = state.hovered == HoverTarget::SettingsPathApply;
     let apply_btn = Group::new()
         .key("settings-wp-apply")
-        .size(Size::px(22.logical_px(), input_h.logical_px()))
+        .size(Size::new(22.logical_px(), input_h.logical_px()))
         .on_hover(Msg::Hover(HoverTarget::SettingsPathApply))
         .on_leave(Msg::Leave(HoverTarget::SettingsPathApply))
         .on_click(Msg::SettingsWallpaperPathApply)
@@ -1025,7 +1025,7 @@ fn build_wallpaper_path_row(state: &State, row_id: usize) -> Element<Msg> {
             Text::new("\u{f00c}")
                 .font(font_ui())
                 .font_size(9.5.logical_px())
-                .optical_bounds(true)
+                .bounds_mode(TextBoundsMode::Optical)
                 .color(if apply_hovered { GREEN } else { SUBTEXT1 })
                 .position(Position::relative_to_parent(
                     Percent::new(50.0),
@@ -1037,7 +1037,7 @@ fn build_wallpaper_path_row(state: &State, row_id: usize) -> Element<Msg> {
     let clear_hovered = state.hovered == HoverTarget::SettingsPathClear;
     let clear_btn = Group::new()
         .key("settings-wp-clear")
-        .size(Size::px(22.logical_px(), input_h.logical_px()))
+        .size(Size::new(22.logical_px(), input_h.logical_px()))
         .on_hover(Msg::Hover(HoverTarget::SettingsPathClear))
         .on_leave(Msg::Leave(HoverTarget::SettingsPathClear))
         .on_click(Msg::SettingsWallpaperPathClear)
@@ -1052,7 +1052,7 @@ fn build_wallpaper_path_row(state: &State, row_id: usize) -> Element<Msg> {
             Text::new("\u{f00d}")
                 .font(font_ui())
                 .font_size(9.5.logical_px())
-                .optical_bounds(true)
+                .bounds_mode(TextBoundsMode::Optical)
                 .color(if clear_hovered { RED } else { SUBTEXT1 })
                 .position(Position::relative_to_parent(
                     Percent::new(50.0),
@@ -1091,7 +1091,7 @@ fn value_row(
     accent: Color,
 ) -> Element<Msg> {
     let pill = Group::new()
-        .size(Size::px(116.logical_px(), 20.logical_px()))
+        .size(Size::new(116.logical_px(), 20.logical_px()))
         .position(Position::absolute(
             (LIST_CONTENT_W - 8.0).logical_px(),
             (ROW_H * 0.5).logical_px(),
@@ -1139,7 +1139,7 @@ fn action_row(
 
     let btn = Group::new()
         .key(("settings-action", row_id))
-        .size(Size::px(92.logical_px(), 20.logical_px()))
+        .size(Size::new(92.logical_px(), 20.logical_px()))
         .position(Position::absolute(
             (LIST_CONTENT_W - 8.0).logical_px(),
             (ROW_H * 0.5).logical_px(),
@@ -1189,7 +1189,7 @@ fn dropdown_row(
     let caret = if is_open { "\u{f0d8}" } else { "\u{f0d7}" };
 
     let trigger = Group::new()
-        .size(Size::px(DROPDOWN_BOX_W.logical_px(), 22.logical_px()))
+        .size(Size::new(DROPDOWN_BOX_W.logical_px(), 22.logical_px()))
         .position(Position::absolute(
             (LIST_CONTENT_W - 8.0).logical_px(),
             (ROW_H * 0.5).logical_px(),
@@ -1214,7 +1214,7 @@ fn dropdown_row(
             Text::new(caret)
                 .font(font_ui())
                 .font_size(9.5.logical_px())
-                .optical_bounds(true)
+                .bounds_mode(TextBoundsMode::Optical)
                 .color(if is_open { MAUVE } else { SUBTEXT1 })
                 .position(Position::absolute(
                     (DROPDOWN_BOX_W - 8.0).logical_px(),
@@ -1250,7 +1250,7 @@ fn dropdown_options_block(
         + (options.len().saturating_sub(1) as f32) * DROPDOWN_OPT_GAP;
 
     let mut opt_col = Column::new()
-        .size(Size::px(DROPDOWN_BOX_W.logical_px(), block_h.logical_px()))
+        .size(Size::new(DROPDOWN_BOX_W.logical_px(), block_h.logical_px()))
         .gap(DROPDOWN_OPT_GAP.logical_px())
         .position(Position::absolute(
             (LIST_CONTENT_W - 8.0).logical_px(),
@@ -1280,7 +1280,7 @@ fn dropdown_options_block(
 
         let opt = Group::new()
             .key(("settings-dd-opt", hover_base + idx))
-            .size(Size::px(
+            .size(Size::new(
                 DROPDOWN_BOX_W.logical_px(),
                 DROPDOWN_OPT_H.logical_px(),
             ))
@@ -1318,7 +1318,7 @@ fn dropdown_options_block(
 
     Group::new()
         .key(("settings-dd-block", hover_base))
-        .size(Size::px(LIST_CONTENT_W.logical_px(), block_h.logical_px()))
+        .size(Size::new(LIST_CONTENT_W.logical_px(), block_h.logical_px()))
         .child(opt_col)
         .into()
 }
@@ -1342,7 +1342,7 @@ fn stepper_row(
                     delta: i32| {
         Group::new()
             .key((key_tag, row_id))
-            .size(Size::px(22.logical_px(), 22.logical_px()))
+            .size(Size::new(22.logical_px(), 22.logical_px()))
             .on_hover(Msg::Hover(target))
             .on_leave(Msg::Leave(target))
             .on_click(Msg::SettingsStep {
@@ -1370,7 +1370,7 @@ fn stepper_row(
     };
 
     let val_box = Group::new()
-        .size(Size::px(58.logical_px(), 22.logical_px()))
+        .size(Size::new(58.logical_px(), 22.logical_px()))
         .child(
             Rect::new()
                 .size(Size::fill())

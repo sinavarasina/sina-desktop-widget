@@ -53,7 +53,7 @@ pub fn build_sysinfo(state: &State) -> Element<Msg> {
         ReelDirection::SlideUp,
     );
     let divider = Rect::new()
-        .size(Size::px(divider_w.logical_px(), 1.logical_px()))
+        .size(Size::new(divider_w.logical_px(), 1.logical_px()))
         .fill(SURFACE1);
     let line_b = build_reel_slot(
         "sysinfo-text-b",
@@ -71,7 +71,7 @@ pub fn build_sysinfo(state: &State) -> Element<Msg> {
 
     let body = Group::new()
         .key("mod-sysinfo-body")
-        .size(Size::px(body_w.logical_px(), BAR_HEIGHT.logical_px()))
+        .size(Size::new(body_w.logical_px(), BAR_HEIGHT.logical_px()))
         .child(Rect::new().size(Size::fill()).fill(bg))
         .child(
             Column::new()

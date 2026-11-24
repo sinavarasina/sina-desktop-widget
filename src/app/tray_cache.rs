@@ -5,6 +5,7 @@ use std::hash::Hasher;
 
 use waywi::desktop::icons::XdgIconLookup;
 use waywi::prelude::*;
+use waywi::dbus::{TrayIconPixmap, TrayStatus};
 
 use super::asset_lru::PathAssetCache;
 use super::types::TrayEntry;
@@ -39,7 +40,7 @@ pub fn resolve_tray_icon(
     entry: &TrayItemSnapshot,
     icon_lookup: &mut XdgIconLookup,
     path_cache: &mut PathAssetCache,
-    ctx: &mut EffectCtx<'_>,
+    ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
 ) -> (Option<ImageAsset>, String) {
     let icon_name =
         if entry.status == TrayStatus::NeedsAttention && !entry.attention_icon_name.is_empty() {

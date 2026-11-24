@@ -10,14 +10,14 @@ use crate::theme::{
 pub fn build_logo(state: &State) -> Element<Msg> {
     let img: Element<Msg> = if let Some(asset) = state.logo_asset {
         Image::new(asset)
-            .size(Size::px(LOGO_MIN_WIDTH.logical_px(), 18.logical_px()))
+            .size(Size::new(LOGO_MIN_WIDTH.logical_px(), 18.logical_px()))
             .fit(ImageFit::Contain)
             .into()
     } else {
         Text::new("\u{f30d}")
             .font(font_ui())
             .font_size(14.logical_px())
-            .optical_bounds(true)
+            .bounds_mode(TextBoundsMode::Optical)
             .color(MAUVE)
             .into()
     };

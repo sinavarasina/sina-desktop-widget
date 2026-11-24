@@ -75,7 +75,7 @@ pub fn build_tooltip_surface(state: &State) -> Option<Surface<Msg>> {
 
     let (anchor, margin) = if let Some(left_margin) = left_anchor_margin {
         (
-            Anchor::Top | Anchor::Left,
+            Anchor::TOP | Anchor::LEFT,
             Edges::new(
                 POPUP_TOP_MARGIN.logical_px(),
                 0.logical_px(),
@@ -88,7 +88,7 @@ pub fn build_tooltip_surface(state: &State) -> Option<Surface<Msg>> {
             .hovered
             .right_margin_hint(state.clock_alt, state.tray_items.len());
         (
-            Anchor::Top | Anchor::Right,
+            Anchor::TOP | Anchor::RIGHT,
             Edges::top_right(POPUP_TOP_MARGIN.logical_px(), right_margin.logical_px()),
         )
     };

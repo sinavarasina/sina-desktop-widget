@@ -2,8 +2,11 @@
 
 mod icons;
 
+use std::sync::Arc;
+
 use waywi::prelude::*;
 
+use crate::app::audio::AudioSnapshotExt;
 use crate::app::state::{AudioControlTarget, SoundCue, State};
 use crate::theme::{MIXER_TRACK_WIDTH, SEP_WIDTH};
 use crate::widgets::mixer_popup::routing::{
@@ -18,7 +21,7 @@ const VOLUME_SCROLL_STEP: f32 = 0.01;
 const BALANCE_SCROLL_STEP: f32 = 0.05;
 const ROUTING_SCROLL_STEP_PX: f32 = 24.0;
 
-pub fn handle_mixer_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &EffectCtx<'_>) {
+pub fn handle_mixer_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     match ev.button {
         Some(MouseButton::Left) => {
             let module_left = ev.position.x.get() - ev.local_position.x.get();
@@ -39,7 +42,7 @@ pub fn handle_mixer_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &Effec
 pub fn handle_mixer_set_target(
     state: &mut State,
     target: AudioControlTarget,
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     if state.audio_target != target {
         state.audio_target = target;
@@ -49,7 +52,7 @@ pub fn handle_mixer_set_target(
     }
 }
 
-pub fn handle_mixer_toggle_routing(state: &mut State, ctx: &EffectCtx<'_>) {
+pub fn handle_mixer_toggle_routing(state: &mut State, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     state.audio_ui.routing_open = !state.audio_ui.routing_open;
     state.audio_ui.profiles_open = false;
     state.audio_ui.routing_scroll_y = 0.0;
@@ -61,7 +64,7 @@ pub fn handle_mixer_toggle_routing(state: &mut State, ctx: &EffectCtx<'_>) {
     state.play_sound(cue, ctx);
 }
 
-pub fn handle_mixer_toggle_profiles(state: &mut State, ctx: &EffectCtx<'_>) {
+pub fn handle_mixer_toggle_profiles(state: &mut State, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     state.audio_ui.profiles_open = !state.audio_ui.profiles_open;
     clamp_routing_scroll(state);
     let cue = if state.audio_ui.profiles_open {
@@ -83,29 +86,19 @@ pub fn handle_mixer_routing_scroll(state: &mut State, sc: ScrollEvent) {
         .clamp(0.0, max_scroll);
 }
 
-pub fn handle_mixer_select_device(state: &mut State, id: u32, ctx: &EffectCtx<'_>) {
+pub fn handle_mixer_select_device(state: &mut State, id: u32, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     if let Ok(ac) = ctx.audio() {
-        match state.audio_target {
-            AudioControlTarget::Sink => {
-                let _ = ac.select_device(id);
-            }
-            AudioControlTarget::Source => {
-                let _ = ac.select_source(id);
-            }
-        }
+        let direction = match state.audio_target {
+            AudioControlTarget::Sink => AudioDirection::Output,
+            AudioControlTarget::Source => AudioDirection::Input,
+        };
+        let _ = ac.set_default_device(direction, id);
     }
     if let Some(audio) = &mut state.audio {
+        let snap = Arc::make_mut(audio);
         match state.audio_target {
-            AudioControlTarget::Sink => {
-                if let Some(dev) = audio.devices.iter().find(|d| d.id == id).cloned() {
-                    audio.default_sink = Some(dev);
-                }
-            }
-            AudioControlTarget::Source => {
-                if let Some(src) = audio.sources.iter().find(|d| d.id == id).cloned() {
-                    audio.default_source = Some(src);
-                }
-            }
+            AudioControlTarget::Sink => snap.default_sink_id = Some(id),
+            AudioControlTarget::Source => snap.default_source_id = Some(id),
         }
     }
     state.audio_ui.profiles_open = false;
@@ -113,37 +106,18 @@ pub fn handle_mixer_select_device(state: &mut State, id: u32, ctx: &EffectCtx<'_
     state.play_sound(SoundCue::TabChanged, ctx);
 }
 
-pub fn handle_mixer_select_port(state: &mut State, port_name: String, ctx: &EffectCtx<'_>) {
+pub fn handle_mixer_select_port(state: &mut State, port_name: String, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     if let Ok(ac) = ctx.audio() {
-        match state.audio_target {
-            AudioControlTarget::Sink => {
-                let _ = ac.select_port(&port_name);
-            }
-            AudioControlTarget::Source => {
-                let _ = ac.select_source_port(&port_name);
-            }
-        }
+        let target = match state.audio_target {
+            AudioControlTarget::Sink => AudioPortTarget::DefaultSink,
+            AudioControlTarget::Source => AudioPortTarget::DefaultSource,
+        };
+        let _ = ac.set_port(target, &port_name);
     }
     if let Some(audio) = &mut state.audio {
-        match state.audio_target {
-            AudioControlTarget::Sink => {
-                if let Some(sink) = &mut audio.default_sink {
-                    sink.active_port = Some(port_name.clone());
-                    let sink_id = sink.id;
-                    if let Some(dev) = audio.devices.iter_mut().find(|d| d.id == sink_id) {
-                        dev.active_port = Some(port_name);
-                    }
-                }
-            }
-            AudioControlTarget::Source => {
-                if let Some(src) = &mut audio.default_source {
-                    src.active_port = Some(port_name.clone());
-                    let src_id = src.id;
-                    if let Some(dev) = audio.sources.iter_mut().find(|d| d.id == src_id) {
-                        dev.active_port = Some(port_name);
-                    }
-                }
-            }
+        let is_source = state.audio_target == AudioControlTarget::Source;
+        if let Some(dev) = Arc::make_mut(audio).default_device_mut(is_source) {
+            dev.active_port = Some(port_name);
         }
     }
     state.play_sound(SoundCue::TabChanged, ctx);
@@ -153,13 +127,13 @@ pub fn handle_mixer_select_profile(
     state: &mut State,
     card_id: u32,
     profile_name: String,
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     if let Ok(ac) = ctx.audio() {
-        let _ = ac.select_card_profile(card_id, &profile_name);
+        let _ = ac.set_card_profile(card_id, &profile_name);
     }
     if let Some(audio) = &mut state.audio
-        && let Some(card) = audio.cards.iter_mut().find(|c| c.id == card_id)
+        && let Some(card) = Arc::make_mut(audio).cards.iter_mut().find(|c| c.id == card_id)
     {
         card.active_profile = Some(profile_name);
     }
@@ -168,7 +142,7 @@ pub fn handle_mixer_select_profile(
     state.play_sound(SoundCue::TabChanged, ctx);
 }
 
-pub fn handle_mixer_balance_seek(state: &mut State, ev: PointerEvent, ctx: &EffectCtx<'_>) {
+pub fn handle_mixer_balance_seek(state: &mut State, ev: PointerEvent, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     match ev.button {
         Some(MouseButton::Right | MouseButton::Middle) => {
             apply_target_balance(state, 0.0, ctx);
@@ -183,48 +157,38 @@ pub fn handle_mixer_balance_seek(state: &mut State, ev: PointerEvent, ctx: &Effe
     }
 }
 
-pub fn handle_mixer_balance_scroll(state: &mut State, sc: ScrollEvent, ctx: &EffectCtx<'_>) {
+pub fn handle_mixer_balance_scroll(state: &mut State, sc: ScrollEvent, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     let step = -scroll_direction_y(sc);
     if step == 0 {
         return;
     }
-    let current = match (state.audio.as_ref(), state.audio_target) {
-        (Some(a), AudioControlTarget::Sink) => a.balance(),
-        (Some(a), AudioControlTarget::Source) => a.source_balance(),
-        (None, _) => 0.0,
-    };
+    let is_source = state.audio_target == AudioControlTarget::Source;
+    let current = state.audio.as_ref().map_or(0.0, |a| a.target_balance(is_source));
     let raw = (current + (step as f32) * BALANCE_SCROLL_STEP).clamp(-1.0, 1.0);
     let snapped = if raw.abs() < 0.025 { 0.0 } else { raw };
     apply_target_balance(state, snapped, ctx);
 }
 
-fn apply_target_balance(state: &mut State, balance: f32, ctx: &EffectCtx<'_>) {
+fn apply_target_balance(state: &mut State, balance: f32, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     let bal = balance.clamp(-1.0, 1.0);
     if let Ok(ac) = ctx.audio() {
-        match state.audio_target {
-            AudioControlTarget::Sink => {
-                let _ = ac.set_balance(bal);
-            }
-            AudioControlTarget::Source => {
-                let _ = ac.set_source_balance(bal);
-            }
-        }
+        let target = match state.audio_target {
+            AudioControlTarget::Sink => AudioTarget::DefaultSink,
+            AudioControlTarget::Source => AudioTarget::DefaultSource,
+        };
+        let _ = ac.set_balance(target, bal);
     }
     if let Some(audio) = &mut state.audio {
-        match state.audio_target {
-            AudioControlTarget::Sink => {
-                let peak = audio.linear.max(0.01);
-                update_optimistic_channels(&mut audio.channels, &audio.channel_map, peak, bal);
-            }
-            AudioControlTarget::Source => {
-                let peak = audio.source_linear.max(0.01);
-                update_optimistic_channels(
-                    &mut audio.source_channels,
-                    &audio.source_channel_map,
-                    peak,
-                    bal,
-                );
-            }
+        let is_source = state.audio_target == AudioControlTarget::Source;
+        let snap = Arc::make_mut(audio);
+        if let Some(dev) = snap.default_device_mut(is_source) {
+            let peak = dev.volume.linear.max(0.01);
+            update_optimistic_channels(
+                &mut dev.volume.channels,
+                &dev.volume.channel_map,
+                peak,
+                bal,
+            );
         }
     }
     state.play_sound(SoundCue::VolumeChange, ctx);
@@ -261,7 +225,7 @@ fn clamp_routing_scroll(state: &mut State) {
     state.audio_ui.routing_scroll_y = state.audio_ui.routing_scroll_y.clamp(0.0, max_scroll);
 }
 
-pub fn handle_mixer_master_seek_click(state: &mut State, ev: PointerEvent, ctx: &EffectCtx<'_>) {
+pub fn handle_mixer_master_seek_click(state: &mut State, ev: PointerEvent, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     match ev.button {
         Some(MouseButton::Left) => {
             let ratio = (ev.local_position.x.get() / MIXER_TRACK_WIDTH).clamp(0.0, 1.0);
@@ -276,7 +240,7 @@ pub fn handle_mixer_stream_scroll(
     state: &mut State,
     id: u32,
     sc: ScrollEvent,
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     let step = -scroll_direction_y(sc);
     if step == 0 {
@@ -287,12 +251,15 @@ pub fn handle_mixer_stream_scroll(
     };
     let next = adjust_step(current, step);
     if let Ok(ac) = ctx.audio() {
-        let _ = ac.set_stream_volume_linear(id, next);
+        let _ = ac.set_volume(AudioTarget::PlaybackStream(id), next);
     }
     if let Some(audio) = &mut state.audio
-        && let Some(s) = audio.streams.iter_mut().find(|s| s.id == id)
+        && let Some(s) = Arc::make_mut(audio)
+            .streams
+            .iter_mut()
+            .find(|s| s.id == id && s.direction == AudioDirection::Output)
     {
-        s.linear = next;
+        s.volume.linear = next;
     }
     state.play_sound(SoundCue::VolumeChange, ctx);
 }
@@ -301,19 +268,22 @@ pub fn handle_mixer_stream_seek_click(
     state: &mut State,
     id: u32,
     ev: PointerEvent,
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     if ev.button != Some(MouseButton::Left) {
         return;
     }
     let ratio = (ev.local_position.x.get() / MIXER_TRACK_WIDTH).clamp(0.0, 1.0);
     if let Ok(ac) = ctx.audio() {
-        let _ = ac.set_stream_volume_linear(id, ratio);
+        let _ = ac.set_volume(AudioTarget::PlaybackStream(id), ratio);
     }
     if let Some(audio) = &mut state.audio
-        && let Some(s) = audio.streams.iter_mut().find(|s| s.id == id)
+        && let Some(s) = Arc::make_mut(audio)
+            .streams
+            .iter_mut()
+            .find(|s| s.id == id && s.direction == AudioDirection::Output)
     {
-        s.linear = ratio;
+        s.volume.linear = ratio;
     }
     state.play_sound(SoundCue::VolumeChange, ctx);
 }
@@ -322,7 +292,7 @@ pub fn handle_mixer_capture_scroll(
     state: &mut State,
     id: u32,
     sc: ScrollEvent,
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     let step = -scroll_direction_y(sc);
     if step == 0 {
@@ -333,12 +303,15 @@ pub fn handle_mixer_capture_scroll(
     };
     let next = adjust_step(current, step);
     if let Ok(ac) = ctx.audio() {
-        let _ = ac.set_capture_volume_linear(id, next);
+        let _ = ac.set_volume(AudioTarget::CaptureStream(id), next);
     }
     if let Some(audio) = &mut state.audio
-        && let Some(c) = audio.captures.iter_mut().find(|c| c.id == id)
+        && let Some(c) = Arc::make_mut(audio)
+            .streams
+            .iter_mut()
+            .find(|c| c.id == id && c.direction == AudioDirection::Input)
     {
-        c.linear = next;
+        c.volume.linear = next;
     }
 }
 
@@ -346,69 +319,65 @@ pub fn handle_mixer_capture_seek_click(
     state: &mut State,
     id: u32,
     ev: PointerEvent,
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     if ev.button != Some(MouseButton::Left) {
         return;
     }
     let ratio = (ev.local_position.x.get() / MIXER_TRACK_WIDTH).clamp(0.0, 1.0);
     if let Ok(ac) = ctx.audio() {
-        let _ = ac.set_capture_volume_linear(id, ratio);
+        let _ = ac.set_volume(AudioTarget::CaptureStream(id), ratio);
     }
     if let Some(audio) = &mut state.audio
-        && let Some(c) = audio.captures.iter_mut().find(|c| c.id == id)
+        && let Some(c) = Arc::make_mut(audio)
+            .streams
+            .iter_mut()
+            .find(|c| c.id == id && c.direction == AudioDirection::Input)
     {
-        c.linear = ratio;
+        c.volume.linear = ratio;
     }
 }
 
-pub fn handle_audio_updated(state: &mut State, snap: AudioSnapshot, ctx: &mut EffectCtx<'_>) {
+pub fn handle_audio_updated(
+    state: &mut State,
+    snap: Arc<AudioSnapshot>,
+    ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
+) {
     state.audio = Some(snap);
     refresh_stream_icons(state, ctx);
 }
 
-fn set_master_volume(state: &mut State, level: f32, ctx: &EffectCtx<'_>) {
+fn set_master_volume(state: &mut State, level: f32, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     if let Ok(ac) = ctx.audio() {
-        match state.audio_target {
-            AudioControlTarget::Sink => {
-                let _ = ac.set_volume_linear(level);
-            }
-            AudioControlTarget::Source => {
-                let _ = ac.set_source_volume_linear(level);
-            }
-        }
+        let target = match state.audio_target {
+            AudioControlTarget::Sink => AudioTarget::DefaultSink,
+            AudioControlTarget::Source => AudioTarget::DefaultSource,
+        };
+        let _ = ac.set_volume(target, level);
     }
     if let Some(audio) = &mut state.audio {
-        match state.audio_target {
-            AudioControlTarget::Sink => audio.linear = level,
-            AudioControlTarget::Source => audio.source_linear = level,
+        let is_source = state.audio_target == AudioControlTarget::Source;
+        if let Some(dev) = Arc::make_mut(audio).default_device_mut(is_source) {
+            dev.volume.linear = level;
         }
     }
     state.play_sound(SoundCue::VolumeChange, ctx);
 }
 
-fn toggle_target_mute(state: &mut State, ctx: &EffectCtx<'_>) {
+fn toggle_target_mute(state: &mut State, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     if let Ok(ac) = ctx.audio() {
-        match state.audio_target {
-            AudioControlTarget::Sink => {
-                let _ = ac.toggle_mute();
-            }
-            AudioControlTarget::Source => {
-                let _ = ac.toggle_source_mute();
-            }
-        }
+        let target = match state.audio_target {
+            AudioControlTarget::Sink => AudioTarget::DefaultSink,
+            AudioControlTarget::Source => AudioTarget::DefaultSource,
+        };
+        let _ = ac.toggle_mute(target);
     }
     let mut now_muted = false;
     if let Some(audio) = &mut state.audio {
-        match state.audio_target {
-            AudioControlTarget::Sink => {
-                audio.muted = !audio.muted;
-                now_muted = audio.muted;
-            }
-            AudioControlTarget::Source => {
-                audio.source_muted = !audio.source_muted;
-                now_muted = audio.source_muted;
-            }
+        let is_source = state.audio_target == AudioControlTarget::Source;
+        if let Some(dev) = Arc::make_mut(audio).default_device_mut(is_source) {
+            dev.volume.muted = !dev.volume.muted;
+            now_muted = dev.volume.muted;
         }
     }
     let cue = if now_muted {
@@ -423,16 +392,16 @@ fn stream_linear(state: &State, id: u32) -> Option<f32> {
     state
         .audio
         .as_ref()
-        .and_then(|a| a.streams.iter().find(|s| s.id == id))
-        .map(|s| s.linear)
+        .and_then(|a| a.playback_streams().find(|s| s.id == id))
+        .map(|s| s.volume.linear)
 }
 
 fn capture_linear(state: &State, id: u32) -> Option<f32> {
     state
         .audio
         .as_ref()
-        .and_then(|a| a.captures.iter().find(|c| c.id == id))
-        .map(|c| c.linear)
+        .and_then(|a| a.capture_streams().find(|c| c.id == id))
+        .map(|c| c.volume.linear)
 }
 
 fn adjust_step(current: f32, step: i32) -> f32 {

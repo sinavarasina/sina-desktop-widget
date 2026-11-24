@@ -82,7 +82,7 @@ pub fn build_quick_menu_surface(state: &State) -> Surface<Msg> {
     let mut surface = Surface::floating("bar-quick-menu", Output::Primary)
         .layer(Layer::Overlay)
         .ignore_exclusive_zone()
-        .anchor(Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right)
+        .anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT)
         .size(Size::fill())
         .input_mode(InputMode::Full)
         .keyboard_interactivity(if input_focused {
@@ -95,7 +95,7 @@ pub fn build_quick_menu_surface(state: &State) -> Surface<Msg> {
         .on_ime(|ev| Some(Msg::SettingsIme(ev)));
 
     if input_focused {
-        let cursor_rect = GeoRect::new(
+        let cursor_rect = Bounds::new(
             (left_x + 120.0 + state.settings_ui.wallpaper_cursor_x.min(176.0)).logical_px(),
             (animated_y + QUICK_CARD_HEIGHT + QUICK_CARD_GAP + 76.0).logical_px(),
             2.0.logical_px(),
@@ -145,7 +145,7 @@ fn build_main_card(state: &State) -> Element<Msg> {
 
     let settings_btn = Group::new()
         .key("quick-settings-toggle")
-        .size(Size::px(34.logical_px(), 34.logical_px()))
+        .size(Size::new(34.logical_px(), 34.logical_px()))
         .on_hover(Msg::Hover(HoverTarget::QuickSettingsToggle))
         .on_leave(Msg::Leave(HoverTarget::QuickSettingsToggle))
         .on_click(Msg::QuickMenuToggleSettings)
@@ -160,7 +160,7 @@ fn build_main_card(state: &State) -> Element<Msg> {
             Text::new("\u{f013}")
                 .font(font_ui())
                 .font_size(14.logical_px())
-                .optical_bounds(true)
+                .bounds_mode(TextBoundsMode::Optical)
                 .color(settings_fg)
                 .position(Position::relative_to_parent(
                     Percent::new(50.0),
@@ -211,7 +211,7 @@ fn build_main_card(state: &State) -> Element<Msg> {
 
     let power_btn = Group::new()
         .key("quick-power-toggle")
-        .size(Size::px(34.logical_px(), 34.logical_px()))
+        .size(Size::new(34.logical_px(), 34.logical_px()))
         .on_hover(Msg::Hover(HoverTarget::QuickPowerToggle))
         .on_leave(Msg::Leave(HoverTarget::QuickPowerToggle))
         .on_click(Msg::QuickMenuTogglePower)
@@ -226,7 +226,7 @@ fn build_main_card(state: &State) -> Element<Msg> {
             Text::new("\u{f011}")
                 .font(font_ui())
                 .font_size(14.logical_px())
-                .optical_bounds(true)
+                .bounds_mode(TextBoundsMode::Optical)
                 .color(power_fg)
                 .position(Position::relative_to_parent(
                     Percent::new(50.0),
@@ -342,7 +342,7 @@ fn build_main_card(state: &State) -> Element<Msg> {
         );
 
     let left_col = Group::new()
-        .size(Size::px(left_w.logical_px(), inner_h.logical_px()))
+        .size(Size::new(left_w.logical_px(), inner_h.logical_px()))
         .child(top_info)
         .child(bottom_stack);
 
@@ -358,7 +358,7 @@ fn build_main_card(state: &State) -> Element<Msg> {
 
     Group::new()
         .key("quick-main-card")
-        .size(Size::px(
+        .size(Size::new(
             QUICK_MENU_WIDTH.logical_px(),
             QUICK_CARD_HEIGHT.logical_px(),
         ))
@@ -379,7 +379,7 @@ fn build_sprite_box(state: &State) -> Element<Msg> {
 
     let mut frame = Group::new()
         .key("quick-sprite-box")
-        .size(Size::px(
+        .size(Size::new(
             SPRITE_FRAME_W.logical_px(),
             SPRITE_FRAME_H.logical_px(),
         ))
@@ -432,7 +432,7 @@ fn build_sprite_box(state: &State) -> Element<Msg> {
                     (spec.mouth_x * scale).logical_px(),
                     (spec.mouth_y * scale).logical_px(),
                 ))
-                .size(Size::px(
+                .size(Size::new(
                     (spec.mouth_w * scale).logical_px(),
                     (spec.mouth_h * scale).logical_px(),
                 ))
@@ -445,7 +445,7 @@ fn build_sprite_box(state: &State) -> Element<Msg> {
                     (spec.mouth_x * scale).logical_px(),
                     (spec.mouth_y * scale).logical_px(),
                 ))
-                .size(Size::px(
+                .size(Size::new(
                     (spec.mouth_w * scale).logical_px(),
                     (spec.mouth_h * scale).logical_px(),
                 ))
@@ -453,7 +453,7 @@ fn build_sprite_box(state: &State) -> Element<Msg> {
 
         let layered = Group::new()
             .key(("yuki-pose-layer", pose_idx))
-            .size(Size::px(base_w.logical_px(), base_h.logical_px()))
+            .size(Size::new(base_w.logical_px(), base_h.logical_px()))
             .position(Position::relative_to_parent(
                 Percent::new(50.0),
                 Percent::new(100.0),
@@ -461,7 +461,7 @@ fn build_sprite_box(state: &State) -> Element<Msg> {
             .anchor(ElementAnchor::BottomCenter)
             .child(
                 Image::new(assets.base)
-                    .size(Size::px(base_w.logical_px(), base_h.logical_px()))
+                    .size(Size::new(base_w.logical_px(), base_h.logical_px()))
                     .filter(ImageFilter::Bicubic),
             )
             .child(
@@ -473,7 +473,7 @@ fn build_sprite_box(state: &State) -> Element<Msg> {
                         (spec.eye_x * scale).logical_px(),
                         (spec.eye_y * scale).logical_px(),
                     ))
-                    .size(Size::px(
+                    .size(Size::new(
                         (spec.eye_w * scale).logical_px(),
                         (spec.eye_h * scale).logical_px(),
                     )),
@@ -481,7 +481,7 @@ fn build_sprite_box(state: &State) -> Element<Msg> {
             .child(mouth_el);
 
         frame = frame.child(
-            Clip::new(layered).size(Size::px(
+            Clip::new(layered).size(Size::new(
                 SPRITE_FRAME_W.logical_px(),
                 SPRITE_FRAME_H.logical_px(),
             )),
@@ -510,7 +510,7 @@ fn build_power_card(state: &State) -> Element<Msg> {
 
     Group::new()
         .key("quick-power-card")
-        .size(Size::px(
+        .size(Size::new(
             QUICK_MENU_WIDTH.logical_px(),
             POWER_CARD_HEIGHT.logical_px(),
         ))
@@ -535,7 +535,7 @@ fn power_icon_btn(state: &State, action: PowerAction, idx: usize) -> Element<Msg
 
     Group::new()
         .key(("quick-power-btn", idx))
-        .size(Size::px(
+        .size(Size::new(
             POWER_BTN_SIZE.logical_px(),
             POWER_BTN_SIZE.logical_px(),
         ))
@@ -553,7 +553,7 @@ fn power_icon_btn(state: &State, action: PowerAction, idx: usize) -> Element<Msg
             Text::new(action.icon())
                 .font(font_ui())
                 .font_size(13.logical_px())
-                .optical_bounds(true)
+                .bounds_mode(TextBoundsMode::Optical)
                 .color(fg)
                 .position(Position::relative_to_parent(
                     Percent::new(50.0),

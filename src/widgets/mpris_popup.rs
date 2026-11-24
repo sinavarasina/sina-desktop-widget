@@ -65,7 +65,7 @@ pub fn build_mpris_popup_surface(state: &State) -> Surface<Msg> {
     Surface::floating("bar-mpris-popup", Output::Primary)
         .layer(Layer::Overlay)
         .ignore_exclusive_zone()
-        .anchor(Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right)
+        .anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT)
         .size(Size::fill())
         .input_mode(InputMode::Full)
         .keyboard_interactivity(KeyboardInteractivity::OnDemand)

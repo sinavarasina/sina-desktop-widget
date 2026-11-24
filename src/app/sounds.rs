@@ -7,11 +7,13 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use waywi::prelude::*;
+use waywi::dbus::NmState;
 
 use super::config::AudioConfig;
 
+/// Bounded LRU cap for resolved XDG sound-theme assets (replaces the old clear-all-when-full).
 #[cfg(not(test))]
-const MAX_SOUND_CACHE: usize = 64;
+const SOUND_CACHE_CAP: usize = 64;
 
 /// Standard Freedesktop XDG Sound Naming Spec event cues used across the widget.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -135,7 +137,7 @@ pub struct SoundEngine {
     pub volume_scale: f32,
     pub detected_theme: String,
     #[cfg(not(test))]
-    cache: HashMap<String, Option<SoundAsset>>,
+    cache: crate::app::asset_lru::LruCache<Option<SoundAsset>>,
     last_played: HashMap<SoundCue, Instant>,
     udisks_seeded: bool,
     known_udisks_drives: HashSet<String>,
@@ -162,7 +164,7 @@ impl SoundEngine {
             volume_scale: 1.0,
             detected_theme: read_gtk_sound_theme_name(),
             #[cfg(not(test))]
-            cache: HashMap::new(),
+            cache: crate::app::asset_lru::LruCache::with_cap(SOUND_CACHE_CAP),
             last_played: HashMap::new(),
             udisks_seeded: false,
             known_udisks_drives: HashSet::new(),
@@ -183,7 +185,7 @@ impl SoundEngine {
     }
 
     /// Plays a standard XDG sound cue if event sounds are enabled, DND is off, and cooldown allows.
-    pub fn play(&mut self, cue: SoundCue, dnd: bool, ctx: &EffectCtx<'_>) {
+    pub fn play(&mut self, cue: SoundCue, dnd: bool, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
         if !self.event_sounds_enabled || dnd {
             return;
         }
@@ -225,23 +227,23 @@ impl SoundEngine {
         &mut self,
         name: &str,
         volume: f32,
-        ctx: &EffectCtx<'_>,
+        ctx: &EffectCtx<'_, crate::app::msg::Msg>,
     ) -> bool {
         if !self.event_sounds_enabled {
             return false;
         }
+        let Ok(player) = ctx.player() else {
+            return false;
+        };
         let asset = if let Some(&cached) = self.cache.get(name) {
             cached
         } else {
-            let resolved = ctx.load_system_sound(name).ok();
-            if self.cache.len() >= MAX_SOUND_CACHE {
-                self.cache.clear();
-            }
+            let resolved = player.load_system_sound(name).ok();
             self.cache.insert(name.to_owned(), resolved);
             resolved
         };
         if let Some(sound) = asset {
-            ctx.play_sound_volume(sound, volume);
+            player.play_at(sound, volume);
             true
         } else {
             false
@@ -250,7 +252,7 @@ impl SoundEngine {
 
     /// Tracks physical UDisks2 drives and plays `DeviceAdded` / `DeviceRemoved` on hotplug transitions
     /// (suppressing initial startup baseline).
-    pub fn observe_udisks(&mut self, snap: &UDisksSnapshot, dnd: bool, ctx: &EffectCtx<'_>) {
+    pub fn observe_udisks(&mut self, snap: &UDisksSnapshot, dnd: bool, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
         let current: HashSet<String> = snap
             .drives
             .iter()
@@ -276,7 +278,7 @@ impl SoundEngine {
 
     /// Tracks connected BlueZ devices and plays `DeviceAdded` / `DeviceRemoved` on connection
     /// transitions (suppressing initial startup baseline).
-    pub fn observe_bluetooth(&mut self, snap: &BluetoothSnapshot, dnd: bool, ctx: &EffectCtx<'_>) {
+    pub fn observe_bluetooth(&mut self, snap: &BluetoothSnapshot, dnd: bool, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
         let current: HashSet<String> = snap
             .devices
             .iter()
@@ -307,7 +309,7 @@ impl SoundEngine {
         &mut self,
         snap: &NetworkManagerSnapshot,
         dnd: bool,
-        ctx: &EffectCtx<'_>,
+        ctx: &EffectCtx<'_, crate::app::msg::Msg>,
     ) {
         let online = match snap.state {
             NmState::ConnectedLocal | NmState::ConnectedSite | NmState::ConnectedGlobal => {

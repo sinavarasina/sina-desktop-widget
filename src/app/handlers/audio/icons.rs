@@ -15,38 +15,30 @@ struct StreamIconQuery {
     id: u32,
     name: String,
     binary: Option<String>,
-    icon_name: Option<String>,
-    app_id: Option<String>,
+    app_name: Option<String>,
 }
 
 /// Resolves desktop icons for every playback/capture stream, keyed by stream id.
-pub(super) fn refresh_stream_icons(state: &mut State, ctx: &mut EffectCtx<'_>) {
+pub(super) fn refresh_stream_icons(state: &mut State, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     let Some(audio) = state.audio.as_ref() else {
         return;
     };
 
+    let query = |s: &AudioStream| StreamIconQuery {
+        id: s.id,
+        name: s.name.clone(),
+        binary: s.binary_name.clone(),
+        app_name: s.app_name.clone(),
+    };
+
     let playback_queries: Vec<StreamIconQuery> = audio
-        .streams
-        .iter()
-        .map(|s| StreamIconQuery {
-            id: s.id,
-            name: s.name.clone(),
-            binary: s.binary.clone(),
-            icon_name: s.icon_name.clone(),
-            app_id: s.app_id.clone(),
-        })
+        .playback_streams()
+        .map(&query)
         .collect();
 
     let capture_queries: Vec<StreamIconQuery> = audio
-        .captures
-        .iter()
-        .map(|c| StreamIconQuery {
-            id: c.id,
-            name: c.name.clone(),
-            binary: c.binary.clone(),
-            icon_name: c.icon_name.clone(),
-            app_id: c.app_id.clone(),
-        })
+        .capture_streams()
+        .map(&query)
         .collect();
 
     let mut streams = HashMap::with_capacity(playback_queries.len());
@@ -65,23 +57,9 @@ pub(super) fn refresh_stream_icons(state: &mut State, ctx: &mut EffectCtx<'_>) {
 fn resolve_stream_icon(
     state: &mut State,
     q: &StreamIconQuery,
-    ctx: &mut EffectCtx<'_>,
+    ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
 ) -> Option<ImageAsset> {
-    // 1. Prefer explicit icon metadata reported by PipeWire / PulseAudio (`application.icon_name`,
-    //    `application.id`, `pipewire.access.portal.app_id`).
-    let mut direct_meta = Vec::new();
-    if let Some(icon_name) = q.icon_name.as_deref() {
-        push_case_variants(&mut direct_meta, icon_name);
-    }
-    if let Some(app_id) = q.app_id.as_deref() {
-        let stripped = app_id.trim().strip_suffix(".desktop").unwrap_or(app_id);
-        push_case_variants(&mut direct_meta, stripped);
-    }
-    if let Some(asset) = resolve_from_candidates(state, &direct_meta, ctx) {
-        return Some(asset);
-    }
-
-    // 2. Match against `.desktop` entries (sharing the cached `drun` scan) before falling back to
+    // 1. Match against `.desktop` entries (sharing the cached `drun` scan) before falling back to
     //    raw theme lookups so wrappers (`firefox-bin`, `electron`, `ALSA plug-in [mpv]`) pick up
     //    their real `Icon=` value.
     let bin_base = q.binary.as_deref().and_then(binary_basename);
@@ -90,7 +68,7 @@ fn resolve_stream_icon(
     state.drun.ensure_scanned();
     if let Some(desktop_icon) = find_desktop_icon(
         &state.drun.entries,
-        q.app_id.as_deref(),
+        q.app_name.as_deref(),
         bin_base,
         &q.name,
         bracket_target,
@@ -102,14 +80,17 @@ fn resolve_stream_icon(
         }
     }
 
-    // 3. Fall back to XDG icon theme lookup over binary basename, bracketed target, stream name,
-    //    and finally the generic executable icon.
+    // 2. Fall back to XDG icon theme lookup over binary basename, bracketed target, application
+    //    name, stream name, and finally the generic executable icon.
     let mut fallbacks = Vec::new();
     if let Some(base) = bin_base {
         push_case_variants(&mut fallbacks, base);
     }
     if let Some(target) = bracket_target {
         push_case_variants(&mut fallbacks, target);
+    }
+    if let Some(app_name) = q.app_name.as_deref() {
+        push_case_variants(&mut fallbacks, app_name);
     }
     push_case_variants(&mut fallbacks, &q.name);
     fallbacks.push(GENERIC_AUDIO_ICON.to_owned());
@@ -120,7 +101,7 @@ fn resolve_stream_icon(
 fn resolve_from_candidates(
     state: &mut State,
     candidates: &[String],
-    ctx: &mut EffectCtx<'_>,
+    ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
 ) -> Option<ImageAsset> {
     for candidate in candidates {
         if let Some(path) = state.icon_lookup.resolve(candidate, AUDIO_ICON_PX)
@@ -266,7 +247,7 @@ fn desktop_exec_key(entry: &DesktopEntry) -> Option<&str> {
 fn load_app_icon_asset(
     state: &mut State,
     path: &Path,
-    ctx: &mut EffectCtx<'_>,
+    ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
 ) -> Option<ImageAsset> {
     let sig = format!("audio-app:{}", path.display());
     if let Some(&cached) = state.path_asset_cache.get(&sig) {

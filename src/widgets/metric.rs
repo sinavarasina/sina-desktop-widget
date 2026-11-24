@@ -38,7 +38,7 @@ pub fn metric_module(cfg: MetricModuleConfig) -> Element<Msg> {
     }
 
     let container_size = match cfg.fixed_width {
-        Some(w) => Size::px(w.logical_px(), BAR_HEIGHT.logical_px()),
+        Some(w) => Size::new(w.logical_px(), BAR_HEIGHT.logical_px()),
         None => Size::new(Length::Auto, BAR_HEIGHT.logical_px()),
     };
 
@@ -76,12 +76,12 @@ pub fn metric_module(cfg: MetricModuleConfig) -> Element<Msg> {
 /// line is muted so only that row's state is struck (output and input stay independent).
 fn metric_row(line: MetricLine, fg: Color) -> Element<Msg> {
     let icon_cell = Group::new()
-        .size(Size::px(METRIC_ICON_WIDTH.logical_px(), 10.logical_px()))
+        .size(Size::new(METRIC_ICON_WIDTH.logical_px(), 10.logical_px()))
         .child(
             Text::new(line.icon)
                 .font(font_ui_semibold())
                 .font_size(8.logical_px())
-                .optical_bounds(true)
+                .bounds_mode(TextBoundsMode::Optical)
                 .color(fg)
                 .position(Position::relative_to_parent(
                     Percent::new(50.0),

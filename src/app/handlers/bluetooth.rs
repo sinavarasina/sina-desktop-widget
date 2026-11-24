@@ -12,7 +12,7 @@ use super::events::scroll_direction_y;
 pub fn handle_bluetooth_agent_event(
     state: &mut State,
     ev: BluetoothAgentEvent,
-    ctx: &mut EffectCtx<'_>,
+    ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     if let Some(prompt) = state.bt_ui.apply_agent_event(ev, &state.bluetooth) {
         // Also surface pairing prompt into the Notification Center with Accept / Reject actions!
@@ -49,7 +49,7 @@ pub fn handle_bluetooth_agent_event(
     }
 }
 
-pub fn handle_bt_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &EffectCtx<'_>) {
+pub fn handle_bt_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     if ev.button == Some(MouseButton::Left) {
         state.bt_ui.popup_left_x = (ev.position.x.get() - 140.0).max(8.0);
         state.bt_ui.toggle_popup();
@@ -62,14 +62,14 @@ pub fn handle_bt_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &EffectCt
     }
 }
 
-pub fn handle_bt_toggle_power(state: &mut State, ctx: &EffectCtx<'_>) {
+pub fn handle_bt_toggle_power(state: &mut State, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     let Some(adapter) = state.bluetooth.adapters.first() else {
         return;
     };
     let path = adapter.object_path.clone();
     let next = !adapter.powered;
     if let Ok(dbus) = ctx.dbus() {
-        let _ = dbus.set_bluetooth_powered(&path, next);
+        let _ = dbus.bluetooth().set_powered(&path, next);
     }
     if let Some(a) = state.bluetooth.adapters.first_mut() {
         a.powered = next;
@@ -84,17 +84,18 @@ pub fn handle_bt_toggle_power(state: &mut State, ctx: &EffectCtx<'_>) {
     );
 }
 
-pub fn handle_bt_toggle_scan(state: &mut State, ctx: &EffectCtx<'_>) {
+pub fn handle_bt_toggle_scan(state: &mut State, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     let Some(adapter) = state.bluetooth.adapters.first() else {
         return;
     };
     let path = adapter.object_path.clone();
     let discovering = adapter.discovering;
     if let Ok(dbus) = ctx.dbus() {
+        let bt = dbus.bluetooth();
         if discovering {
-            let _ = dbus.stop_bluetooth_discovery(&path);
+            let _ = bt.stop_discovery(&path);
         } else {
-            let _ = dbus.start_bluetooth_discovery(&path);
+            let _ = bt.start_discovery(&path, None);
         }
     }
     let next = !discovering;
@@ -111,7 +112,7 @@ pub fn handle_bt_toggle_scan(state: &mut State, ctx: &EffectCtx<'_>) {
     );
 }
 
-pub fn handle_bt_toggle_discoverable(state: &mut State, ctx: &EffectCtx<'_>) {
+pub fn handle_bt_toggle_discoverable(state: &mut State, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     let Some(adapter) = state.bluetooth.adapters.first() else {
         return;
     };
@@ -119,7 +120,7 @@ pub fn handle_bt_toggle_discoverable(state: &mut State, ctx: &EffectCtx<'_>) {
     let discoverable = adapter.discoverable;
     let next = !discoverable;
     if let Ok(dbus) = ctx.dbus() {
-        let _ = dbus.set_bluetooth_discoverable(&path, next);
+        let _ = dbus.bluetooth().set_discoverable(&path, next);
     }
     if let Some(a) = state.bluetooth.adapters.first_mut() {
         a.discoverable = next;
@@ -138,7 +139,7 @@ pub fn handle_bt_device_pointer(
     state: &mut State,
     path: String,
     ev: PointerEvent,
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     let Some(dev) = state
         .bluetooth
@@ -156,15 +157,16 @@ pub fn handle_bt_device_pointer(
             state.bt_ui.menu_path = None;
             state.bt_ui.last_error = None;
             if let Ok(dbus) = ctx.dbus() {
+                let bt = dbus.bluetooth();
                 if dev.connected {
                     state.bt_ui.set_pending(path.clone(), "disconnecting");
-                    let _ = dbus.disconnect_bluetooth_device(&path);
+                    let _ = bt.disconnect(&path);
                 } else if dev.paired {
                     state.bt_ui.set_pending(path.clone(), "connecting");
-                    let _ = dbus.connect_bluetooth_device(&path);
+                    let _ = bt.connect(&path);
                 } else {
                     state.bt_ui.set_pending(path.clone(), "pairing");
-                    let _ = dbus.pair_bluetooth_device(&path);
+                    let _ = bt.pair(&path);
                 }
             }
         }
@@ -180,7 +182,7 @@ pub fn handle_bt_device_menu_action(
     state: &mut State,
     path: String,
     action: BtDeviceMenuAction,
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     let Some(dev) = state
         .bluetooth
@@ -195,23 +197,24 @@ pub fn handle_bt_device_menu_action(
     let Ok(dbus) = ctx.dbus() else {
         return;
     };
+    let bt = dbus.bluetooth();
     match action {
         BtDeviceMenuAction::ToggleConnect => {
             state.bt_ui.last_error = None;
             if dev.connected {
                 state.bt_ui.set_pending(path.clone(), "disconnecting");
-                let _ = dbus.disconnect_bluetooth_device(&path);
+                let _ = bt.disconnect(&path);
             } else if dev.paired {
                 state.bt_ui.set_pending(path.clone(), "connecting");
-                let _ = dbus.connect_bluetooth_device(&path);
+                let _ = bt.connect(&path);
             } else {
                 state.bt_ui.set_pending(path.clone(), "pairing");
-                let _ = dbus.pair_bluetooth_device(&path);
+                let _ = bt.pair(&path);
             }
         }
         BtDeviceMenuAction::ToggleTrust => {
             let next = !dev.trusted;
-            let _ = dbus.trust_bluetooth_device(&path, next);
+            let _ = bt.trust(&path, next);
             if let Some(d) = state
                 .bluetooth
                 .devices
@@ -224,7 +227,7 @@ pub fn handle_bt_device_menu_action(
         BtDeviceMenuAction::Forget => {
             state.bt_ui.last_error = None;
             state.bt_ui.set_pending(path.clone(), "removing");
-            let _ = dbus.remove_bluetooth_device(&dev.adapter_path, &path);
+            let _ = bt.remove(&dev.adapter_path, &path);
             state.bluetooth.devices.retain(|d| d.object_path != path);
         }
     }
@@ -234,7 +237,7 @@ pub fn handle_bt_agent_decision(
     state: &mut State,
     request_id: u64,
     accept: bool,
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     let prompt = state.bt_ui.pending_prompt.clone();
     if state
@@ -250,21 +253,23 @@ pub fn handle_bt_agent_decision(
     let Ok(dbus) = ctx.dbus() else {
         return;
     };
+    let bt = dbus.bluetooth();
     if !accept {
-        let _ = dbus.bluetooth_agent_reject(request_id);
+        let _ = bt.reply_agent(request_id, BluetoothAgentReply::Reject);
         return;
     }
-    if let Some(p) = prompt {
+    let reply = if let Some(p) = prompt {
         if p.needs_pin {
-            let _ = dbus.bluetooth_agent_reply_pincode(request_id, "0000");
+            BluetoothAgentReply::PinCode(String::from("0000"))
         } else if p.needs_passkey {
-            let _ = dbus.bluetooth_agent_reply_passkey(request_id, 0);
+            BluetoothAgentReply::Passkey(0)
         } else {
-            let _ = dbus.bluetooth_agent_confirm(request_id);
+            BluetoothAgentReply::Accept
         }
     } else {
-        let _ = dbus.bluetooth_agent_confirm(request_id);
-    }
+        BluetoothAgentReply::Accept
+    };
+    let _ = bt.reply_agent(request_id, reply);
 }
 
 pub fn handle_bt_popup_scroll(state: &mut State, sc: ScrollEvent) {
@@ -284,7 +289,7 @@ pub fn handle_bt_popup_scroll(state: &mut State, sc: ScrollEvent) {
     state.bt_ui.scroll_index = next.min(max_idx);
 }
 
-pub fn handle_dbus_action_result(state: &mut State, res: DbusActionResult, ctx: &EffectCtx<'_>) {
+pub fn handle_dbus_action_result(state: &mut State, res: DbusActionResult, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     let had_error = res.error.is_some();
     if matches!(
         res.lane,

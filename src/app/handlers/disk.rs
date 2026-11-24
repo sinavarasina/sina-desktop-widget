@@ -9,7 +9,7 @@ use crate::app::handlers::ipc::close_other_overlays;
 use crate::app::state::{SoundCue, State};
 use crate::widgets::disk_popup::DISK_POPUP_WIDTH;
 
-pub fn handle_udisks_updated(state: &mut State, snap: UDisksSnapshot, ctx: &EffectCtx<'_>) {
+pub fn handle_udisks_updated(state: &mut State, snap: UDisksSnapshot, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     state.disk_ui.clear_settled_pending(&snap);
     state
         .sounds
@@ -17,7 +17,7 @@ pub fn handle_udisks_updated(state: &mut State, snap: UDisksSnapshot, ctx: &Effe
     state.udisks = snap;
 }
 
-pub fn handle_disk_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &EffectCtx<'_>) {
+pub fn handle_disk_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     match ev.button {
         Some(MouseButton::Left) => {
             let click_global_x = ev.position.x.get();
@@ -28,7 +28,10 @@ pub fn handle_disk_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &Effect
                 close_other_overlays(state, Some("disk"));
                 if state.udisks.block_devices.is_empty()
                     && let Ok(dbus) = ctx.dbus()
-                    && let Ok(snap) = dbus.udisks_snapshot()
+                    && let Ok(snap) = dbus
+                        .udisks()
+                        .cached_snapshot()
+                        .map_or_else(|| dbus.udisks().snapshot_blocking(), Ok)
                 {
                     state.udisks = snap;
                 }
@@ -45,16 +48,19 @@ pub fn handle_disk_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &Effect
             state.cycle_selected_mount();
         }
         Some(MouseButton::Right) => {
-            let _ = spawn_detached("footclient", &["btop"]);
+            let _ = spawn_detached("footclient", ["btop"]);
         }
         _ => {}
     }
 }
 
-pub fn handle_disk_refresh(state: &mut State, ctx: &EffectCtx<'_>) {
+pub fn handle_disk_refresh(state: &mut State, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     state.disk_ui.last_error = None;
     if let Ok(dbus) = ctx.dbus()
-        && let Ok(snap) = dbus.udisks_snapshot()
+        && let Ok(snap) = dbus
+            .udisks()
+            .cached_snapshot()
+            .map_or_else(|| dbus.udisks().snapshot_blocking(), Ok)
     {
         state.disk_ui.clear_settled_pending(&snap);
         state.udisks = snap;
@@ -68,7 +74,7 @@ pub fn handle_disk_device_pointer(
     state: &mut State,
     path: String,
     ev: PointerEvent,
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     let Some(block) = state
         .udisks
@@ -97,7 +103,7 @@ pub fn handle_disk_device_pointer(
                 state.disk_ui.last_error = None;
                 if let Ok(dbus) = ctx.dbus() {
                     state.disk_ui.set_pending(path.clone(), "mounting");
-                    if let Err(e) = dbus.udisks_mount(&path) {
+                    if let Err(e) = dbus.udisks().mount(&path, &UDisksMountOptions::new()) {
                         state.disk_ui.pending_ops.remove(&path);
                         state.disk_ui.last_error = Some(e.to_string());
                     }
@@ -117,7 +123,7 @@ pub fn handle_disk_device_menu_action(
     state: &mut State,
     path: String,
     action: DiskMenuAction,
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     let Some(block) = state
         .udisks
@@ -144,14 +150,14 @@ pub fn handle_disk_device_menu_action(
     match action {
         DiskMenuAction::Mount => {
             state.disk_ui.set_pending(path.clone(), "mounting");
-            if let Err(e) = dbus.udisks_mount(&path) {
+            if let Err(e) = dbus.udisks().mount(&path, &waywi::dbus::UDisksMountOptions::default()) {
                 state.disk_ui.pending_ops.remove(&path);
                 state.disk_ui.last_error = Some(e.to_string());
             }
         }
         DiskMenuAction::Unmount { force } => {
             state.disk_ui.set_pending(path.clone(), "unmounting");
-            if let Err(e) = dbus.udisks_unmount(&path, force) {
+            if let Err(e) = dbus.udisks().unmount(&path, force, true) {
                 state.disk_ui.pending_ops.remove(&path);
                 state.disk_ui.last_error = Some(e.to_string());
             }
@@ -165,7 +171,7 @@ pub fn handle_disk_device_menu_action(
             };
             if let Some(target_path) = lock_path {
                 state.disk_ui.set_pending(target_path.clone(), "locking");
-                if let Err(e) = dbus.udisks_lock_encrypted(&target_path) {
+                if let Err(e) = dbus.udisks().lock(&target_path, true) {
                     state.disk_ui.pending_ops.remove(&target_path);
                     state.disk_ui.last_error = Some(e.to_string());
                 }
@@ -175,7 +181,7 @@ pub fn handle_disk_device_menu_action(
             if let Some(drive) = state.udisks.drive_for_block(&block) {
                 let drive_path = drive.object_path.clone();
                 state.disk_ui.set_pending(drive_path.clone(), "ejecting");
-                if let Err(e) = dbus.udisks_eject_drive(&drive_path) {
+                if let Err(e) = dbus.udisks().eject(&drive_path, true) {
                     state.disk_ui.pending_ops.remove(&drive_path);
                     state.disk_ui.last_error = Some(e.to_string());
                 }
@@ -187,7 +193,7 @@ pub fn handle_disk_device_menu_action(
                 state
                     .disk_ui
                     .set_pending(drive_path.clone(), "powering off");
-                if let Err(e) = dbus.udisks_power_off_drive(&drive_path) {
+                if let Err(e) = dbus.udisks().power_off(&drive_path, true) {
                     state.disk_ui.pending_ops.remove(&drive_path);
                     state.disk_ui.last_error = Some(e.to_string());
                 }
@@ -196,7 +202,7 @@ pub fn handle_disk_device_menu_action(
     }
 }
 
-pub fn handle_disk_unlock_key(state: &mut State, ev: KeyEvent, ctx: &mut EffectCtx<'_>) {
+pub fn handle_disk_unlock_key(state: &mut State, ev: KeyEvent, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     if state.disk_ui.unlock_target.is_none() {
         if ev.key == Key::Escape {
             state.disk_ui.close_popup();
@@ -215,7 +221,7 @@ pub fn handle_disk_unlock_key(state: &mut State, ev: KeyEvent, ctx: &mut EffectC
     }
 }
 
-pub fn handle_disk_unlock_ime(state: &mut State, ev: ImeEvent, ctx: &mut EffectCtx<'_>) {
+pub fn handle_disk_unlock_ime(state: &mut State, ev: ImeEvent, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     if state.disk_ui.unlock_target.is_none() {
         return;
     }
@@ -225,7 +231,7 @@ pub fn handle_disk_unlock_ime(state: &mut State, ev: ImeEvent, ctx: &mut EffectC
     }
 }
 
-pub fn handle_disk_unlock_submit(state: &mut State, ctx: &EffectCtx<'_>) {
+pub fn handle_disk_unlock_submit(state: &mut State, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     let Some(target_path) = state.disk_ui.unlock_target.take() else {
         return;
     };
@@ -237,7 +243,7 @@ pub fn handle_disk_unlock_submit(state: &mut State, ctx: &EffectCtx<'_>) {
     };
     state.disk_ui.last_error = None;
     state.disk_ui.set_pending(target_path.clone(), "unlocking");
-    if let Err(e) = dbus.udisks_unlock_encrypted(&target_path, &passphrase) {
+    if let Err(e) = dbus.udisks().unlock(&target_path, &passphrase, true) {
         state.disk_ui.pending_ops.remove(&target_path);
         state.disk_ui.last_error = Some(e.to_string());
     }

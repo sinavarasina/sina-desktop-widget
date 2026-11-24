@@ -1,6 +1,7 @@
 //! Icon-anchored DBusMenu tray popup with Catppuccin hover highlighting.
 
 use waywi::prelude::*;
+use waywi::dbus::TrayMenuItem;
 
 use crate::app::state::{HoverTarget, Msg, State, TrayMenuPopup};
 use crate::theme::{
@@ -56,7 +57,7 @@ pub fn build_tray_menu_surface(state: &State, menu: &TrayMenuPopup) -> Surface<M
         if item.is_separator {
             col = col.child(
                 Rect::new()
-                    .size(Size::px(row_w.logical_px(), 1.logical_px()))
+                    .size(Size::new(row_w.logical_px(), 1.logical_px()))
                     .fill(SURFACE0),
             );
             continue;
@@ -79,7 +80,7 @@ pub fn build_tray_menu_surface(state: &State, menu: &TrayMenuPopup) -> Surface<M
 
         let mut row_group = Group::new()
             .key(("tray-menu-item", item_id))
-            .size(Size::px(row_w.logical_px(), 22.logical_px()))
+            .size(Size::new(row_w.logical_px(), 22.logical_px()))
             .child(
                 Rect::new()
                     .size(Size::fill())
@@ -119,7 +120,7 @@ pub fn build_tray_menu_surface(state: &State, menu: &TrayMenuPopup) -> Surface<M
     col = col.child(
         Group::new()
             .key("tray-menu-close")
-            .size(Size::px(row_w.logical_px(), 20.logical_px()))
+            .size(Size::new(row_w.logical_px(), 20.logical_px()))
             .on_hover(Msg::Hover(HoverTarget::TrayMenuClose))
             .on_leave(Msg::Leave(HoverTarget::TrayMenuClose))
             .on_click(Msg::CloseTrayMenu)
@@ -161,7 +162,7 @@ pub fn build_tray_menu_surface(state: &State, menu: &TrayMenuPopup) -> Surface<M
     Surface::floating("bar-tray-menu", Output::Primary)
         .layer(Layer::Overlay)
         .ignore_exclusive_zone()
-        .anchor(Anchor::Top | Anchor::Left)
+        .anchor(Anchor::TOP | Anchor::LEFT)
         .margin(Edges::top_left(
             POPUP_TOP_MARGIN.logical_px(),
             left_margin.logical_px(),

@@ -7,10 +7,14 @@ use waywi::prelude::*;
 use crate::app::ipc::{CONTROL_SOCKET_NAME, parse_ipc_command};
 use crate::app::state::{Msg, State};
 
+/// User inactivity delay before a `trim_memory()` sweep (pixel buffers, text/canvas/scale
+/// caches, arena slabs, idle wl_shm slots) runs while nothing is drawing.
+const IDLE_TRIM_TIMEOUT: Duration = Duration::from_secs(120);
+
 pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
     let mut subs = Subscriptions::new();
     subs.push(Control::socket(CONTROL_SOCKET_NAME, |cmd| {
-        parse_ipc_command(&cmd)
+        parse_ipc_command(&cmd).unwrap_or(Msg::Noop)
     }));
 
     // Stage 1 (pre-hydration): keep the first event-loop pass completely free of D-Bus worker
@@ -36,7 +40,7 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
     ));
     subs.push(Dbus::mpris(|ev| Msg::MprisEvent(Box::new(ev))));
     subs.push(Dbus::action_results(Msg::DbusActionOutcome));
-    subs.push(Audio::subscribe(|snap| Msg::AudioUpdated(Box::new(snap))));
+    subs.push(Audio::subscribe(Msg::AudioUpdated));
     subs.push(System::cpu().every(Duration::from_secs(1), Msg::CpuSampled));
     subs.push(System::gpu().every(Duration::from_secs(2), Msg::GpuSampled));
     subs.push(System::sensors().every(Duration::from_secs(2), Msg::SensorsSampled));
@@ -52,6 +56,7 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
     }));
     subs.push(Dbus::udisks(Msg::UDisksUpdated));
     subs.push(Dbus::logind(Msg::LogindEvent));
+    subs.push(Idle::notify(IDLE_TRIM_TIMEOUT, Msg::UserIdle));
 
     if state.scroller.needs_scroll() {
         subs.push(Timer::every(

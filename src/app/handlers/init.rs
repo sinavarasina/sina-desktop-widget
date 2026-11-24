@@ -19,13 +19,13 @@ use crate::theme::{GENTOO_MAUVE_SVG, WALLPAPER_PNG};
 
 /// Decodes the embedded wallpaper PNG and marks it `AssetRetention::ReclaimAfterPresent` so
 /// its ~33 MiB RGBA8 pixel buffer is immediately reclaimed after presenting to the compositor.
-pub fn load_embedded_wallpaper(ctx: &mut EffectCtx<'_>) -> Option<ImageAsset> {
+pub fn load_embedded_wallpaper(ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Option<ImageAsset> {
     let wp = ctx.load_image_bytes(WALLPAPER_PNG).ok()?;
-    let _ = ctx.set_asset_retention(wp, AssetRetention::ReclaimAfterPresent);
+    let _ = ctx.set_image_retention(wp, AssetRetention::ReclaimAfterPresent);
     Some(wp)
 }
 
-pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
+pub fn init_state(ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Result<State> {
     #[cfg(not(test))]
     let config_path = WidgetConfig::default_path();
     #[cfg(test)]
@@ -180,7 +180,7 @@ pub fn init_state(ctx: &mut EffectCtx<'_>) -> Result<State> {
 }
 
 fn init_hyprland(
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) -> (
     Vec<WorkspaceInfo>,
     i32,

@@ -14,7 +14,7 @@ const ACTION_SCROLL_STEP_PX: f32 = 32.0;
 pub fn handle_notification_event(
     state: &mut State,
     ev: NotificationEvent,
-    ctx: &mut EffectCtx<'_>,
+    ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     match ev {
         NotificationEvent::Received(notif) => {
@@ -37,7 +37,7 @@ pub fn handle_notification_event(
     }
 }
 
-pub fn handle_notif_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &mut EffectCtx<'_>) {
+pub fn handle_notif_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     match ev.button {
         Some(MouseButton::Left) => {
             if state.notifications.toggle_center() {
@@ -63,7 +63,7 @@ pub fn handle_notif_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &mut E
     }
 }
 
-pub fn handle_notif_center_scroll(state: &mut State, sc: ScrollEvent, ctx: &mut EffectCtx<'_>) {
+pub fn handle_notif_center_scroll(state: &mut State, sc: ScrollEvent, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     let step = scroll_direction_y(sc);
     if step == 0 {
         return;
@@ -95,14 +95,14 @@ pub fn handle_notif_card_pointer(
     state: &mut State,
     id: u32,
     ev: PointerEvent,
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     match ev.button {
         Some(MouseButton::Right) => {
             if state.notifications.dismiss(id)
                 && let Ok(dbus) = ctx.dbus()
             {
-                let _ = dbus.close_notification(id, NotificationCloseReason::Dismissed);
+                let _ = dbus.notifications().close(id, NotificationCloseReason::Dismissed);
             }
         }
         Some(MouseButton::Left) => {
@@ -112,7 +112,7 @@ pub fn handle_notif_card_pointer(
                 if let Some(key) = action_key {
                     invoke_or_route_action(state, notif_id, &key, keep_resident, ctx);
                 } else if let Ok(dbus) = ctx.dbus() {
-                    let _ = dbus.close_notification(notif_id, NotificationCloseReason::Dismissed);
+                    let _ = dbus.notifications().close(notif_id, NotificationCloseReason::Dismissed);
                 }
             }
         }
@@ -124,7 +124,7 @@ pub fn handle_notif_action_click(
     state: &mut State,
     id: u32,
     action_key: &str,
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     let keep_resident = state.notifications.is_resident(id);
     if keep_resident || state.notifications.dismiss(id) {
@@ -169,7 +169,7 @@ fn invoke_or_route_action(
     id: u32,
     action_key: &str,
     keep_resident: bool,
-    ctx: &EffectCtx<'_>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     if let Some(req_str) = action_key.strip_prefix("bt-accept:")
         && let Ok(req_id) = req_str.parse::<u64>()
@@ -184,9 +184,9 @@ fn invoke_or_route_action(
         return;
     }
     if let Ok(dbus) = ctx.dbus() {
-        let _ = dbus.invoke_notification_action(id, action_key);
+        let _ = dbus.notifications().invoke_action(id, action_key);
         if !keep_resident {
-            let _ = dbus.close_notification(id, NotificationCloseReason::Dismissed);
+            let _ = dbus.notifications().close(id, NotificationCloseReason::Dismissed);
         }
     }
 }

@@ -12,7 +12,7 @@ pub fn handle_logind_event(state: &mut State, ev: LogindEvent) {
     }
 }
 
-pub fn handle_clock_menu_click(state: &mut State, ctx: &mut EffectCtx<'_>) {
+pub fn handle_clock_menu_click(state: &mut State, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     if state.quick_menu.popup_target {
         state.quick_menu.close_popup();
         state.settings_ui.unfocus_inputs();
@@ -31,7 +31,7 @@ pub fn handle_clock_menu_click(state: &mut State, ctx: &mut EffectCtx<'_>) {
     }
 }
 
-pub fn handle_quick_menu_toggle_power(state: &mut State, ctx: &EffectCtx<'_>) {
+pub fn handle_quick_menu_toggle_power(state: &mut State, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     refresh_power_capabilities_if_empty(state, ctx);
     state.quick_menu.toggle_power_menu();
     state.settings_ui.unfocus_inputs();
@@ -45,7 +45,7 @@ pub fn handle_quick_menu_toggle_power(state: &mut State, ctx: &EffectCtx<'_>) {
 }
 
 /// Schedules any power action behind the configured cancelable countdown (`0s` executes immediately).
-pub fn handle_power_action(state: &mut State, action: PowerAction, ctx: &EffectCtx<'_>) {
+pub fn handle_power_action(state: &mut State, action: PowerAction, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     let support = action.support(&state.quick_menu.logind.power_capabilities);
     if !support.is_supported() {
         state.quick_menu.power_error = Some(format!("{} not supported", action.label()));
@@ -62,7 +62,7 @@ pub fn handle_power_action(state: &mut State, action: PowerAction, ctx: &EffectC
 }
 
 /// Advances the 1-second power countdown and executes the logind action once it reaches 0.
-pub fn handle_power_countdown_tick(state: &mut State, ctx: &EffectCtx<'_>) {
+pub fn handle_power_countdown_tick(state: &mut State, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     let Some(mut pending) = state.quick_menu.pending_power else {
         return;
     };
@@ -90,7 +90,7 @@ fn power_lifecycle_cue(action: PowerAction) -> SoundCue {
     }
 }
 
-fn execute_power_action(state: &mut State, action: PowerAction, ctx: &EffectCtx<'_>) {
+fn execute_power_action(state: &mut State, action: PowerAction, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     let support = action.support(&state.quick_menu.logind.power_capabilities);
     if !support.is_supported() {
         state.quick_menu.power_error = Some(format!("{} not supported", action.label()));
@@ -105,16 +105,16 @@ fn execute_power_action(state: &mut State, action: PowerAction, ctx: &EffectCtx<
     };
 
     let res = match action {
-        PowerAction::PowerOff => dbus.power_off(interactive),
-        PowerAction::Reboot => dbus.reboot(interactive),
-        PowerAction::RebootToFirmware => dbus.reboot_to_firmware_setup(interactive),
-        PowerAction::SoftReboot => dbus.soft_reboot(interactive),
-        PowerAction::Suspend => dbus.suspend(interactive),
-        PowerAction::Hibernate => dbus.hibernate(interactive),
-        PowerAction::HybridSleep => dbus.hybrid_sleep(interactive),
-        PowerAction::SuspendThenHibernate => dbus.suspend_then_hibernate(interactive),
-        PowerAction::Halt => dbus.halt(interactive),
-        PowerAction::Logout => dbus.terminate_session(),
+        PowerAction::PowerOff => dbus.logind().power(waywi::dbus::PowerAction::PowerOff, interactive),
+        PowerAction::Reboot => dbus.logind().power(waywi::dbus::PowerAction::Reboot, interactive),
+        PowerAction::RebootToFirmware => dbus.logind().power(waywi::dbus::PowerAction::RebootToFirmwareSetup, interactive),
+        PowerAction::SoftReboot => dbus.logind().power(waywi::dbus::PowerAction::SoftReboot, interactive),
+        PowerAction::Suspend => dbus.logind().power(waywi::dbus::PowerAction::Suspend, interactive),
+        PowerAction::Hibernate => dbus.logind().power(waywi::dbus::PowerAction::Hibernate, interactive),
+        PowerAction::HybridSleep => dbus.logind().power(waywi::dbus::PowerAction::HybridSleep, interactive),
+        PowerAction::SuspendThenHibernate => dbus.logind().power(waywi::dbus::PowerAction::SuspendThenHibernate, interactive),
+        PowerAction::Halt => dbus.logind().power(waywi::dbus::PowerAction::Halt, interactive),
+        PowerAction::Logout => dbus.logind().terminate_session(None),
     };
 
     if let Err(err) = res {
@@ -129,7 +129,7 @@ fn execute_power_action(state: &mut State, action: PowerAction, ctx: &EffectCtx<
     }
 }
 
-pub fn refresh_power_capabilities_if_empty(state: &mut State, ctx: &EffectCtx<'_>) {
+pub fn refresh_power_capabilities_if_empty(state: &mut State, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     let caps = &state.quick_menu.logind.power_capabilities;
     let empty = !caps.power_off.is_supported()
         && !caps.reboot.is_supported()
@@ -137,7 +137,7 @@ pub fn refresh_power_capabilities_if_empty(state: &mut State, ctx: &EffectCtx<'_
         && !caps.hibernate.is_supported();
     if empty
         && let Ok(dbus) = ctx.dbus()
-        && let Ok(queried) = dbus.logind_power_capabilities()
+        && let Ok(queried) = dbus.logind().power_capabilities_blocking()
     {
         state.quick_menu.logind.power_capabilities = queried;
     }

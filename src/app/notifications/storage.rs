@@ -3,7 +3,8 @@
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use waywi::prelude::{EffectCtx, ImageAsset, NotificationImageData};
+use waywi::prelude::{EffectCtx, ImageAsset};
+use waywi::dbus::NotificationImageData;
 
 pub const MAX_RAM_NOTIFICATIONS: usize = 50;
 pub const MAX_DISK_NOTIFICATIONS: usize = 500;
@@ -153,7 +154,7 @@ pub fn save_cached_icon(store_path: &Path, raw: &NotificationImageData) -> Optio
     Some(file_path.to_string_lossy().into_owned())
 }
 
-pub fn load_cached_icon(path: &Path, ctx: &mut EffectCtx<'_>) -> Option<ImageAsset> {
+pub fn load_cached_icon(path: &Path, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Option<ImageAsset> {
     let bytes = std::fs::read(path).ok()?;
     if bytes.len() < 13 || &bytes[0..4] != ICON_CACHE_MAGIC {
         return None;

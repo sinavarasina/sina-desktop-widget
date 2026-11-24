@@ -12,7 +12,7 @@ pub fn build_wallpaper_surface(asset: ImageAsset, fit: WallpaperFit) -> Surface<
         Surface::overlay("desktop-wallpaper", Output::All)
             .layer(Layer::Background)
             .ignore_exclusive_zone()
-            .anchor(Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right)
+            .anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT)
             .size(Size::fill())
             .input_mode(InputMode::PassThrough)
             .keyboard_interactivity(KeyboardInteractivity::None)

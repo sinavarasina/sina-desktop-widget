@@ -13,7 +13,15 @@ use crate::theme::{
 };
 use crate::widgets::text::marquee_slice;
 
+use crate::app::audio::AudioSnapshotExt;
+
 use routing::{build_routing_card, format_balance_short, port_icon, target_supports_balance};
+
+/// The currently selected port/route on a device, resolved for its description.
+fn active_port_of(dev: &AudioDevice) -> Option<&AudioPort> {
+    let name = dev.active_port.as_deref()?;
+    dev.ports.iter().find(|p| p.name == name)
+}
 
 const MASTER_CARD_HEIGHT: f32 = 80.0;
 const APPS_HEADER_HEIGHT: f32 = 24.0;
@@ -99,7 +107,7 @@ pub fn build_mixer_popup_surface(state: &State) -> Surface<Msg> {
     Surface::floating("bar-mixer-popup", Output::Primary)
         .layer(Layer::Overlay)
         .ignore_exclusive_zone()
-        .anchor(Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right)
+        .anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT)
         .size(Size::fill())
         .input_mode(InputMode::Full)
         .keyboard_interactivity(KeyboardInteractivity::OnDemand)
@@ -118,31 +126,22 @@ pub fn build_mixer_popup_surface(state: &State) -> Surface<Msg> {
 fn build_master_card(state: &State) -> Element<Msg> {
     let out_active = state.audio_target == AudioControlTarget::Sink;
 
-    let device_name = match state.audio.as_ref() {
-        Some(audio) => match state.audio_target {
-            AudioControlTarget::Sink => audio
-                .default_sink
-                .as_ref()
-                .map(|d| {
-                    if d.description.is_empty() {
-                        d.name.as_str()
-                    } else {
-                        d.description.as_str()
-                    }
-                })
-                .unwrap_or("Default Sink"),
-            AudioControlTarget::Source => audio
-                .default_source
-                .as_ref()
-                .map(|d| {
-                    if d.description.is_empty() {
-                        d.name.as_str()
-                    } else {
-                        d.description.as_str()
-                    }
-                })
-                .unwrap_or("Default Source"),
-        },
+    let is_source = state.audio_target == AudioControlTarget::Source;
+    let device_name = match state.audio.as_ref().and_then(|a| a.target_device(is_source)) {
+        Some(d) => {
+            if d.description.is_empty() {
+                d.name.as_str()
+            } else {
+                d.description.as_str()
+            }
+        }
+        None if state.audio.is_some() => {
+            if is_source {
+                "Default Source"
+            } else {
+                "Default Sink"
+            }
+        }
         None => "PipeWire",
     };
     let name_text = marquee_slice(
@@ -151,18 +150,16 @@ fn build_master_card(state: &State) -> Element<Msg> {
         state.audio_ui.marquee_tick,
     );
 
-    let muted = match state.audio.as_ref() {
-        Some(audio) => match state.audio_target {
-            AudioControlTarget::Sink => audio.muted,
-            AudioControlTarget::Source => audio.source_muted,
-        },
-        None => false,
-    };
-    let master_linear = match (state.audio.as_ref(), state.audio_target) {
-        (Some(audio), AudioControlTarget::Sink) => audio.linear,
-        (Some(audio), AudioControlTarget::Source) => audio.source_linear,
-        (None, _) => 0.0,
-    };
+    let muted = state
+        .audio
+        .as_ref()
+        .and_then(|a| a.target_volume(is_source))
+        .is_some_and(|v| v.muted);
+    let master_linear = state
+        .audio
+        .as_ref()
+        .and_then(|a| a.target_volume(is_source))
+        .map_or(0.0, |v| v.linear);
     let pct = (master_linear * 100.0).clamp(0.0, 150.0).round() as u16;
     let fill_w = MIXER_TRACK_WIDTH * master_linear.clamp(0.0, 1.0);
     let footer_row = build_master_footer(state, !out_active);
@@ -204,7 +201,7 @@ fn build_master_card(state: &State) -> Element<Msg> {
                                     .font_size(10.5.logical_px())
                                     .color(TEXT),
                             )
-                            .size(Size::px(MASTER_NAME_WIDTH.logical_px(), 14.logical_px())),
+                            .size(Size::new(MASTER_NAME_WIDTH.logical_px(), 14.logical_px())),
                         )
                         .child(target_btn(
                             "mixer-btn-output",
@@ -231,7 +228,7 @@ fn build_master_card(state: &State) -> Element<Msg> {
                         .child(
                             Group::new()
                                 .key("mixer-master-track")
-                                .size(Size::px(MIXER_TRACK_WIDTH.logical_px(), 6.logical_px()))
+                                .size(Size::new(MIXER_TRACK_WIDTH.logical_px(), 6.logical_px()))
                                 .on_hover(Msg::Hover(HoverTarget::MixerMaster))
                                 .on_leave(Msg::Leave(HoverTarget::MixerMaster))
                                 .on_pointer_down(Msg::MixerMasterSeekClick)
@@ -239,7 +236,7 @@ fn build_master_card(state: &State) -> Element<Msg> {
                                 .child(Rect::new().size(Size::fill()).fill(SURFACE0))
                                 .child(
                                     Rect::new()
-                                        .size(Size::px(fill_w.logical_px(), 6.logical_px()))
+                                        .size(Size::new(fill_w.logical_px(), 6.logical_px()))
                                         .fill(if muted { OVERLAY0 } else { MAUVE }),
                                 ),
                         )
@@ -262,13 +259,11 @@ fn build_master_card(state: &State) -> Element<Msg> {
 /// Compact master footer showing active port/routing toggle on the left and L/R balance readout
 /// on the right (scroll to nudge balance, right-click to snap center).
 fn build_master_footer(state: &State, is_source: bool) -> Element<Msg> {
-    let active_port = state.audio.as_ref().and_then(|a| {
-        if is_source {
-            a.active_source_port()
-        } else {
-            a.active_port()
-        }
-    });
+    let active_port = state
+        .audio
+        .as_ref()
+        .and_then(|a| a.target_device(is_source))
+        .and_then(active_port_of);
     let (route_icon, route_label) = match active_port {
         Some(p) => {
             let desc = if p.description.is_empty() {
@@ -331,7 +326,7 @@ fn build_master_footer(state: &State, is_source: bool) -> Element<Msg> {
                     Text::new(route_icon)
                         .font(font_ui())
                         .font_size(9.5.logical_px())
-                        .optical_bounds(true)
+                        .bounds_mode(TextBoundsMode::Optical)
                         .color(route_fg),
                 )
                 .child(
@@ -344,21 +339,20 @@ fn build_master_footer(state: &State, is_source: bool) -> Element<Msg> {
                     Text::new(caret)
                         .font(font_ui())
                         .font_size(8.5.logical_px())
-                        .optical_bounds(true)
+                        .bounds_mode(TextBoundsMode::Optical)
                         .color(route_fg),
                 ),
         );
 
     let mut bar = Group::new()
-        .size(Size::px(inner_w.logical_px(), 20.logical_px()))
+        .size(Size::new(inner_w.logical_px(), 20.logical_px()))
         .child(route_btn);
 
     if target_supports_balance(state) {
-        let bal = match (state.audio.as_ref(), is_source) {
-            (Some(a), false) => a.balance(),
-            (Some(a), true) => a.source_balance(),
-            (None, _) => 0.0,
-        };
+        let bal = state
+            .audio
+            .as_ref()
+            .map_or(0.0, |a| a.target_balance(is_source));
         let panned = bal.abs() >= 0.01;
         let bal_hovered = state.hovered == HoverTarget::MixerBalanceBar;
         let bal_text = format!("Bal {}", format_balance_short(bal));
@@ -524,25 +518,25 @@ fn build_app_rows(state: &State, max_body_height: f32) -> (Vec<Element<Msg>>, f3
     let mut app_rows: Vec<AppRow> = Vec::new();
     if let Some(audio) = state.audio.as_ref() {
         if state.audio_target == AudioControlTarget::Source {
-            for c in &audio.captures {
-                let name = c.binary.clone().unwrap_or_else(|| c.name.clone());
+            for c in audio.capture_streams() {
+                let name = c.binary_name.clone().unwrap_or_else(|| c.name.clone());
                 app_rows.push(AppRow {
                     id: c.id,
                     name,
-                    linear: c.linear,
-                    muted: c.muted,
+                    linear: c.volume.linear,
+                    muted: c.volume.muted,
                     icon: state.audio_ui.capture_icons.get(&c.id).copied().flatten(),
                     capture: true,
                 });
             }
         } else {
-            for s in &audio.streams {
-                let name = s.binary.clone().unwrap_or_else(|| s.name.clone());
+            for s in audio.playback_streams() {
+                let name = s.binary_name.clone().unwrap_or_else(|| s.name.clone());
                 app_rows.push(AppRow {
                     id: s.id,
                     name,
-                    linear: s.linear,
-                    muted: s.muted,
+                    linear: s.volume.linear,
+                    muted: s.volume.muted,
                     icon: state.audio_ui.stream_icons.get(&s.id).copied().flatten(),
                     capture: false,
                 });
@@ -595,7 +589,7 @@ fn build_app_row(r: &AppRow, tick: u32) -> Element<Msg> {
 
     let icon: Element<Msg> = match r.icon {
         Some(img) => Image::new(img)
-            .size(Size::px(ICON_PX.logical_px(), ICON_PX.logical_px()))
+            .size(Size::new(ICON_PX.logical_px(), ICON_PX.logical_px()))
             .fit(ImageFit::Contain)
             .position(Position::relative_to_parent(
                 Percent::new(50.0),
@@ -606,7 +600,7 @@ fn build_app_row(r: &AppRow, tick: u32) -> Element<Msg> {
         None => Text::new("\u{f001}")
             .font(font_ui())
             .font_size(10.logical_px())
-            .optical_bounds(true)
+            .bounds_mode(TextBoundsMode::Optical)
             .color(OVERLAY0)
             .position(Position::relative_to_parent(
                 Percent::new(50.0),
@@ -663,7 +657,7 @@ fn build_app_row(r: &AppRow, tick: u32) -> Element<Msg> {
                 .align(Align::Center)
                 .child(
                     Group::new()
-                        .size(Size::px(
+                        .size(Size::new(
                             ICON_BADGE_PX.logical_px(),
                             ICON_BADGE_PX.logical_px(),
                         ))
@@ -684,7 +678,7 @@ fn build_app_row(r: &AppRow, tick: u32) -> Element<Msg> {
                                             .font_size(10.logical_px())
                                             .color(TEXT),
                                     )
-                                    .size(Size::px(NAME_CLIP_WIDTH.logical_px(), 13.logical_px())),
+                                    .size(Size::new(NAME_CLIP_WIDTH.logical_px(), 13.logical_px())),
                                 )
                                 .child(
                                     Text::new(if r.muted {
@@ -703,13 +697,13 @@ fn build_app_row(r: &AppRow, tick: u32) -> Element<Msg> {
                         )
                         .child(
                             Group::new()
-                                .size(Size::px(MIXER_TRACK_WIDTH.logical_px(), 5.logical_px()))
+                                .size(Size::new(MIXER_TRACK_WIDTH.logical_px(), 5.logical_px()))
                                 .on_pointer_down(pointer)
                                 .on_scroll(scroll)
                                 .child(Rect::new().size(Size::fill()).fill(SURFACE0))
                                 .child(
                                     Rect::new()
-                                        .size(Size::px(fill_w.logical_px(), 5.logical_px()))
+                                        .size(Size::new(fill_w.logical_px(), 5.logical_px()))
                                         .fill(if r.muted { OVERLAY0 } else { MAUVE }),
                                 ),
                         ),

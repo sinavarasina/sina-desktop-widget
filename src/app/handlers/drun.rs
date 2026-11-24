@@ -6,7 +6,7 @@ use crate::app::handlers::events::scroll_direction_y;
 use crate::app::handlers::ipc::close_other_overlays;
 use crate::app::state::{SoundCue, State};
 
-pub fn handle_toggle_drun(state: &mut State, ctx: &mut EffectCtx<'_>) {
+pub fn handle_toggle_drun(state: &mut State, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     if state.drun.target {
         state.drun.close();
         state.play_sound(SoundCue::MenuPopdown, ctx);
@@ -18,7 +18,7 @@ pub fn handle_toggle_drun(state: &mut State, ctx: &mut EffectCtx<'_>) {
     }
 }
 
-pub fn handle_drun_key(state: &mut State, ev: KeyEvent, ctx: &mut EffectCtx<'_>) {
+pub fn handle_drun_key(state: &mut State, ev: KeyEvent, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     match ev.key {
         Key::Down | Key::Tab => {
             let delta = if ev.key == Key::Tab && ev.modifiers.contains(Modifiers::SHIFT) {
@@ -74,7 +74,7 @@ pub fn handle_drun_key(state: &mut State, ev: KeyEvent, ctx: &mut EffectCtx<'_>)
     }
 }
 
-pub fn handle_drun_ime(state: &mut State, ev: ImeEvent, ctx: &mut EffectCtx<'_>) {
+pub fn handle_drun_ime(state: &mut State, ev: ImeEvent, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     let outcome = state.drun.input.handle_ime(&ev);
     if outcome.text_changed() {
         state.drun.refresh_matches();
@@ -97,11 +97,11 @@ pub fn handle_drun_launch_index(state: &mut State, match_pos: usize) {
         .launch_counts
         .entry(entry.id.clone())
         .or_insert(0) += 1;
-    let _ = entry.launch_detached();
+    let _ = entry.launch();
     state.drun.close();
 }
 
-pub fn handle_drun_scroll(state: &mut State, sc: ScrollEvent, ctx: &mut EffectCtx<'_>) {
+pub fn handle_drun_scroll(state: &mut State, sc: ScrollEvent, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     let step = scroll_direction_y(sc);
     if step != 0 {
         state.drun.move_selection(step as isize);
@@ -116,12 +116,12 @@ fn launch_selected_app(state: &mut State) {
             .launch_counts
             .entry(entry.id.clone())
             .or_insert(0) += 1;
-        let _ = entry.launch_detached();
+        let _ = entry.launch();
         state.drun.close();
     }
 }
 
-pub fn resolve_visible_drun_icons(state: &mut State, ctx: &mut EffectCtx<'_>) {
+pub fn resolve_visible_drun_icons(state: &mut State, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
     let visible: Vec<usize> = state.drun.visible_match_indices().to_vec();
     for entry_idx in visible {
         if let Some(entry) = state.drun.entries.get(entry_idx) {

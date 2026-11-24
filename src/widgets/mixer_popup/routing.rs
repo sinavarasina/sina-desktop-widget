@@ -4,6 +4,7 @@
 
 use waywi::prelude::*;
 
+use crate::app::audio::AudioSnapshotExt;
 use crate::app::state::{AudioControlTarget, HoverTarget, Msg, State};
 use crate::theme::{
     BLUE, CRUST, MANTLE, MAUVE, MIXER_POPUP_WIDTH, OVERLAY0, SUBTEXT1, SURFACE0, SURFACE1, TEXT,
@@ -66,10 +67,11 @@ pub fn target_supports_balance(state: &State) -> bool {
     let Some(audio) = state.audio.as_ref() else {
         return false;
     };
-    let (channels, map) = match state.audio_target {
-        AudioControlTarget::Sink => (&audio.channels, &audio.channel_map),
-        AudioControlTarget::Source => (&audio.source_channels, &audio.source_channel_map),
+    let Some(volume) = audio.target_volume(state.audio_target == AudioControlTarget::Source)
+    else {
+        return false;
     };
+    let (channels, map) = (&volume.channels, &volume.channel_map);
     if !map.is_empty() {
         let has_l = map.iter().any(|p| p.is_left());
         let has_r = map.iter().any(|p| p.is_right());
@@ -83,9 +85,12 @@ fn target_devices(state: &State) -> (&[AudioDevice], Option<&AudioDevice>) {
     let Some(audio) = state.audio.as_ref() else {
         return (&[], None);
     };
-    match state.audio_target {
-        AudioControlTarget::Sink => (audio.devices.as_slice(), audio.default_sink.as_ref()),
-        AudioControlTarget::Source => (audio.sources.as_slice(), audio.default_source.as_ref()),
+    let is_source = state.audio_target == AudioControlTarget::Source;
+    let device = audio.target_device(is_source);
+    if is_source {
+        (audio.sources.as_slice(), device)
+    } else {
+        (audio.sinks.as_slice(), device)
     }
 }
 
@@ -93,30 +98,16 @@ fn target_ports(state: &State) -> (&[AudioPort], Option<&str>) {
     let Some(audio) = state.audio.as_ref() else {
         return (&[], None);
     };
-    match state.audio_target {
-        AudioControlTarget::Sink => (
-            audio.ports(),
-            audio
-                .default_sink
-                .as_ref()
-                .and_then(|d| d.active_port.as_deref()),
-        ),
-        AudioControlTarget::Source => (
-            audio.source_ports(),
-            audio
-                .default_source
-                .as_ref()
-                .and_then(|d| d.active_port.as_deref()),
-        ),
+    match audio.target_device(state.audio_target == AudioControlTarget::Source) {
+        Some(d) => (d.ports.as_slice(), d.active_port.as_deref()),
+        None => (&[], None),
     }
 }
 
 fn target_card(state: &State) -> Option<&AudioCard> {
     let audio = state.audio.as_ref()?;
-    match state.audio_target {
-        AudioControlTarget::Sink => audio.default_sink_card(),
-        AudioControlTarget::Source => audio.default_source_card(),
-    }
+    let is_source = state.audio_target == AudioControlTarget::Source;
+    audio.target_card(is_source)
 }
 
 fn available_profile_count(card: &AudioCard) -> usize {
@@ -294,7 +285,7 @@ pub fn build_routing_card(state: &State) -> (Element<Msg>, f32) {
     if rows.is_empty() {
         rows.push(
             Row::new()
-                .size(Size::px(CONTENT_W.logical_px(), ITEM_H.logical_px()))
+                .size(Size::new(CONTENT_W.logical_px(), ITEM_H.logical_px()))
                 .padding(Edges::symmetric(0.logical_px(), 6.logical_px()))
                 .align(Align::Center)
                 .child(
@@ -308,7 +299,7 @@ pub fn build_routing_card(state: &State) -> (Element<Msg>, f32) {
     }
 
     let mut list_col = Column::new()
-        .size(Size::px(CONTENT_W.logical_px(), content_h.logical_px()))
+        .size(Size::new(CONTENT_W.logical_px(), content_h.logical_px()))
         .gap(ROW_GAP.logical_px())
         .position(Position::absolute(0.logical_px(), (-scroll_y).logical_px()));
     for r in rows {
@@ -320,14 +311,14 @@ pub fn build_routing_card(state: &State) -> (Element<Msg>, f32) {
             CARD_PAD.logical_px(),
             CARD_PAD.logical_px(),
         ))
-        .size(Size::px(inner_w.logical_px(), view_h.logical_px()))
+        .size(Size::new(inner_w.logical_px(), view_h.logical_px()))
         .child(
             Clip::new(
                 Group::new()
-                    .size(Size::px(CONTENT_W.logical_px(), view_h.logical_px()))
+                    .size(Size::new(CONTENT_W.logical_px(), view_h.logical_px()))
                     .child(list_col),
             )
-            .size(Size::px(CONTENT_W.logical_px(), view_h.logical_px()))
+            .size(Size::new(CONTENT_W.logical_px(), view_h.logical_px()))
             .on_scroll(Msg::MixerRoutingScroll),
         );
 
@@ -343,7 +334,7 @@ pub fn build_routing_card(state: &State) -> (Element<Msg>, f32) {
     let card_h = view_h + CARD_PAD * 2.0;
     let card = Group::new()
         .key("mixer-routing-card")
-        .size(Size::px(MIXER_POPUP_WIDTH.logical_px(), card_h.logical_px()))
+        .size(Size::new(MIXER_POPUP_WIDTH.logical_px(), card_h.logical_px()))
         .child(
             Rect::new()
                 .size(Size::fill())
@@ -360,12 +351,12 @@ pub fn build_routing_card(state: &State) -> (Element<Msg>, f32) {
 fn subsection_header(key: &'static str, title: &'static str) -> Element<Msg> {
     Row::new()
         .key(key)
-        .size(Size::px(CONTENT_W.logical_px(), SUBSECTION_H.logical_px()))
+        .size(Size::new(CONTENT_W.logical_px(), SUBSECTION_H.logical_px()))
         .gap(6.logical_px())
         .align(Align::Center)
         .child(
             Rect::new()
-                .size(Size::px(2.logical_px(), 9.logical_px()))
+                .size(Size::new(2.logical_px(), 9.logical_px()))
                 .fill(MAUVE),
         )
         .child(
@@ -417,7 +408,7 @@ fn build_select_row(
 
     let mut row = Group::new()
         .key(key)
-        .size(Size::px(CONTENT_W.logical_px(), ITEM_H.logical_px()))
+        .size(Size::new(CONTENT_W.logical_px(), ITEM_H.logical_px()))
         .on_hover(Msg::Hover(target))
         .on_leave(Msg::Leave(target))
         .on_click(on_click)
@@ -433,7 +424,7 @@ fn build_select_row(
         row = row.child(
             Rect::new()
                 .position(Position::absolute(0.logical_px(), 0.logical_px()))
-                .size(Size::px(2.logical_px(), ITEM_H.logical_px()))
+                .size(Size::new(2.logical_px(), ITEM_H.logical_px()))
                 .fill(MAUVE),
         );
     }
@@ -443,7 +434,7 @@ fn build_select_row(
             Text::new(icon)
                 .font(font_ui())
                 .font_size(10.5.logical_px())
-                .optical_bounds(true)
+                .bounds_mode(TextBoundsMode::Optical)
                 .color(if active { MAUVE } else { fg })
                 .position(Position::absolute(9.logical_px(), (ITEM_H * 0.5).logical_px()))
                 .anchor(ElementAnchor::CenterLeft),
@@ -481,7 +472,7 @@ fn build_select_row(
             Text::new("\u{f00c}")
                 .font(font_ui())
                 .font_size(9.logical_px())
-                .optical_bounds(true)
+                .bounds_mode(TextBoundsMode::Optical)
                 .color(MAUVE)
                 .position(Position::absolute(
                     (CONTENT_W - 8.0).logical_px(),
@@ -509,7 +500,7 @@ fn build_profile_trigger(state: &State, active_desc: &str) -> Element<Msg> {
 
     Group::new()
         .key("mixer-profile-toggle")
-        .size(Size::px(CONTENT_W.logical_px(), ITEM_H.logical_px()))
+        .size(Size::new(CONTENT_W.logical_px(), ITEM_H.logical_px()))
         .on_hover(Msg::Hover(HoverTarget::MixerProfileToggle))
         .on_leave(Msg::Leave(HoverTarget::MixerProfileToggle))
         .on_click(Msg::MixerToggleProfiles)
@@ -532,7 +523,7 @@ fn build_profile_trigger(state: &State, active_desc: &str) -> Element<Msg> {
             Text::new(caret)
                 .font(font_ui())
                 .font_size(9.5.logical_px())
-                .optical_bounds(true)
+                .bounds_mode(TextBoundsMode::Optical)
                 .color(if open { MAUVE } else { SUBTEXT1 })
                 .position(Position::absolute(
                     (CONTENT_W - 8.0).logical_px(),
@@ -554,7 +545,7 @@ fn build_profile_options(
 
     let mut col = Column::new()
         .key("mixer-profile-options")
-        .size(Size::px(CONTENT_W.logical_px(), block_h.logical_px()))
+        .size(Size::new(CONTENT_W.logical_px(), block_h.logical_px()))
         .gap(OPT_GAP.logical_px());
 
     for (idx, prof) in profiles.iter().enumerate() {
@@ -578,7 +569,7 @@ fn build_profile_options(
 
         let opt = Group::new()
             .key(("mixer-prof-opt", idx))
-            .size(Size::px(CONTENT_W.logical_px(), PROFILE_OPT_H.logical_px()))
+            .size(Size::new(CONTENT_W.logical_px(), PROFILE_OPT_H.logical_px()))
             .on_hover(Msg::Hover(target))
             .on_leave(Msg::Leave(target))
             .on_click(Msg::MixerSelectProfile {
@@ -620,11 +611,13 @@ fn build_profile_options(
 }
 
 fn build_balance_row(state: &State) -> Element<Msg> {
-    let bal = match (state.audio.as_ref(), state.audio_target) {
-        (Some(a), AudioControlTarget::Sink) => a.balance().clamp(-1.0, 1.0),
-        (Some(a), AudioControlTarget::Source) => a.source_balance().clamp(-1.0, 1.0),
-        (None, _) => 0.0,
-    };
+    let bal = state
+        .audio
+        .as_ref()
+        .map_or(0.0, |a| {
+            a.target_balance(state.audio_target == AudioControlTarget::Source)
+        })
+        .clamp(-1.0, 1.0);
     let hovered = state.hovered == HoverTarget::MixerBalanceBar;
     let half_w = BALANCE_TRACK_W * 0.5;
     let fill_w = (bal.abs() * half_w).round();
@@ -634,14 +627,14 @@ fn build_balance_row(state: &State) -> Element<Msg> {
 
     let mut bar = Group::new()
         .position(Position::absolute(0.logical_px(), 6.logical_px()))
-        .size(Size::px(BALANCE_TRACK_W.logical_px(), 6.logical_px()))
+        .size(Size::new(BALANCE_TRACK_W.logical_px(), 6.logical_px()))
         .child(Rect::new().size(Size::fill()).fill(SURFACE0));
 
     if fill_w >= 1.0 {
         bar = bar.child(
             Rect::new()
                 .position(Position::absolute(fill_x.logical_px(), 0.logical_px()))
-                .size(Size::px(fill_w.logical_px(), 6.logical_px()))
+                .size(Size::new(fill_w.logical_px(), 6.logical_px()))
                 .fill(BLUE),
         );
     }
@@ -650,7 +643,7 @@ fn build_balance_row(state: &State) -> Element<Msg> {
     bar = bar.child(
         Rect::new()
             .position(Position::absolute((half_w - 0.5).logical_px(), 0.logical_px()))
-            .size(Size::px(1.logical_px(), 6.logical_px()))
+            .size(Size::new(1.logical_px(), 6.logical_px()))
             .fill(if panned { TEXT } else { MAUVE }),
     );
 
@@ -660,7 +653,7 @@ fn build_balance_row(state: &State) -> Element<Msg> {
             22.logical_px(),
             ((BALANCE_ROW_H - 18.0) * 0.5).logical_px(),
         ))
-        .size(Size::px(BALANCE_TRACK_W.logical_px(), 18.logical_px()))
+        .size(Size::new(BALANCE_TRACK_W.logical_px(), 18.logical_px()))
         .on_hover(Msg::Hover(HoverTarget::MixerBalanceBar))
         .on_leave(Msg::Leave(HoverTarget::MixerBalanceBar))
         .on_pointer_down(Msg::MixerBalanceSeekClick)
@@ -668,7 +661,7 @@ fn build_balance_row(state: &State) -> Element<Msg> {
 
     Group::new()
         .key("mixer-balance-row")
-        .size(Size::px(CONTENT_W.logical_px(), BALANCE_ROW_H.logical_px()))
+        .size(Size::new(CONTENT_W.logical_px(), BALANCE_ROW_H.logical_px()))
         .on_scroll(Msg::MixerBalanceScroll)
         .child(
             Rect::new()
@@ -723,12 +716,12 @@ fn build_scrollbar_thumb(x: f32, view_h: f32, content_h: f32, scroll_y: f32) -> 
 
     Group::new()
         .position(Position::absolute(x.logical_px(), 0.logical_px()))
-        .size(Size::px(2.logical_px(), view_h.logical_px()))
+        .size(Size::new(2.logical_px(), view_h.logical_px()))
         .child(Rect::new().size(Size::fill()).fill(SURFACE0))
         .child(
             Rect::new()
                 .position(Position::absolute(0.logical_px(), thumb_y.logical_px()))
-                .size(Size::px(2.logical_px(), thumb_h.logical_px()))
+                .size(Size::new(2.logical_px(), thumb_h.logical_px()))
                 .fill(MAUVE),
         )
         .into()
