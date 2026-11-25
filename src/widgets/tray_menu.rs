@@ -171,5 +171,6 @@ pub fn build_tray_menu_surface(state: &State, menu: &TrayMenuPopup) -> Surface<M
         .input_mode(InputMode::Full)
         .keyboard_interactivity(KeyboardInteractivity::None)
         .background(Color::TRANSPARENT)
+        .on_close(Msg::CloseTrayMenu)
         .child(card)
 }

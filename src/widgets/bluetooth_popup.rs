@@ -169,6 +169,7 @@ pub fn build_bluetooth_popup_surface(state: &State) -> Surface<Msg> {
         .input_mode(InputMode::Full)
         .keyboard_interactivity(KeyboardInteractivity::OnDemand)
         .background(Color::TRANSPARENT)
+        .on_close(Msg::CloseBtPopup)
         .on_key(|ev| {
             if ev.key == Key::Escape {
                 Some(Msg::CloseBtPopup)

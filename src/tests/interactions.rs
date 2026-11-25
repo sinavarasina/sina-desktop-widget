@@ -1222,6 +1222,53 @@ fn quick_menu_settings_drawer_controls_persist_toml_and_apply_live() {
         count_before_muted_preview
     );
 
+    // General section: open Renderer dropdown, select Auto (GPU), verify persistence & render.
+    rt.enqueue(Msg::SettingsSelectSection(SettingsSection::General));
+    rt.enqueue(Msg::SettingsToggleDropdown(SettingsDropdown::Renderer));
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state().settings_ui.open_dropdown,
+        Some(SettingsDropdown::Renderer)
+    );
+    assert!(rt.rendered_buffer("bar-quick-menu").is_some());
+
+    rt.enqueue(Msg::SettingsSelectDropdown {
+        dropdown: SettingsDropdown::Renderer,
+        index: 1,
+    });
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state().config.general.renderer,
+        crate::app::config::RendererMode::Auto
+    );
+    assert_eq!(rt.state().settings_ui.open_dropdown, None);
+
+    // Select Low Memory profile via dropdown and verify persistence & render.
+    rt.enqueue(Msg::SettingsToggleDropdown(SettingsDropdown::MemoryProfile));
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state().settings_ui.open_dropdown,
+        Some(SettingsDropdown::MemoryProfile)
+    );
+    assert!(rt.rendered_buffer("bar-quick-menu").is_some());
+
+    rt.enqueue(Msg::SettingsSelectDropdown {
+        dropdown: SettingsDropdown::MemoryProfile,
+        index: 1,
+    });
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state().config.general.memory_profile,
+        crate::app::config::MemoryProfile::LowMemory
+    );
+    assert_eq!(rt.state().settings_ui.open_dropdown, None);
+
+    // Idle trim_memory() sweep keeps audio playback and UI rendering intact.
+    rt.enqueue(Msg::UserIdle(IdleEvent::Idled(Duration::from_secs(120))));
+    rt.enqueue(Msg::UserIdle(IdleEvent::Resumed(Duration::from_secs(120))));
+    rt.step().unwrap();
+    assert!(rt.rendered_buffer("bar-quick-menu").is_some());
+
     // Desktop section (Wallpaper + Companion Yuki subsections): open dropdown, select Contain,
     // test invalid path error + valid PNG dynamic load.
     rt.enqueue(Msg::SettingsSelectSection(SettingsSection::Desktop));

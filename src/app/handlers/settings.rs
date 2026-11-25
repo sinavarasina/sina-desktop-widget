@@ -3,9 +3,9 @@
 use waywi::prelude::*;
 
 use crate::app::config::{
-    DesktopPoseMode, MetricPlacement, RightMetricId, SettingStepperId, SettingToggleId,
-    SettingsDropdown, SettingsSection, WallpaperConfig, WallpaperFit, WidgetConfig,
-    expand_tilde_path,
+    DesktopPoseMode, MemoryProfile, MetricPlacement, RendererMode, RightMetricId, SettingStepperId,
+    SettingToggleId, SettingsDropdown, SettingsSection, WallpaperConfig, WallpaperFit,
+    WidgetConfig, expand_tilde_path,
 };
 use crate::app::handlers::events::scroll_direction_y;
 use crate::app::handlers::init::load_embedded_wallpaper;
@@ -331,6 +331,12 @@ pub fn handle_select_dropdown(
 ) {
     state.settings_ui.open_dropdown = None;
     match dropdown {
+        SettingsDropdown::Renderer => {
+            state.config.general.renderer = RendererMode::from_index(index);
+        }
+        SettingsDropdown::MemoryProfile => {
+            state.config.general.memory_profile = MemoryProfile::from_index(index);
+        }
         SettingsDropdown::WallpaperFit => {
             state.config.wallpaper.fit = WallpaperFit::from_index(index);
         }

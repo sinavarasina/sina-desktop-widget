@@ -93,6 +93,7 @@ pub fn build_disk_popup_surface(state: &State) -> Surface<Msg> {
             KeyboardInteractivity::OnDemand
         })
         .background(Color::TRANSPARENT)
+        .on_close(Msg::CloseDiskPopup)
         .on_key(|ev| Some(Msg::DiskUnlockKey(ev)))
         .on_ime(|ev| Some(Msg::DiskUnlockIme(ev)));
 

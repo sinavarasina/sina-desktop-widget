@@ -50,10 +50,23 @@ fn main() {
         return;
     }
 
+    let startup_cfg =
+        app::config::WidgetConfig::load_from_path(&app::config::WidgetConfig::default_path());
+    let renderer_pref = std::env::var("SINA_RENDERER")
+        .ok()
+        .and_then(|v| app::config::RendererMode::parse(&v))
+        .unwrap_or(startup_cfg.general.renderer)
+        .to_preference();
+    let memory_cfg = std::env::var("SINA_MEMORY")
+        .ok()
+        .and_then(|v| app::config::MemoryProfile::parse(&v))
+        .unwrap_or(startup_cfg.general.memory_profile)
+        .to_memory_config();
+
     if let Err(err) = App::new()
         .name("sina-desktop-widget")
-        .renderer(RendererPreference::Software)
-        .memory(MemoryConfig::default())
+        .renderer(renderer_pref)
+        .memory(memory_cfg)
         .run::<SinaDesktopWidget>()
     {
         eprintln!("sina-desktop-widget error: {err}");

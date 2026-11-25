@@ -106,6 +106,7 @@ pub fn build_drun_surface(state: &State) -> Surface<Msg> {
         .keyboard_interactivity(KeyboardInteractivity::Exclusive)
         .ime(ime_cfg)
         .background(Color::TRANSPARENT)
+        .on_close(Msg::CloseDrun)
         .on_key(|ev| Some(Msg::DrunKey(ev)))
         .on_ime(|ev| Some(Msg::DrunIme(ev)))
         .child(backdrop)

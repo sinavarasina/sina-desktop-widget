@@ -5,8 +5,9 @@
 use waywi::prelude::*;
 
 use crate::app::config::{
-    CONFIG_FILE_NAME, DesktopPoseMode, MetricPlacement, QUICK_MENU_POSE_LABELS, RightMetricSlot,
-    SettingStepperId, SettingToggleId, SettingsDropdown, SettingsSection, WallpaperFit,
+    CONFIG_FILE_NAME, DesktopPoseMode, MemoryProfile, MetricPlacement, QUICK_MENU_POSE_LABELS,
+    RendererMode, RightMetricSlot, SettingStepperId, SettingToggleId, SettingsDropdown,
+    SettingsSection, WallpaperFit,
 };
 use crate::app::state::{HoverTarget, Msg, State};
 use crate::theme::{
@@ -52,7 +53,7 @@ pub fn settings_rail_content_height() -> f32 {
 #[must_use]
 pub fn settings_list_content_height(state: &State) -> f32 {
     let (base_rows, subsections): (usize, usize) = match state.settings_ui.active_section {
-        SettingsSection::General => (6, 2),
+        SettingsSection::General => (8, 2),
         SettingsSection::Audio => (6, 2),
         SettingsSection::Desktop => (11, 2),
         SettingsSection::Bar => (6 + state.config.widgets.right_metrics.len(), 2),
@@ -73,6 +74,10 @@ pub fn settings_list_content_height(state: &State) -> f32 {
         state.settings_ui.active_section,
         state.settings_ui.open_dropdown,
     ) {
+        (SettingsSection::General, Some(SettingsDropdown::Renderer)) => RendererMode::ALL.len(),
+        (SettingsSection::General, Some(SettingsDropdown::MemoryProfile)) => {
+            MemoryProfile::ALL.len()
+        }
         (SettingsSection::Desktop, Some(SettingsDropdown::WallpaperFit)) => WallpaperFit::ALL.len(),
         (SettingsSection::Desktop, Some(SettingsDropdown::DesktopPose)) => {
             DesktopPoseMode::LABELS.len()
@@ -445,7 +450,7 @@ fn build_general_rows(state: &State) -> Vec<Element<Msg>> {
     } else {
         format!("{}s", g.power_countdown_secs)
     };
-    vec![
+    let mut rows = vec![
         subsection_header("gen-clock", "CLOCK & POWER"),
         toggle_row(
             state,
@@ -475,17 +480,61 @@ fn build_general_rows(state: &State) -> Vec<Element<Msg>> {
             &countdown_label,
             SettingStepperId::PowerCountdownSecs,
         ),
-        subsection_header("gen-cfg", "CONFIG"),
-        value_row(state, 4, "Config Storage", CONFIG_FILE_NAME, SUBTEXT1),
-        action_row(
+        subsection_header("gen-cfg", "RUNTIME & CONFIG"),
+        dropdown_row(
             state,
-            5,
-            "Reset Defaults",
-            "Reset",
-            RED,
-            Msg::SettingsResetDefaults,
+            6,
+            "Renderer (restart)",
+            g.renderer.label(),
+            SettingsDropdown::Renderer,
         ),
-    ]
+    ];
+
+    if state.settings_ui.open_dropdown == Some(SettingsDropdown::Renderer) {
+        let labels: Vec<&'static str> = RendererMode::ALL.iter().map(|r| r.label()).collect();
+        rows.push(dropdown_options_block(
+            state,
+            SettingsDropdown::Renderer,
+            &labels,
+            g.renderer.index(),
+            180,
+        ));
+    }
+
+    rows.push(dropdown_row(
+        state,
+        7,
+        "Memory (restart)",
+        g.memory_profile.label(),
+        SettingsDropdown::MemoryProfile,
+    ));
+    if state.settings_ui.open_dropdown == Some(SettingsDropdown::MemoryProfile) {
+        let labels: Vec<&'static str> = MemoryProfile::ALL.iter().map(|m| m.label()).collect();
+        rows.push(dropdown_options_block(
+            state,
+            SettingsDropdown::MemoryProfile,
+            &labels,
+            g.memory_profile.index(),
+            190,
+        ));
+    }
+
+    rows.push(value_row(
+        state,
+        4,
+        "Config Storage",
+        CONFIG_FILE_NAME,
+        SUBTEXT1,
+    ));
+    rows.push(action_row(
+        state,
+        5,
+        "Reset Defaults",
+        "Reset",
+        RED,
+        Msg::SettingsResetDefaults,
+    ));
+    rows
 }
 
 fn build_audio_rows(state: &State) -> Vec<Element<Msg>> {

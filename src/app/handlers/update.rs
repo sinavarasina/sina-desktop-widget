@@ -56,7 +56,23 @@ use super::settings::{
     handle_wallpaper_path_clear, handle_wallpaper_path_focus,
 };
 
+/// Keeps `bar_width` and `screen_height` synchronized with the primary Wayland output across
+/// monitor hotplug, OSD HDR/mode changes, and scale switches (O(1), zero allocations).
+fn sync_primary_output_size(state: &mut State, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
+    if let Some(primary) = ctx.outputs().first() {
+        let w = primary.logical_size.width.get();
+        let h = primary.logical_size.height.get();
+        if w >= 320.0 && (state.bar_width - w).abs() > 0.5 {
+            state.bar_width = w;
+        }
+        if h >= 240.0 && (state.screen_height - h).abs() > 0.5 {
+            state.screen_height = h;
+        }
+    }
+}
+
 pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Result<()> {
+    sync_primary_output_size(state, ctx);
     match msg {
         Msg::SpawnBtop => {
             let _ = spawn_detached("footclient", ["btop"]);

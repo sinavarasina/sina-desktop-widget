@@ -91,6 +91,7 @@ pub fn build_quick_menu_surface(state: &State) -> Surface<Msg> {
             KeyboardInteractivity::OnDemand
         })
         .background(Color::TRANSPARENT)
+        .on_close(Msg::CloseQuickMenu)
         .on_key(|ev| Some(Msg::SettingsKey(ev)))
         .on_ime(|ev| Some(Msg::SettingsIme(ev)));
 

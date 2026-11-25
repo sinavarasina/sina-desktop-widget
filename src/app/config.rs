@@ -148,12 +148,150 @@ impl DesktopPoseMode {
 
 pub const QUICK_MENU_POSE_LABELS: [&str; 3] = ["Profile Right", "3/4 Right", "Front View"];
 
+/// WayWi rendering backend preference persisted in `[general] renderer` (applied on startup).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum RendererMode {
+    #[default]
+    Software,
+    Auto,
+    Gpu,
+}
+
+impl RendererMode {
+    pub const ALL: [Self; 3] = [Self::Software, Self::Auto, Self::Gpu];
+
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Software => "software",
+            Self::Auto => "auto",
+            Self::Gpu => "gpu",
+        }
+    }
+
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Software => "CPU (Software)",
+            Self::Auto => "Auto (GPU)",
+            Self::Gpu => "GPU",
+        }
+    }
+
+    #[must_use]
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "software" | "cpu" => Some(Self::Software),
+            "auto" => Some(Self::Auto),
+            "gpu" | "wgpu" | "vulkan" => Some(Self::Gpu),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn to_preference(self) -> RendererPreference {
+        match self {
+            Self::Software => RendererPreference::Software,
+            Self::Auto => RendererPreference::Auto,
+            Self::Gpu => RendererPreference::Gpu,
+        }
+    }
+
+    #[must_use]
+    pub const fn index(self) -> usize {
+        match self {
+            Self::Software => 0,
+            Self::Auto => 1,
+            Self::Gpu => 2,
+        }
+    }
+
+    #[must_use]
+    pub const fn from_index(idx: usize) -> Self {
+        match idx {
+            1 => Self::Auto,
+            2 => Self::Gpu,
+            _ => Self::Software,
+        }
+    }
+}
+
+/// WayWi runtime memory/cache preset persisted in `[general] memory_profile` (applied on startup).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum MemoryProfile {
+    #[default]
+    Balanced,
+    LowMemory,
+    HighThroughput,
+}
+
+impl MemoryProfile {
+    pub const ALL: [Self; 3] = [Self::Balanced, Self::LowMemory, Self::HighThroughput];
+
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Balanced => "balanced",
+            Self::LowMemory => "low_memory",
+            Self::HighThroughput => "high_throughput",
+        }
+    }
+
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Balanced => "Balanced",
+            Self::LowMemory => "Low Memory",
+            Self::HighThroughput => "High Throughput",
+        }
+    }
+
+    #[must_use]
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "balanced" | "default" => Some(Self::Balanced),
+            "low_memory" | "low-memory" | "low" => Some(Self::LowMemory),
+            "high_throughput" | "high-throughput" | "high" => Some(Self::HighThroughput),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn to_memory_config(self) -> MemoryConfig {
+        match self {
+            Self::Balanced => MemoryConfig::balanced(),
+            Self::LowMemory => MemoryConfig::low_memory(),
+            Self::HighThroughput => MemoryConfig::high_throughput(),
+        }
+    }
+
+    #[must_use]
+    pub const fn index(self) -> usize {
+        match self {
+            Self::Balanced => 0,
+            Self::LowMemory => 1,
+            Self::HighThroughput => 2,
+        }
+    }
+
+    #[must_use]
+    pub const fn from_index(idx: usize) -> Self {
+        match idx {
+            1 => Self::LowMemory,
+            2 => Self::HighThroughput,
+            _ => Self::Balanced,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GeneralConfig {
     pub clock_24h: bool,
     pub clock_alt_default: bool,
     pub foreground_booster: bool,
     pub power_countdown_secs: u8,
+    pub renderer: RendererMode,
+    pub memory_profile: MemoryProfile,
 }
 
 impl Default for GeneralConfig {
@@ -163,6 +301,8 @@ impl Default for GeneralConfig {
             clock_alt_default: false,
             foreground_booster: true,
             power_countdown_secs: crate::app::quick_menu::POWER_COUNTDOWN_SECS,
+            renderer: RendererMode::Software,
+            memory_profile: MemoryProfile::Balanced,
         }
     }
 }
@@ -587,6 +727,8 @@ impl WidgetConfig {
              clock_alt_default = {}\n\
              foreground_booster = {}\n\
              power_countdown_secs = {}\n\
+             renderer = \"{}\"\n\
+             memory_profile = \"{}\"\n\
              \n\
              [audio]\n\
              xdg_sounds_enabled = {}\n\
@@ -620,6 +762,8 @@ impl WidgetConfig {
             self.general.clock_alt_default,
             self.general.foreground_booster,
             self.general.power_countdown_secs.min(10),
+            self.general.renderer.as_str(),
+            self.general.memory_profile.as_str(),
             self.audio.xdg_sounds_enabled,
             self.audio.ui_feedback_sounds,
             self.audio.notification_sounds,
@@ -682,6 +826,20 @@ impl WidgetConfig {
                 ("general", "power_countdown_secs") => {
                     if let Ok(n) = val.parse::<u8>() {
                         cfg.general.power_countdown_secs = n.min(10);
+                    }
+                }
+                ("general", "renderer") => {
+                    if let Some(s) = parse_toml_string(val)
+                        && let Some(mode) = RendererMode::parse(&s)
+                    {
+                        cfg.general.renderer = mode;
+                    }
+                }
+                ("general", "memory_profile") => {
+                    if let Some(s) = parse_toml_string(val)
+                        && let Some(profile) = MemoryProfile::parse(&s)
+                    {
+                        cfg.general.memory_profile = profile;
                     }
                 }
                 ("audio", "xdg_sounds_enabled") => {
@@ -1010,6 +1168,8 @@ pub enum SettingStepperId {
 /// Inline expandable dropdown controls in the Settings panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SettingsDropdown {
+    Renderer,
+    MemoryProfile,
     WallpaperFit,
     DesktopPose,
     QuickMenuPose,
@@ -1083,6 +1243,8 @@ mod tests {
         cfg.general.clock_alt_default = true;
         cfg.general.foreground_booster = false;
         cfg.general.power_countdown_secs = 5;
+        cfg.general.renderer = RendererMode::Gpu;
+        cfg.general.memory_profile = MemoryProfile::LowMemory;
         cfg.audio.xdg_sounds_enabled = false;
         cfg.audio.ui_feedback_sounds = false;
         cfg.audio.notification_sounds = false;
@@ -1161,6 +1323,8 @@ right_metrics = "bluetooth:bar,audio:drawer,bluetooth:off"
 [general]
 clock_24h = false # inline comment
 power_countdown_secs = 99
+renderer = "auto"
+memory_profile = "high_throughput"
 unknown_future_flag = true
 
 [audio]
@@ -1182,6 +1346,14 @@ foo = "bar"
         let parsed = WidgetConfig::from_toml(sample);
         assert!(!parsed.general.clock_24h);
         assert_eq!(parsed.general.power_countdown_secs, 10);
+        assert_eq!(parsed.general.renderer, RendererMode::Auto);
+        assert_eq!(parsed.general.memory_profile, MemoryProfile::HighThroughput);
+        assert_eq!(RendererMode::parse("cpu"), Some(RendererMode::Software));
+        assert_eq!(RendererMode::parse("vulkan"), Some(RendererMode::Gpu));
+        assert_eq!(RendererMode::parse("invalid"), None);
+        assert_eq!(MemoryProfile::parse("low"), Some(MemoryProfile::LowMemory));
+        assert_eq!(MemoryProfile::parse("default"), Some(MemoryProfile::Balanced));
+        assert_eq!(MemoryProfile::parse("invalid"), None);
         assert_eq!(parsed.audio.sound_volume_pct, 150);
         assert_eq!(parsed.wallpaper.path, "/tmp/my # literal path.png");
         assert_eq!(parsed.wallpaper.fit, WallpaperFit::Fill);
