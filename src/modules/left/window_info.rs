@@ -114,8 +114,7 @@ fn animated_info_width(items: &[String], reel: &crate::app::reel::ReelState) -> 
         let next_w = ((items[next_idx].chars().count().min(MAX_CHARS) as f32) * CHAR_WIDTH_PX
             + 2.0)
             .max(20.0);
-        let p = reel.progress.clamp(0.0, 1.0);
-        let ease = 1.0 - (1.0 - p).powi(3);
+        let ease = reel.progress();
         cur_w + (next_w - cur_w) * ease
     } else {
         cur_w

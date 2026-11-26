@@ -8,7 +8,7 @@ use waywi::dbus::{BluetoothDevice, NmState, NotificationImageData, UDisksDrive};
 use crate::app::Msg;
 use crate::app::notifications::storage::MAX_RAM_NOTIFICATIONS;
 
-use super::support::synthetic_rt;
+use super::support::{settle_ui_anims, synthetic_rt};
 
 fn sample_notif(id: u32, summary: &str, body: &str) -> DesktopNotification {
     DesktopNotification {
@@ -114,12 +114,9 @@ fn notification_center_opens_on_left_click_closes_on_outside_or_esc_and_bounds_r
         modifiers: Modifiers::empty(),
     }));
     rt.step().unwrap();
-    assert!(rt.state().notifications.center_target);
-    for _ in 0..16 {
-        rt.enqueue(Msg::NotifCenterAnimTick);
-        rt.step().unwrap();
-    }
-    assert!((rt.state().notifications.center_progress - 1.0).abs() < 1e-4);
+    assert!(rt.state().notifications.is_center_open());
+    settle_ui_anims(&mut rt);
+    assert!((rt.state().notifications.center_progress() - 1.0).abs() < 1e-4);
     assert!(
         rt.rendered_buffer("bar-notification-center").is_some(),
         "notification center overlay surface must render"
@@ -168,12 +165,9 @@ fn notification_center_opens_on_left_click_closes_on_outside_or_esc_and_bounds_r
     // Clicking outside closes the notification center and animates it closed.
     rt.enqueue(Msg::CloseNotificationCenter);
     rt.step().unwrap();
-    assert!(!rt.state().notifications.center_target);
-    for _ in 0..16 {
-        rt.enqueue(Msg::NotifCenterAnimTick);
-        rt.step().unwrap();
-    }
-    assert!(rt.state().notifications.center_progress <= 1e-4);
+    assert!(!rt.state().notifications.is_center_open());
+    settle_ui_anims(&mut rt);
+    assert!(rt.state().notifications.center_progress() <= 1e-4);
     assert_eq!(rt.surface_count(), 1);
 }
 
@@ -253,10 +247,7 @@ fn notification_center_shows_multi_actions_with_variable_height_and_horizontal_s
         button: Some(MouseButton::Left),
         modifiers: Modifiers::empty(),
     }));
-    for _ in 0..16 {
-        rt.enqueue(Msg::NotifCenterAnimTick);
-        rt.step().unwrap();
-    }
+    settle_ui_anims(&mut rt);
     assert!(rt.rendered_buffer("bar-notification-center").is_some());
 
     // Hover and horizontally scroll action buttons via mouse wheel.
@@ -274,6 +265,7 @@ fn notification_center_shows_multi_actions_with_variable_height_and_horizontal_s
             discrete_x: 0,
             discrete_y: 1,
             modifiers: Modifiers::empty(),
+            ..ScrollEvent::default()
         },
     });
     rt.step().unwrap();
@@ -499,6 +491,7 @@ fn xdg_sound_theme_engine_tracks_transitions_cooldowns_and_dnd() {
         discrete_x: 0,
         discrete_y: -1,
         modifiers: Modifiers::empty(),
+        ..ScrollEvent::default()
     };
     let before_len = rt.state().sounds.played_cues.len();
     for _ in 0..5 {

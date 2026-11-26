@@ -9,7 +9,7 @@ use crate::modules::right::build_right_metric;
 use crate::theme::{BAR_HEIGHT, EXPAND_SIGN_WIDTH, MANTLE, MODULE_PAD_H, SUBTEXT0, font_ui};
 
 pub fn build_expandable_mon(state: &State, metrics: &[RightMetricId]) -> Element<Msg> {
-    let p = state.drawer_progress.clamp(0.0, 1.0);
+    let p = state.drawer_anim.progress();
     let mut drawer_row = Row::new()
         .key("expandable-mon")
         .size(Size::new(Length::Auto, BAR_HEIGHT.logical_px()))
@@ -22,6 +22,7 @@ pub fn build_expandable_mon(state: &State, metrics: &[RightMetricId]) -> Element
                 EXPAND_SIGN_WIDTH.logical_px(),
                 BAR_HEIGHT.logical_px(),
             ))
+            .cursor(CursorShape::Pointer)
             .on_hover(Msg::Hover(HoverTarget::ExpandSign))
             .on_leave(Msg::Leave(HoverTarget::ExpandSign))
             .child(Rect::new().size(Size::fill()).fill(MANTLE))

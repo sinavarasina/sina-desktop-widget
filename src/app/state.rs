@@ -12,6 +12,7 @@ use waywi::system::{
     NetworkSnapshot, TimeFormat, shift_year_month,
 };
 
+use super::anim::RevealAnim;
 use super::asset_lru::PathAssetCache;
 pub use super::audio::AudioUiState;
 pub use super::bluetooth::BluetoothUiState;
@@ -33,7 +34,7 @@ use super::tray_cache::upsert_tray_entry_into;
 pub use super::types::{AudioControlTarget, HoverTarget, TrayEntry, TrayMenuPopup};
 pub use super::window_info::WindowInfoState;
 
-pub const DRAWER_ANIM_STEP: f32 = 16.0 / 300.0;
+pub const DRAWER_ANIM_DURATION: Duration = Duration::from_millis(260);
 
 pub struct State {
     pub config: WidgetConfig,
@@ -95,16 +96,14 @@ pub struct State {
     pub calendar_open: bool,
     pub cal_year_mode: bool,
     pub cal_month_offset: i32,
-    pub clock_menu_target: bool,
-    pub clock_menu_progress: f32,
+    pub clock_menu_anim: RevealAnim,
     pub clock_menu_leave_deadline: Option<Instant>,
     pub quick_menu: QuickMenuState,
 
     pub hovered: HoverTarget,
     pub hover_anchor_x: Option<f32>,
     pub startup_hydrated: bool,
-    pub drawer_target: bool,
-    pub drawer_progress: f32,
+    pub drawer_anim: RevealAnim,
     pub drawer_leave_deadline: Option<Instant>,
 }
 
@@ -123,19 +122,82 @@ impl State {
 
     #[must_use]
     pub fn is_animating_drawer(&self) -> bool {
-        let target = if self.drawer_target { 1.0 } else { 0.0 };
-        (self.drawer_progress - target).abs() > 0.001
+        self.drawer_anim.is_animating()
     }
 
     #[must_use]
     pub fn is_animating_clock_menu(&self) -> bool {
-        let target = if self.clock_menu_target { 1.0 } else { 0.0 };
-        (self.clock_menu_progress - target).abs() > 0.001
+        self.clock_menu_anim.is_animating()
     }
 
     #[must_use]
     pub const fn is_animating_reels(&self) -> bool {
         self.sysinfo.is_animating() || self.window_info.is_animating()
+    }
+
+    /// True whenever any VSync UI animation is active and needs `Animation::frames`.
+    #[must_use]
+    pub fn is_animating_ui(&self) -> bool {
+        self.is_animating_drawer()
+            || self.is_animating_clock_menu()
+            || self.is_animating_reels()
+            || self.quick_menu.is_animating_popup()
+            || self.desktop_sprite.is_fading()
+            || self.notifications.is_animating_center()
+            || self.mpris.is_animating_popup()
+            || self.bt_ui.is_animating_popup()
+            || self.disk_ui.is_animating_popup()
+            || self.audio_ui.is_animating_popup()
+            || self.drun.is_animating()
+    }
+
+    /// Advances all active VSync UI animations to `now`.
+    pub fn advance_ui_animations(
+        &mut self,
+        now: Instant,
+        ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
+    ) {
+        if self.drawer_anim.is_animating() {
+            self.drawer_anim.advance(now);
+        }
+        if self.clock_menu_anim.is_animating() {
+            self.clock_menu_anim.advance(now);
+        }
+        if self.sysinfo.is_animating() {
+            self.sysinfo
+                .advance_animation(now, self.cpu.as_ref(), self.memory.as_ref());
+        }
+        if self.window_info.is_animating() {
+            self.window_info
+                .advance_animation(now, self.booster.short_badge());
+        }
+        if self.quick_menu.is_animating_popup() {
+            self.quick_menu.advance_popup_animation(now);
+            if !self.quick_menu.is_popup_visible() {
+                self.quick_menu.evict_sprite_pixels(ctx);
+            }
+        }
+        if self.desktop_sprite.is_fading() {
+            self.desktop_sprite.advance_fade(now, ctx);
+        }
+        if self.notifications.is_animating_center() {
+            self.notifications.advance_center_animation(now);
+        }
+        if self.mpris.is_animating_popup() {
+            self.mpris.advance_popup_animation(now);
+        }
+        if self.bt_ui.is_animating_popup() {
+            self.bt_ui.advance_popup_animation(now);
+        }
+        if self.disk_ui.is_animating_popup() {
+            self.disk_ui.advance_popup_animation(now);
+        }
+        if self.audio_ui.is_animating_popup() {
+            self.audio_ui.advance_popup_animation(now);
+        }
+        if self.drun.is_animating() {
+            self.drun.advance_animation(now);
+        }
     }
 
     #[must_use]
@@ -157,17 +219,17 @@ impl State {
             }
             self.hovered = target;
             if target_in_drawer {
-                self.drawer_target = true;
+                self.drawer_anim.set_open(true);
                 self.drawer_leave_deadline = None;
             } else {
-                self.drawer_target = false;
+                self.drawer_anim.set_open(false);
                 self.drawer_leave_deadline = None;
             }
             if target.is_clock_group() {
-                self.clock_menu_target = true;
+                self.clock_menu_anim.set_open(true);
                 self.clock_menu_leave_deadline = None;
-            } else if !self.quick_menu.popup_target {
-                self.clock_menu_target = false;
+            } else if !self.quick_menu.is_popup_open() {
+                self.clock_menu_anim.set_open(false);
                 self.clock_menu_leave_deadline = None;
             }
         } else if self.hovered == target {
@@ -177,51 +239,24 @@ impl State {
                 // Brief grace avoids flicker when sliding between `expand_sign` and drawer modules.
                 self.drawer_leave_deadline = Some(Instant::now() + Duration::from_millis(120));
             }
-            if target.is_clock_group() && !self.quick_menu.popup_target {
+            if target.is_clock_group() && !self.quick_menu.is_popup_open() {
                 // Brief grace avoids flicker when sliding from `Clock` into `ClockMenu`.
                 self.clock_menu_leave_deadline = Some(Instant::now() + Duration::from_millis(140));
             }
         }
     }
 
-    pub fn step_drawer_animation(&mut self) {
-        let target = if self.drawer_target { 1.0_f32 } else { 0.0_f32 };
-        if (self.drawer_progress - target).abs() <= DRAWER_ANIM_STEP {
-            self.drawer_progress = target;
-        } else if self.drawer_progress < target {
-            self.drawer_progress = (self.drawer_progress + DRAWER_ANIM_STEP).min(1.0);
-        } else {
-            self.drawer_progress = (self.drawer_progress - DRAWER_ANIM_STEP).max(0.0);
-        }
-    }
-
     pub fn expire_drawer_leave(&mut self) {
         self.drawer_leave_deadline = None;
         if !self.is_drawer_target(self.hovered) {
-            self.drawer_target = false;
-        }
-    }
-
-    pub fn step_clock_menu_animation(&mut self) {
-        const CLOCK_MENU_STEP: f32 = 16.0 / 180.0;
-        let target = if self.clock_menu_target {
-            1.0_f32
-        } else {
-            0.0_f32
-        };
-        if (self.clock_menu_progress - target).abs() <= CLOCK_MENU_STEP {
-            self.clock_menu_progress = target;
-        } else if self.clock_menu_progress < target {
-            self.clock_menu_progress = (self.clock_menu_progress + CLOCK_MENU_STEP).min(1.0);
-        } else {
-            self.clock_menu_progress = (self.clock_menu_progress - CLOCK_MENU_STEP).max(0.0);
+            self.drawer_anim.set_open(false);
         }
     }
 
     pub fn expire_clock_menu_leave(&mut self) {
         self.clock_menu_leave_deadline = None;
-        if !self.hovered.is_clock_group() && !self.quick_menu.popup_target {
-            self.clock_menu_target = false;
+        if !self.hovered.is_clock_group() && !self.quick_menu.is_popup_open() {
+            self.clock_menu_anim.set_open(false);
         }
     }
 

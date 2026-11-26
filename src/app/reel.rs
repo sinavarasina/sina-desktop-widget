@@ -1,15 +1,19 @@
-//! Reusable pause-and-slide rotating slot state for compact bar telemetry lines.
+//! Reusable pause-and-slide rotating slot state backed by `waywi::animation::Animated`.
 
-const REEL_ANIM_STEP: f32 = 16.0 / 360.0;
+use std::time::{Duration, Instant};
 
-/// Tracks the visible item index, hold countdown (in seconds), and vertical slide progress.
+use waywi::prelude::*;
+
+const REEL_ANIM_DURATION: Duration = Duration::from_millis(360);
+
+/// Tracks the visible item index, hold countdown (in seconds), and VSync-paced slide progress.
 #[derive(Debug, Clone)]
 pub struct ReelState {
     pub index: usize,
     pub hold_secs: u16,
     pub hold_remaining: u16,
     pub animating: bool,
-    pub progress: f32,
+    anim: Animated<f32>,
 }
 
 impl ReelState {
@@ -21,17 +25,14 @@ impl ReelState {
             hold_secs: clamped,
             hold_remaining: clamped,
             animating: false,
-            progress: 0.0,
+            anim: Animated::new(0.0),
         }
     }
 
     /// Advances the 1-second hold countdown; triggers a slide transition when the hold expires.
     pub fn tick_second(&mut self, item_count: usize) {
         if item_count <= 1 {
-            self.index = 0;
-            self.animating = false;
-            self.progress = 0.0;
-            self.hold_remaining = self.hold_secs;
+            self.reset();
             return;
         }
         if self.index >= item_count {
@@ -44,12 +45,14 @@ impl ReelState {
             self.hold_remaining -= 1;
         } else {
             self.animating = true;
-            self.progress = 0.0;
+            self.anim.snap_to(0.0);
+            self.anim
+                .transition_to(1.0, REEL_ANIM_DURATION, Easing::CubicOut, Instant::now());
         }
     }
 
-    /// Steps the 60fps slide animation; wraps to the next item and resets the hold countdown on completion.
-    pub fn step_animation(&mut self, item_count: usize) {
+    /// Advances the VSync slide animation; wraps to the next item and resets the hold countdown.
+    pub fn advance(&mut self, now: Instant, item_count: usize) {
         if !self.animating {
             return;
         }
@@ -57,10 +60,10 @@ impl ReelState {
             self.reset();
             return;
         }
-        self.progress = (self.progress + REEL_ANIM_STEP).min(1.0);
-        if self.progress >= 1.0 - 1e-4 {
+        let val = self.anim.sample(now);
+        if val >= 1.0 - 1e-4 {
             self.index = (self.index + 1) % item_count;
-            self.progress = 0.0;
+            self.anim.snap_to(0.0);
             self.animating = false;
             self.hold_remaining = self.hold_secs;
         }
@@ -69,7 +72,7 @@ impl ReelState {
     pub fn reset(&mut self) {
         self.index = 0;
         self.animating = false;
-        self.progress = 0.0;
+        self.anim.snap_to(0.0);
         self.hold_remaining = self.hold_secs;
     }
 
@@ -77,10 +80,18 @@ impl ReelState {
     pub const fn is_animating(&self) -> bool {
         self.animating
     }
+
+    /// Eased `0.0..=1.0` slide progress.
+    #[must_use]
+    pub fn progress(&self) -> f32 {
+        self.anim.value().clamp(0.0, 1.0)
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::time::{Duration, Instant};
+
     use super::ReelState;
 
     #[test]
@@ -96,9 +107,12 @@ mod tests {
         reel.tick_second(2);
         assert!(reel.is_animating());
 
-        for _ in 0..25 {
-            reel.step_animation(2);
-        }
+        let t0 = Instant::now();
+        reel.advance(t0 + Duration::from_millis(180), 2);
+        assert!(reel.is_animating());
+        assert!(reel.progress() > 0.5);
+
+        reel.advance(t0 + Duration::from_millis(400), 2);
         assert!(!reel.is_animating());
         assert_eq!(reel.index, 1);
         assert_eq!(reel.hold_remaining, 3);

@@ -11,11 +11,14 @@ use crate::app::state::{
     AudioControlTarget, SoundCue, State, TrayEntry, TrayMenuPopup, resolve_tray_icon,
 };
 
-/// Returns Wayland vertical scroll step (`< 0` = scroll up, `> 0` = scroll down).
+/// Returns Wayland vertical scroll step (`< 0` = scroll up, `> 0` = scroll down), ignoring
+/// zero-delta kinetic stop frames (`stop_y`).
 #[must_use]
 pub fn scroll_direction_y(sc: ScrollEvent) -> i32 {
     if sc.discrete_y != 0 {
         sc.discrete_y
+    } else if sc.stop_y && sc.delta_y.abs() <= f32::EPSILON {
+        0
     } else if sc.delta_y > 0.0 {
         1
     } else if sc.delta_y < 0.0 {

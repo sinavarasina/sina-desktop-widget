@@ -25,6 +25,7 @@ pub fn build_seek_box(state: &State) -> Element<Msg> {
             MPRIS_SEEK_TRACK_WIDTH.logical_px(),
             6.logical_px(),
         ))
+        .cursor(CursorShape::EwResize)
         .on_hover(Msg::Hover(HoverTarget::MprisSeek))
         .on_leave(Msg::Leave(HoverTarget::MprisSeek))
         .on_pointer_down(Msg::MprisSeekClick)

@@ -1,22 +1,22 @@
 //! Native `drun` application launcher state, lazy XDG entry cache, and input metrics.
 
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 use waywi::desktop::icons::XdgIconLookup;
 use waywi::prelude::*;
 
 use crate::theme::{BAR_HEIGHT, DRUN_INPUT_MIN_W, POPUP_TOP_MARGIN, font_ui};
 
+use super::anim::RevealAnim;
 use super::asset_lru::PathAssetCache;
 
-const DRUN_ANIM_STEP: f32 = 16.0 / 160.0;
+const DRUN_ANIM_DURATION: Duration = Duration::from_millis(160);
 const DRUN_ICON_PX: u16 = 32;
 const DRUN_VISIBLE_SLOTS: usize = 5;
 
-#[derive(Default)]
 pub struct DrunState {
-    pub target: bool,
-    pub progress: f32,
+    pub anim: RevealAnim,
     pub input: TextInputState,
     pub entries: Vec<DesktopEntry>,
     pub scanned: bool,
@@ -29,27 +29,47 @@ pub struct DrunState {
     pub marquee_tick: u32,
 }
 
+impl Default for DrunState {
+    fn default() -> Self {
+        Self {
+            anim: RevealAnim::new(DRUN_ANIM_DURATION, Easing::CubicOut),
+            input: TextInputState::default(),
+            entries: Vec::new(),
+            scanned: false,
+            match_indices: Vec::new(),
+            selected: 0,
+            scroll_start: 0,
+            launch_counts: HashMap::new(),
+            measured_text_w: 0.0,
+            cursor_x: 0.0,
+            marquee_tick: 0,
+        }
+    }
+}
+
 impl DrunState {
     #[must_use]
+    pub const fn is_open(&self) -> bool {
+        self.anim.is_open()
+    }
+
+    #[must_use]
+    pub fn progress(&self) -> f32 {
+        self.anim.progress()
+    }
+
+    #[must_use]
     pub fn is_visible(&self) -> bool {
-        self.target || self.progress > 0.001
+        self.anim.is_visible()
     }
 
     #[must_use]
     pub fn is_animating(&self) -> bool {
-        let tgt = if self.target { 1.0 } else { 0.0 };
-        (self.progress - tgt).abs() > 0.001
+        self.anim.is_animating()
     }
 
-    pub fn step_animation(&mut self) {
-        let tgt = if self.target { 1.0_f32 } else { 0.0_f32 };
-        if (self.progress - tgt).abs() <= DRUN_ANIM_STEP {
-            self.progress = tgt;
-        } else if self.progress < tgt {
-            self.progress = (self.progress + DRUN_ANIM_STEP).min(1.0);
-        } else {
-            self.progress = (self.progress - DRUN_ANIM_STEP).max(0.0);
-        }
+    pub fn advance_animation(&mut self, now: Instant) {
+        self.anim.advance(now);
     }
 
     pub fn ensure_scanned(&mut self) {
@@ -60,7 +80,7 @@ impl DrunState {
     }
 
     pub fn open(&mut self, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
-        self.target = true;
+        self.anim.set_open(true);
         self.input.clear();
         self.selected = 0;
         self.scroll_start = 0;
@@ -71,7 +91,7 @@ impl DrunState {
     }
 
     pub fn close(&mut self) {
-        self.target = false;
+        self.anim.set_open(false);
     }
 
     pub fn refresh_matches(&mut self) {

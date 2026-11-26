@@ -24,8 +24,7 @@ const DISK_VISIBLE_ROWS: usize = 6;
 const DISK_PAD: f32 = 10.0;
 
 pub fn build_disk_popup_surface(state: &State) -> Surface<Msg> {
-    let p = state.disk_ui.popup_progress.clamp(0.0, 1.0);
-    let ease = 1.0 - (1.0 - p).powi(3);
+    let ease = state.disk_ui.popup_progress();
 
     let user_blocks = DiskUiState::user_blocks(&state.udisks);
     let sys_blocks = DiskUiState::system_blocks(&state.udisks);
@@ -307,6 +306,7 @@ fn build_header(
             Percent::new(50.0),
         ))
         .anchor(ElementAnchor::CenterRight)
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(HoverTarget::DiskRefresh))
         .on_leave(Msg::Leave(HoverTarget::DiskRefresh))
         .on_click(Msg::DiskRefresh)
@@ -419,6 +419,7 @@ fn build_unlock_bar(state: &State) -> Element<Msg> {
                 .child(
                     Group::new()
                         .size(Size::new(Length::Fill, 18.logical_px()))
+                        .cursor(CursorShape::Text)
                         .child(
                             Text::new(if is_empty {
                                 marquee_slice(&placeholder, 24, state.disk_ui.marquee_tick)
@@ -472,6 +473,7 @@ fn header_btn(
     Group::new()
         .key(key)
         .size(Size::auto())
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(target))
         .on_leave(Msg::Leave(target))
         .on_click(on_click)
@@ -509,6 +511,7 @@ fn menu_btn(
     Group::new()
         .key(key)
         .size(Size::auto())
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(target))
         .on_leave(Msg::Leave(target))
         .on_click(on_click)
@@ -616,6 +619,7 @@ fn build_device_row(state: &State, block: &UDisksBlockDevice, idx: usize) -> Ele
     Group::new()
         .key(("disk-dev", idx))
         .size(Size::new(Length::Fill, DISK_ROW_HEIGHT.logical_px()))
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(HoverTarget::DiskDevice(idx)))
         .on_leave(Msg::Leave(HoverTarget::DiskDevice(idx)))
         .on_pointer_down(move |ev| Msg::DiskDevicePointerDown {

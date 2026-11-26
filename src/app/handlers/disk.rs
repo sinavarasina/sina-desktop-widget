@@ -24,7 +24,7 @@ pub fn handle_disk_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &Effect
             let raw_left = click_global_x - DISK_POPUP_WIDTH * 0.5;
             let max_left = (state.bar_width - DISK_POPUP_WIDTH - 8.0).max(8.0);
             state.disk_ui.popup_left_x = raw_left.clamp(8.0, max_left);
-            if !state.disk_ui.popup_target {
+            if !state.disk_ui.is_popup_open() {
                 close_other_overlays(state, Some("disk"));
                 if state.udisks.block_devices.is_empty()
                     && let Ok(dbus) = ctx.dbus()
@@ -37,7 +37,7 @@ pub fn handle_disk_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &Effect
                 }
             }
             state.disk_ui.toggle_popup();
-            let cue = if state.disk_ui.popup_target {
+            let cue = if state.disk_ui.is_popup_open() {
                 SoundCue::MenuPopup
             } else {
                 SoundCue::MenuPopdown

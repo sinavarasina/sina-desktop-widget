@@ -79,6 +79,7 @@ pub fn build_notification_segment(state: &State) -> Element<Msg> {
     let pill = Group::new()
         .key("notifications-pill")
         .size(Size::new(Length::Auto, BAR_HEIGHT.logical_px()))
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(HoverTarget::Notifications))
         .on_leave(Msg::Leave(HoverTarget::Notifications))
         .on_pointer_down(Msg::NotifBarPointerDown)

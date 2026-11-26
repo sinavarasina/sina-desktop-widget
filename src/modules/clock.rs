@@ -15,13 +15,13 @@ const MENU_FULL_W: f32 = SEP_WIDTH + MENU_BODY_W;
 
 /// Builds the Powerline separator + hover-revealed Clock Menu button + Clock pill.
 pub fn build_clock_group(state: &State) -> Element<Msg> {
-    let p = state.clock_menu_progress.clamp(0.0, 1.0);
-    let ease = 1.0 - (1.0 - p).powi(3);
+    let ease = state.clock_menu_anim.progress();
     let reveal_w = MENU_FULL_W * ease;
 
-    let menu_hovered = state.hovered == HoverTarget::ClockMenu || state.quick_menu.popup_target;
+    let menu_hovered =
+        state.hovered == HoverTarget::ClockMenu || state.quick_menu.is_popup_open();
     let menu_bg = if menu_hovered { SURFACE0 } else { MANTLE };
-    let menu_icon_col = if state.quick_menu.popup_target {
+    let menu_icon_col = if state.quick_menu.is_popup_open() {
         MAUVE
     } else {
         TEXT
@@ -54,6 +54,7 @@ pub fn build_clock_group(state: &State) -> Element<Msg> {
             .key("mod-clock-menu")
             .size(Size::new(MENU_FULL_W.logical_px(), BAR_HEIGHT.logical_px()))
             .align(Align::Center)
+            .cursor(CursorShape::Pointer)
             .on_hover(Msg::Hover(HoverTarget::ClockMenu))
             .on_leave(Msg::Leave(HoverTarget::ClockMenu))
             .on_click(Msg::ClockMenuClick)
@@ -92,6 +93,7 @@ pub fn build_clock(state: &State) -> Element<Msg> {
     Group::new()
         .key("mod-clock")
         .size(Size::new(Length::Auto, BAR_HEIGHT.logical_px()))
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(HoverTarget::Clock))
         .on_leave(Msg::Leave(HoverTarget::Clock))
         .on_pointer_down(Msg::ClockPointerDown)

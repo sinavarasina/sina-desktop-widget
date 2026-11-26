@@ -17,8 +17,7 @@ const BT_ROW_HEIGHT: f32 = 38.0;
 const BT_ROW_GAP: f32 = 4.0;
 
 pub fn build_bluetooth_popup_surface(state: &State) -> Surface<Msg> {
-    let p = state.bt_ui.popup_progress.clamp(0.0, 1.0);
-    let ease = 1.0 - (1.0 - p).powi(3);
+    let ease = state.bt_ui.popup_progress();
 
     let fallback_left = (state.bar_width - BT_POPUP_WIDTH - 68.0).max(8.0);
     let raw_left = if state.bt_ui.popup_left_x > 0.0 {
@@ -248,6 +247,7 @@ fn header_btn(
     Group::new()
         .key(key)
         .size(Size::auto())
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(target))
         .on_leave(Msg::Leave(target))
         .on_click(msg)
@@ -286,6 +286,7 @@ fn menu_btn(
     Group::new()
         .key(key)
         .size(Size::auto())
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(target))
         .on_leave(Msg::Leave(target))
         .on_click(msg)
@@ -349,6 +350,7 @@ fn prompt_btn(key: &'static str, label: &'static str, col: Color, msg: Msg) -> E
     Group::new()
         .key(key)
         .size(Size::auto())
+        .cursor(CursorShape::Pointer)
         .on_click(msg)
         .child(
             Rect::new()
@@ -414,6 +416,7 @@ fn build_device_row(state: &State, dev: &BluetoothDevice, idx: usize) -> Element
     Group::new()
         .key(("bt-dev", idx))
         .size(Size::new(Length::Fill, BT_ROW_HEIGHT.logical_px()))
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(HoverTarget::BtDevice(idx)))
         .on_leave(Msg::Leave(HoverTarget::BtDevice(idx)))
         .on_pointer_down(move |ev| Msg::BtDevicePointerDown {

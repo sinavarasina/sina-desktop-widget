@@ -7,7 +7,7 @@ use crate::app::handlers::ipc::close_other_overlays;
 use crate::app::state::{SoundCue, State};
 
 pub fn handle_toggle_drun(state: &mut State, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
-    if state.drun.target {
+    if state.drun.is_open() {
         state.drun.close();
         state.play_sound(SoundCue::MenuPopdown, ctx);
     } else {

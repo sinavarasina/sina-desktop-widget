@@ -240,6 +240,7 @@ pub fn build_workspaces(state: &State) -> Element<Msg> {
         let mut item = Group::new()
             .key(("ws-item", id))
             .size(Size::new(Length::Auto, BAR_HEIGHT.logical_px()))
+            .cursor(CursorShape::Pointer)
             .on_hover(Msg::Hover(target))
             .on_leave(Msg::Leave(target))
             .on_pointer_down(move |ev| match ev.button {
@@ -283,6 +284,7 @@ pub fn build_workspaces(state: &State) -> Element<Msg> {
         let mut item = Group::new()
             .key(("ws-named", idx))
             .size(Size::new(Length::Auto, BAR_HEIGHT.logical_px()))
+            .cursor(CursorShape::Pointer)
             .on_hover(Msg::Hover(target))
             .on_leave(Msg::Leave(target))
             .on_pointer_down(move |ev| match ev.button {
@@ -342,6 +344,7 @@ pub fn build_workspaces(state: &State) -> Element<Msg> {
             let mut item = Group::new()
                 .key(("ws-special", idx))
                 .size(Size::new(Length::Auto, BAR_HEIGHT.logical_px()))
+                .cursor(CursorShape::Pointer)
                 .on_hover(Msg::Hover(target))
                 .on_leave(Msg::Leave(target))
                 .on_pointer_down(move |ev| match ev.button {

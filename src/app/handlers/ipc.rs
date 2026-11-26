@@ -49,7 +49,7 @@ pub fn close_other_overlays(state: &mut State, keep: Option<&str>) {
         state.settings_ui.unfocus_inputs();
         state.settings_ui.open_dropdown = None;
         if !state.hovered.is_clock_group() {
-            state.clock_menu_target = false;
+            state.clock_menu_anim.set_open(false);
         }
     }
 }
@@ -67,7 +67,7 @@ pub fn handle_ipc_control(
             }
         }
         IpcTarget::Drun => {
-            let was_open = state.drun.target;
+            let was_open = state.drun.is_open();
             let next = resolve_next(was_open, action);
             if next {
                 close_other_overlays(state, Some("drun"));
@@ -76,15 +76,14 @@ pub fn handle_ipc_control(
             } else {
                 state.drun.close();
             }
-            play_overlay_transition(state, was_open, state.drun.target, ctx);
+            play_overlay_transition(state, was_open, state.drun.is_open(), ctx);
         }
         IpcTarget::Notifications => {
-            let was_open = state.notifications.center_target;
+            let was_open = state.notifications.is_center_open();
             let next = resolve_next(was_open, action);
             if next {
                 close_other_overlays(state, Some("notifications"));
-                state.notifications.center_target = true;
-                state.notifications.marquee_tick = 0;
+                state.notifications.open_center();
                 state.notifications.ensure_visible_icons(
                     state.notifications.scroll_index,
                     12,
@@ -95,7 +94,7 @@ pub fn handle_ipc_control(
             } else {
                 state.notifications.close_center();
             }
-            play_overlay_transition(state, was_open, state.notifications.center_target, ctx);
+            play_overlay_transition(state, was_open, state.notifications.is_center_open(), ctx);
         }
         IpcTarget::Dnd => {
             let want_on = resolve_next(state.notifications.dnd, action);
@@ -107,39 +106,35 @@ pub fn handle_ipc_control(
             }
         }
         IpcTarget::Volume => {
-            let was_open = state.audio_ui.popup_target;
+            let was_open = state.audio_ui.is_popup_open();
             let next = resolve_next(was_open, action);
             if next {
                 close_other_overlays(state, Some("volume"));
                 if state.audio_ui.popup_left_x <= 0.0 {
                     state.audio_ui.popup_left_x = (state.bar_width - 340.0).max(8.0);
                 }
-                if !state.audio_ui.popup_target {
-                    state.audio_ui.toggle_popup();
-                }
+                state.audio_ui.open_popup();
             } else {
                 state.audio_ui.close_popup();
             }
-            play_overlay_transition(state, was_open, state.audio_ui.popup_target, ctx);
+            play_overlay_transition(state, was_open, state.audio_ui.is_popup_open(), ctx);
         }
         IpcTarget::Bluetooth => {
-            let was_open = state.bt_ui.popup_target;
+            let was_open = state.bt_ui.is_popup_open();
             let next = resolve_next(was_open, action);
             if next {
                 close_other_overlays(state, Some("bluetooth"));
                 if state.bt_ui.popup_left_x <= 0.0 {
                     state.bt_ui.popup_left_x = (state.bar_width - 378.0).max(8.0);
                 }
-                if !state.bt_ui.popup_target {
-                    state.bt_ui.toggle_popup();
-                }
+                state.bt_ui.open_popup();
             } else {
                 state.bt_ui.close_popup();
             }
-            play_overlay_transition(state, was_open, state.bt_ui.popup_target, ctx);
+            play_overlay_transition(state, was_open, state.bt_ui.is_popup_open(), ctx);
         }
         IpcTarget::Disk => {
-            let was_open = state.disk_ui.popup_target;
+            let was_open = state.disk_ui.is_popup_open();
             let next = resolve_next(was_open, action);
             if next {
                 close_other_overlays(state, Some("disk"));
@@ -152,43 +147,39 @@ pub fn handle_ipc_control(
                 {
                     state.udisks = snap;
                 }
-                if !state.disk_ui.popup_target {
-                    state.disk_ui.toggle_popup();
-                }
+                state.disk_ui.open_popup();
             } else {
                 state.disk_ui.close_popup();
             }
-            play_overlay_transition(state, was_open, state.disk_ui.popup_target, ctx);
+            play_overlay_transition(state, was_open, state.disk_ui.is_popup_open(), ctx);
         }
         IpcTarget::Mpris => {
-            let was_open = state.mpris.popup_target;
+            let was_open = state.mpris.is_popup_open();
             let next = resolve_next(was_open, action);
             if next {
                 close_other_overlays(state, Some("mpris"));
-                if !state.mpris.popup_target {
-                    state.mpris.toggle_popup();
-                }
+                state.mpris.open_popup();
             } else {
                 state.mpris.close_popup();
             }
-            play_overlay_transition(state, was_open, state.mpris.popup_target, ctx);
+            play_overlay_transition(state, was_open, state.mpris.is_popup_open(), ctx);
         }
         IpcTarget::QuickMenu => {
-            let was_open = state.quick_menu.popup_target;
+            let was_open = state.quick_menu.is_popup_open();
             let next = resolve_next(was_open, action);
             if next {
                 close_other_overlays(state, Some("quick_menu"));
                 refresh_power_capabilities_if_empty(state, ctx);
                 state.quick_menu.open_popup(ctx);
-                state.clock_menu_target = true;
+                state.clock_menu_anim.set_open(true);
                 state.clock_menu_leave_deadline = None;
             } else {
                 state.quick_menu.close_popup();
                 if !state.hovered.is_clock_group() {
-                    state.clock_menu_target = false;
+                    state.clock_menu_anim.set_open(false);
                 }
             }
-            play_overlay_transition(state, was_open, state.quick_menu.popup_target, ctx);
+            play_overlay_transition(state, was_open, state.quick_menu.is_popup_open(), ctx);
         }
         IpcTarget::Calendar => {
             let was_open = state.calendar_open;

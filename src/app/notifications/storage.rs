@@ -47,23 +47,10 @@ pub fn default_store_path() -> PathBuf {
     }
     #[cfg(not(test))]
     {
-        if let Ok(state_home) = std::env::var("XDG_STATE_HOME")
-            && !state_home.trim().is_empty()
-        {
-            return PathBuf::from(state_home)
-                .join("sina-desktop-widget")
-                .join("notifications.json");
-        }
-        if let Ok(home) = std::env::var("HOME")
-            && !home.trim().is_empty()
-        {
-            return PathBuf::from(home)
-                .join(".local")
-                .join("state")
-                .join("sina-desktop-widget")
-                .join("notifications.json");
-        }
-        PathBuf::from("/tmp/sina-desktop-widget-notifications.json")
+        waywi::desktop::XdgBaseDirs::from_env()
+            .state_home
+            .map(|dir| dir.join("sina-desktop-widget").join("notifications.json"))
+            .unwrap_or_else(|| PathBuf::from("/tmp/sina-desktop-widget-notifications.json"))
     }
 }
 

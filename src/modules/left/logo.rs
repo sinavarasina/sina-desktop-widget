@@ -25,6 +25,7 @@ pub fn build_logo(state: &State) -> Element<Msg> {
     Group::new()
         .key("custom-logo")
         .size(Size::new(Length::Auto, BAR_HEIGHT.logical_px()))
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(HoverTarget::Logo))
         .on_leave(Msg::Leave(HoverTarget::Logo))
         .on_pointer_down(|ev| {

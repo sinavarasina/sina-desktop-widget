@@ -1,7 +1,9 @@
 //! MPRIS session state, active player selection, album art loading, and marquee scrolling.
 
 use std::path::Path;
+use std::time::Instant;
 
+use crate::app::anim::RevealAnim;
 use crate::app::asset_lru::PathAssetCache;
 use waywi::prelude::*;
 
@@ -15,8 +17,6 @@ pub enum MprisControlAction {
     CycleLoop,
 }
 
-const POPUP_ANIM_STEP: f32 = 16.0 / 180.0;
-
 #[derive(Default)]
 pub struct MprisState {
     pub players: Vec<MprisSnapshot>,
@@ -25,8 +25,7 @@ pub struct MprisState {
     pub art_url_loaded: String,
     pub marquee_tick: u32,
     pub sub_ticks: u8,
-    pub popup_target: bool,
-    pub popup_progress: f32,
+    pub popup_anim: RevealAnim,
     pub popup_left_x: f32,
 }
 
@@ -65,33 +64,39 @@ impl MprisState {
     }
 
     #[must_use]
+    pub const fn is_popup_open(&self) -> bool {
+        self.popup_anim.is_open()
+    }
+
+    #[must_use]
+    pub fn popup_progress(&self) -> f32 {
+        self.popup_anim.progress()
+    }
+
+    #[must_use]
     pub fn is_popup_visible(&self) -> bool {
-        self.popup_target || self.popup_progress > 0.001
+        self.popup_anim.is_visible()
     }
 
     #[must_use]
     pub fn is_animating_popup(&self) -> bool {
-        let target = if self.popup_target { 1.0 } else { 0.0 };
-        (self.popup_progress - target).abs() > 0.001
+        self.popup_anim.is_animating()
     }
 
-    pub fn step_popup_animation(&mut self) {
-        let target = if self.popup_target { 1.0_f32 } else { 0.0_f32 };
-        if (self.popup_progress - target).abs() <= POPUP_ANIM_STEP {
-            self.popup_progress = target;
-        } else if self.popup_progress < target {
-            self.popup_progress = (self.popup_progress + POPUP_ANIM_STEP).min(1.0);
-        } else {
-            self.popup_progress = (self.popup_progress - POPUP_ANIM_STEP).max(0.0);
-        }
+    pub fn advance_popup_animation(&mut self, now: Instant) {
+        self.popup_anim.advance(now);
+    }
+
+    pub fn open_popup(&mut self) {
+        self.popup_anim.set_open(true);
     }
 
     pub fn toggle_popup(&mut self) {
-        self.popup_target = !self.popup_target;
+        self.popup_anim.toggle();
     }
 
     pub fn close_popup(&mut self) {
-        self.popup_target = false;
+        self.popup_anim.set_open(false);
     }
 
     pub fn set_players(

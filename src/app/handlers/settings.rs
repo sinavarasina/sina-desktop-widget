@@ -230,8 +230,7 @@ pub fn handle_cycle_metric_placement(
         }
     }
     if state.config.widgets.drawer_metrics().is_empty() {
-        state.drawer_target = false;
-        state.drawer_progress = 0.0;
+        state.drawer_anim.snap_closed();
         state.drawer_leave_deadline = None;
     }
     state.save_config();
@@ -425,12 +424,12 @@ pub fn handle_settings_key(state: &mut State, ev: KeyEvent, ctx: &mut EffectCtx<
                 state.settings_ui.open_dropdown = None;
                 state.play_sound(SoundCue::MenuPopdown, ctx);
             } else {
-                let was_open = state.quick_menu.popup_target;
+                let was_open = state.quick_menu.is_popup_open();
                 state.quick_menu.close_popup();
                 state.settings_ui.unfocus_inputs();
                 state.settings_ui.open_dropdown = None;
                 if !state.hovered.is_clock_group() {
-                    state.clock_menu_target = false;
+                    state.clock_menu_anim.set_open(false);
                 }
                 if was_open {
                     state.play_sound(SoundCue::MenuPopdown, ctx);

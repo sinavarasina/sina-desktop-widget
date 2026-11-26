@@ -53,7 +53,7 @@ pub fn handle_bt_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &EffectCt
     if ev.button == Some(MouseButton::Left) {
         state.bt_ui.popup_left_x = (ev.position.x.get() - 140.0).max(8.0);
         state.bt_ui.toggle_popup();
-        let cue = if state.bt_ui.popup_target {
+        let cue = if state.bt_ui.is_popup_open() {
             SoundCue::MenuPopup
         } else {
             SoundCue::MenuPopdown

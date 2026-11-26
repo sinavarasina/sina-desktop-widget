@@ -1,7 +1,7 @@
 //! Shared headless runtime and fixture builders for tests.
 
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use waywi::prelude::*;
 use waywi::dbus::{TrayCategory, TrayStatus};
@@ -25,6 +25,20 @@ pub fn synthetic_rt() -> HeadlessRuntime<SinaDesktopWidget> {
         RendererPreference::Software,
     )
     .expect("headless bar runtime boots")
+}
+
+/// Processes queued messages and settles all active VSync UI animations deterministically.
+pub fn settle_ui_anims(rt: &mut HeadlessRuntime<SinaDesktopWidget>) {
+    rt.step().unwrap();
+    let mut t = Instant::now();
+    for _ in 0..3 {
+        if !rt.state().is_animating_ui() {
+            break;
+        }
+        t += Duration::from_secs(2);
+        rt.enqueue(Msg::AnimationFrame(t));
+        rt.step().unwrap();
+    }
 }
 
 pub fn maybe_dump_argb8888_ppm(name: &str, width: u32, height: u32, buf: &[u8]) {

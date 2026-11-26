@@ -191,6 +191,7 @@ fn icon_btn(
     Group::new()
         .key(key)
         .size(Size::new(18.logical_px(), 18.logical_px()))
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(target))
         .on_leave(Msg::Leave(target))
         .on_click(Msg::MprisAction(action))

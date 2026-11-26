@@ -8,19 +8,20 @@ use waywi::prelude::*;
 use waywi::system::LocalDateTime;
 use waywi::system::os::{read_hostname, read_os_info, read_uptime};
 
+use crate::app::anim::RevealAnim;
 use crate::app::asset_lru::PathAssetCache;
 use crate::app::config::{DesktopPoseMode, SettingsUiState, WidgetConfig};
 use crate::app::state::{
-    AudioControlTarget, AudioUiState, BluetoothUiState, DesktopSpriteState, DiskUiState,
-    DrunState, ForegroundBooster, HoverTarget, MprisState, NotificationStore, QuickMenuState,
-    SoundEngine, State, SysInfoState, WindowInfoState, WindowScroller,
+    AudioControlTarget, AudioUiState, BluetoothUiState, DRAWER_ANIM_DURATION, DesktopSpriteState,
+    DiskUiState, DrunState, ForegroundBooster, HoverTarget, MprisState, NotificationStore,
+    QuickMenuState, SoundEngine, State, SysInfoState, WindowInfoState, WindowScroller,
 };
 use crate::theme::{GENTOO_MAUVE_SVG, WALLPAPER_PNG};
 
-/// Decodes the embedded wallpaper PNG and marks it `AssetRetention::ReclaimAfterPresent` so
-/// its ~33 MiB RGBA8 pixel buffer is immediately reclaimed after presenting to the compositor.
+/// Decodes the embedded wallpaper PNG using `AssetSource::StaticBytes` (zero compressed heap copy)
+/// and marks `AssetRetention::ReclaimAfterPresent` so decoded RGBA8 pixels reclaim to 0 B after present.
 pub fn load_embedded_wallpaper(ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Option<ImageAsset> {
-    let wp = ctx.load_image_bytes(WALLPAPER_PNG).ok()?;
+    let wp = ctx.load_image_static(WALLPAPER_PNG).ok()?;
     let _ = ctx.set_image_retention(wp, AssetRetention::ReclaimAfterPresent);
     Some(wp)
 }
@@ -44,7 +45,7 @@ pub fn init_state(ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Result<State
     let mut settings_ui = SettingsUiState::default();
     settings_ui.sync_from_config(&config);
 
-    let logo_asset = ctx.load_image_bytes_sized(GENTOO_MAUVE_SVG, 64).ok();
+    let logo_asset = ctx.load_image_static_sized(GENTOO_MAUVE_SVG, 64).ok();
     #[cfg(not(test))]
     let wallpaper_asset = match super::settings::load_configured_wallpaper(&config.wallpaper, ctx) {
         Ok(asset) => asset,
@@ -166,15 +167,13 @@ pub fn init_state(ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Result<State
         calendar_open: false,
         cal_year_mode: false,
         cal_month_offset: 0,
-        clock_menu_target: false,
-        clock_menu_progress: 0.0,
+        clock_menu_anim: RevealAnim::popup(),
         clock_menu_leave_deadline: None,
         quick_menu,
         hovered: HoverTarget::None,
         hover_anchor_x: None,
         startup_hydrated: false,
-        drawer_target: false,
-        drawer_progress: 0.0,
+        drawer_anim: RevealAnim::new(DRAWER_ANIM_DURATION, Easing::CubicOut),
         drawer_leave_deadline: None,
     })
 }

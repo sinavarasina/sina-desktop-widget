@@ -35,8 +35,7 @@ const ICON_BADGE_PX: f32 = 18.0;
 const ICON_PX: f32 = 16.0;
 
 pub fn build_mixer_popup_surface(state: &State) -> Surface<Msg> {
-    let p = state.audio_ui.popup_progress.clamp(0.0, 1.0);
-    let ease = 1.0 - (1.0 - p).powi(3);
+    let ease = state.audio_ui.popup_progress();
 
     let fallback_left = (state.bar_width - MIXER_POPUP_WIDTH - 8.0).max(8.0);
     let raw_left = if state.audio_ui.popup_left_x > 0.0 {
@@ -230,6 +229,7 @@ fn build_master_card(state: &State) -> Element<Msg> {
                             Group::new()
                                 .key("mixer-master-track")
                                 .size(Size::new(MIXER_TRACK_WIDTH.logical_px(), 6.logical_px()))
+                                .cursor(CursorShape::EwResize)
                                 .on_hover(Msg::Hover(HoverTarget::MixerMaster))
                                 .on_leave(Msg::Leave(HoverTarget::MixerMaster))
                                 .on_pointer_down(Msg::MixerMasterSeekClick)
@@ -304,6 +304,7 @@ fn build_master_footer(state: &State, is_source: bool) -> Element<Msg> {
         .key("mixer-routing-toggle")
         .position(Position::absolute(0.logical_px(), 0.logical_px()))
         .size(Size::auto())
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(HoverTarget::MixerRoutingToggle))
         .on_leave(Msg::Leave(HoverTarget::MixerRoutingToggle))
         .on_click(Msg::MixerToggleRouting)
@@ -370,6 +371,7 @@ fn build_master_footer(state: &State, is_source: bool) -> Element<Msg> {
             .position(Position::absolute(inner_w.logical_px(), 0.logical_px()))
             .anchor(ElementAnchor::TopRight)
             .size(Size::auto())
+            .cursor(CursorShape::Pointer)
             .on_hover(Msg::Hover(HoverTarget::MixerBalanceBar))
             .on_leave(Msg::Leave(HoverTarget::MixerBalanceBar))
             .on_pointer_down(|ev| match ev.button {
@@ -437,6 +439,7 @@ fn target_btn(
     Group::new()
         .key(key)
         .size(Size::auto())
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(hover_target))
         .on_leave(Msg::Leave(hover_target))
         .on_click(Msg::MixerSetTarget(target))
@@ -699,6 +702,7 @@ fn build_app_row(r: &AppRow, tick: u32) -> Element<Msg> {
                         .child(
                             Group::new()
                                 .size(Size::new(MIXER_TRACK_WIDTH.logical_px(), 5.logical_px()))
+                                .cursor(CursorShape::EwResize)
                                 .on_pointer_down(pointer)
                                 .on_scroll(scroll)
                                 .child(Rect::new().size(Size::fill()).fill(SURFACE0))

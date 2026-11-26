@@ -152,6 +152,7 @@ fn build_section_rail(state: &State) -> Element<Msg> {
         let mut tab = Group::new()
             .key(("settings-tab", idx))
             .size(Size::new(tab_w.logical_px(), RAIL_TAB_H.logical_px()))
+            .cursor(CursorShape::Pointer)
             .on_hover(Msg::Hover(HoverTarget::SettingsTab(idx)))
             .on_leave(Msg::Leave(HoverTarget::SettingsTab(idx)))
             .on_click(Msg::SettingsSelectSection(section))
@@ -796,6 +797,7 @@ fn metric_slot_row(
     let place_btn = Group::new()
         .key(("settings-metric-place", slot.id as usize))
         .size(Size::new(56.logical_px(), 22.logical_px()))
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(place_target))
         .on_leave(Msg::Leave(place_target))
         .on_click(Msg::SettingsCycleMetricPlacement(slot.id))
@@ -863,6 +865,7 @@ fn metric_slot_row(
             );
         if enabled {
             g = g
+                .cursor(CursorShape::Pointer)
                 .on_hover(Msg::Hover(target))
                 .on_leave(Msg::Leave(target))
                 .on_click(Msg::SettingsMoveMetric { id: slot.id, delta });
@@ -993,6 +996,7 @@ fn toggle_row(
         .into();
 
     row_shell(row_id, hovered, None, inner)
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(target))
         .on_leave(Msg::Leave(target))
         .on_click(Msg::SettingsToggle(toggle_id))
@@ -1020,6 +1024,7 @@ fn build_wallpaper_path_row(state: &State, row_id: usize) -> Element<Msg> {
     let mut input_box = Group::new()
         .key("settings-wp-input")
         .size(Size::new(input_w.logical_px(), input_h.logical_px()))
+        .cursor(CursorShape::Text)
         .on_click(Msg::SettingsWallpaperPathFocus)
         .child(
             Rect::new()
@@ -1060,6 +1065,7 @@ fn build_wallpaper_path_row(state: &State, row_id: usize) -> Element<Msg> {
     let apply_btn = Group::new()
         .key("settings-wp-apply")
         .size(Size::new(22.logical_px(), input_h.logical_px()))
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(HoverTarget::SettingsPathApply))
         .on_leave(Msg::Leave(HoverTarget::SettingsPathApply))
         .on_click(Msg::SettingsWallpaperPathApply)
@@ -1087,6 +1093,7 @@ fn build_wallpaper_path_row(state: &State, row_id: usize) -> Element<Msg> {
     let clear_btn = Group::new()
         .key("settings-wp-clear")
         .size(Size::new(22.logical_px(), input_h.logical_px()))
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(HoverTarget::SettingsPathClear))
         .on_leave(Msg::Leave(HoverTarget::SettingsPathClear))
         .on_click(Msg::SettingsWallpaperPathClear)
@@ -1194,6 +1201,7 @@ fn action_row(
             (ROW_H * 0.5).logical_px(),
         ))
         .anchor(ElementAnchor::CenterRight)
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(target))
         .on_leave(Msg::Leave(target))
         .on_click(msg)
@@ -1282,6 +1290,7 @@ fn dropdown_row(
         .into();
 
     row_shell(row_id, hovered, is_open.then_some(MAUVE), inner)
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(target))
         .on_leave(Msg::Leave(target))
         .on_click(Msg::SettingsToggleDropdown(dropdown))
@@ -1333,6 +1342,7 @@ fn dropdown_options_block(
                 DROPDOWN_BOX_W.logical_px(),
                 DROPDOWN_OPT_H.logical_px(),
             ))
+            .cursor(CursorShape::Pointer)
             .on_hover(Msg::Hover(target))
             .on_leave(Msg::Leave(target))
             .on_click(Msg::SettingsSelectDropdown {
@@ -1392,6 +1402,7 @@ fn stepper_row(
         Group::new()
             .key((key_tag, row_id))
             .size(Size::new(22.logical_px(), 22.logical_px()))
+            .cursor(CursorShape::Pointer)
             .on_hover(Msg::Hover(target))
             .on_leave(Msg::Leave(target))
             .on_click(Msg::SettingsStep {

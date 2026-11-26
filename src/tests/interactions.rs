@@ -12,7 +12,8 @@ use crate::app::state::{AudioControlTarget, HoverTarget, TrayMenuPopup};
 use crate::widgets::tray_menu::tray_menu_left_and_width;
 
 use super::support::{
-    make_tray_snap, maybe_dump_argb8888_ppm, populate_sample_metrics, synthetic_rt,
+    make_tray_snap, maybe_dump_argb8888_ppm, populate_sample_metrics, settle_ui_anims,
+    synthetic_rt,
 };
 
 #[test]
@@ -178,6 +179,7 @@ fn audio_scroll_up_increases_and_down_decreases() {
             discrete_x: 0,
             discrete_y,
             modifiers: Modifiers::empty(),
+            ..ScrollEvent::default()
         })
     };
 
@@ -238,7 +240,7 @@ fn clock_interactions_toggle_alt_format_calendar_mode_and_scroll_month() {
     assert!(rt.pointer_move_surface_point("bar", 1895.0, 12.0));
     rt.step().unwrap();
     assert_eq!(rt.state().hovered, HoverTarget::Clock);
-    assert!(rt.state().clock_menu_target);
+    assert!(rt.state().clock_menu_anim.is_open());
     assert!(!rt.state().calendar_open);
     assert_eq!(
         rt.surface_count(),
@@ -303,6 +305,7 @@ fn clock_interactions_toggle_alt_format_calendar_mode_and_scroll_month() {
         discrete_x: 0,
         discrete_y: -1,
         modifiers: Modifiers::empty(),
+        ..ScrollEvent::default()
     }));
     rt.step().unwrap();
     assert_eq!(rt.state().cal_month_offset, 1);
@@ -323,12 +326,9 @@ fn clock_hover_reveals_menu_and_opens_quick_status_with_sprite_and_power_strip()
     // Hovering Clock animates the Powerline menu button open.
     assert!(rt.pointer_move_surface_point("bar", 1895.0, 12.0));
     rt.step().unwrap();
-    assert!(rt.state().clock_menu_target);
-    for _ in 0..16 {
-        rt.enqueue(Msg::ClockMenuTick);
-    }
-    rt.step().unwrap();
-    assert!((rt.state().clock_menu_progress - 1.0).abs() < 1e-4);
+    assert!(rt.state().clock_menu_anim.is_open());
+    settle_ui_anims(&mut rt);
+    assert!((rt.state().clock_menu_anim.progress() - 1.0).abs() < 1e-4);
 
     // Populate real logind capabilities and click the Clock Menu button.
     rt.enqueue(Msg::LogindEvent(LogindEvent::Snapshot(LogindSnapshot {
@@ -346,10 +346,7 @@ fn clock_hover_reveals_menu_and_opens_quick_status_with_sprite_and_power_strip()
         ..LogindSnapshot::default()
     })));
     rt.enqueue(Msg::ClockMenuClick);
-    for _ in 0..16 {
-        rt.enqueue(Msg::QuickMenuAnimTick);
-    }
-    rt.step().unwrap();
+    settle_ui_anims(&mut rt);
 
     assert!(rt.state().quick_menu.is_popup_visible());
     assert!(
@@ -382,6 +379,7 @@ fn clock_hover_reveals_menu_and_opens_quick_status_with_sprite_and_power_strip()
         discrete_x: 0,
         discrete_y: 1,
         modifiers: Modifiers::empty(),
+        ..ScrollEvent::default()
     };
     rt.enqueue(Msg::QuickMenuSpriteScroll(scroll_down));
     rt.step().unwrap();
@@ -436,10 +434,7 @@ fn clock_hover_reveals_menu_and_opens_quick_status_with_sprite_and_power_strip()
 
     // Closing collapses the popup cleanly.
     rt.enqueue(Msg::CloseQuickMenu);
-    for _ in 0..16 {
-        rt.enqueue(Msg::QuickMenuAnimTick);
-    }
-    rt.step().unwrap();
+    settle_ui_anims(&mut rt);
     assert!(!rt.state().quick_menu.is_popup_visible());
 }
 
@@ -449,12 +444,9 @@ fn expandable_mon_drawer_animates_open_and_closed_on_hover() {
     populate_sample_metrics(&mut rt);
     rt.enqueue(Msg::Hover(HoverTarget::ExpandSign));
     rt.step().unwrap();
-    assert!(rt.state().drawer_target);
-    for _ in 0..22 {
-        rt.enqueue(Msg::DrawerTick);
-        rt.step().unwrap();
-    }
-    assert!((rt.state().drawer_progress - 1.0).abs() < 1e-4);
+    assert!(rt.state().drawer_anim.is_open());
+    settle_ui_anims(&mut rt);
+    assert!((rt.state().drawer_anim.progress() - 1.0).abs() < 1e-4);
 
     if let Some(buf) = rt.rendered_buffer("bar") {
         maybe_dump_argb8888_ppm("bar_drawer_open", 1920, 24, buf);
@@ -464,19 +456,16 @@ fn expandable_mon_drawer_animates_open_and_closed_on_hover() {
     rt.enqueue(Msg::Leave(HoverTarget::ExpandSign));
     rt.enqueue(Msg::Hover(HoverTarget::Disk));
     rt.step().unwrap();
-    assert!(rt.state().drawer_target);
+    assert!(rt.state().drawer_anim.is_open());
 
     // Leaving drawer schedules the grace timer cleanly; step first, then advance past 125ms.
     rt.enqueue(Msg::Leave(HoverTarget::Disk));
     rt.step().unwrap();
     rt.step_at(Instant::now() + Duration::from_millis(200))
         .unwrap();
-    assert!(!rt.state().drawer_target);
-    for _ in 0..22 {
-        rt.enqueue(Msg::DrawerTick);
-        rt.step().unwrap();
-    }
-    assert!(rt.state().drawer_progress <= 1e-4);
+    assert!(!rt.state().drawer_anim.is_open());
+    settle_ui_anims(&mut rt);
+    assert!(rt.state().drawer_anim.progress() <= 1e-4);
 }
 
 #[test]
@@ -605,11 +594,8 @@ fn bluetooth_device_menu_keeps_name_marquee_and_renders_colored_action_buttons()
         modifiers: Modifiers::empty(),
     }));
     rt.step().unwrap();
-    assert!(rt.state().bt_ui.popup_target);
-    for _ in 0..20 {
-        rt.enqueue(Msg::BtPopupAnimTick);
-        rt.step().unwrap();
-    }
+    assert!(rt.state().bt_ui.is_popup_open());
+    settle_ui_anims(&mut rt);
 
     // Right-click the device row: the context menu must open...
     let dev_path = rt.state().bluetooth.devices[0].object_path.clone();
@@ -747,7 +733,7 @@ fn mixer_popup_bar_click_opens_right_click_mutes_and_tracks_set_volume() {
         modifiers: Modifiers::empty(),
     }));
     rt.step().unwrap();
-    assert!(rt.state().audio_ui.popup_target);
+    assert!(rt.state().audio_ui.is_popup_open());
     assert!(rt.state().audio_ui.popup_left_x > 8.0);
 
     // Right-click on the module toggles mute for the controlled target (sink).
@@ -791,6 +777,7 @@ fn mixer_popup_bar_click_opens_right_click_mutes_and_tracks_set_volume() {
             discrete_x: 0,
             discrete_y,
             modifiers: Modifiers::empty(),
+            ..ScrollEvent::default()
         })
     };
 
@@ -839,6 +826,7 @@ fn mixer_popup_bar_click_opens_right_click_mutes_and_tracks_set_volume() {
             discrete_x: 0,
             discrete_y: 1,
             modifiers: Modifiers::empty(),
+            ..ScrollEvent::default()
         },
     });
     rt.step().unwrap();
@@ -878,10 +866,7 @@ fn mixer_popup_bar_click_opens_right_click_mutes_and_tracks_set_volume() {
     assert!((row_vol - 25.0).abs() < 1e-3, "expected 25%, got {row_vol}");
 
     // Let the open animation finish, then render the popup headless.
-    for _ in 0..20 {
-        rt.enqueue(Msg::MixerPopupAnimTick);
-        rt.step().unwrap();
-    }
+    settle_ui_anims(&mut rt);
     let buf = rt
         .rendered_buffer("bar-mixer-popup")
         .expect("mixer popup renders headless");
@@ -908,10 +893,7 @@ fn mixer_popup_bar_click_opens_right_click_mutes_and_tracks_set_volume() {
 
     // Closing collapses back to the bar only.
     rt.enqueue(Msg::CloseMixerPopup);
-    for _ in 0..20 {
-        rt.enqueue(Msg::MixerPopupAnimTick);
-        rt.step().unwrap();
-    }
+    settle_ui_anims(&mut rt);
     assert!(!rt.state().audio_ui.is_popup_visible());
 }
 
@@ -965,6 +947,7 @@ fn disk_popup_mounts_cycles_middle_click_luks_unlock_and_pending_animation() {
             ejectable: true,
             can_power_off: true,
             optical: false,
+            ..UDisksDrive::default()
         }],
         block_devices: vec![
             UDisksBlockDevice {
@@ -1101,10 +1084,7 @@ fn disk_popup_mounts_cycles_middle_click_luks_unlock_and_pending_animation() {
         button: Some(MouseButton::Left),
         modifiers: Modifiers::empty(),
     }));
-    for _ in 0..16 {
-        rt.enqueue(Msg::DiskPopupAnimTick);
-    }
-    rt.step().unwrap();
+    settle_ui_anims(&mut rt);
     assert!(rt.state().disk_ui.is_popup_visible());
     assert!(rt.rendered_buffer("bar-disk-popup").is_some());
 
@@ -1154,11 +1134,8 @@ fn quick_menu_settings_drawer_controls_persist_toml_and_apply_live() {
 
     // Open Quick Menu and let slide animation settle.
     rt.enqueue(Msg::ClockMenuClick);
-    for _ in 0..16 {
-        rt.enqueue(Msg::QuickMenuAnimTick);
-    }
-    rt.step().unwrap();
-    assert!(rt.state().quick_menu.popup_target);
+    settle_ui_anims(&mut rt);
+    assert!(rt.state().quick_menu.is_popup_open());
     assert!(!rt.state().quick_menu.settings_open);
 
     // Open Power first, then toggle Settings: must be mutually exclusive.
@@ -1382,6 +1359,7 @@ fn quick_menu_settings_drawer_controls_persist_toml_and_apply_live() {
         discrete_x: 0,
         discrete_y: 2,
         modifiers: Modifiers::empty(),
+        ..ScrollEvent::default()
     }));
     rt.step().unwrap();
     assert!(!rt.state().config.widgets.show_sysinfo);
@@ -1560,10 +1538,7 @@ fn mixer_popup_routing_card_switches_devices_ports_profiles_and_balance() {
         modifiers: Modifiers::empty(),
     }));
     rt.enqueue(Msg::MixerToggleRouting);
-    for _ in 0..20 {
-        rt.enqueue(Msg::MixerPopupAnimTick);
-    }
-    rt.step().unwrap();
+    settle_ui_anims(&mut rt);
     assert!(rt.state().audio_ui.routing_open);
     assert!(rt.rendered_buffer("bar-mixer-popup").is_some());
 
@@ -1603,6 +1578,7 @@ fn mixer_popup_routing_card_switches_devices_ports_profiles_and_balance() {
         discrete_x: 0,
         discrete_y: 2,
         modifiers: Modifiers::empty(),
+        ..ScrollEvent::default()
     }));
     rt.step().unwrap();
     assert!(rt.state().audio_ui.routing_scroll_y > 0.0);
@@ -1646,6 +1622,7 @@ fn mixer_popup_routing_card_switches_devices_ports_profiles_and_balance() {
         discrete_x: 0,
         discrete_y: -1,
         modifiers: Modifiers::empty(),
+        ..ScrollEvent::default()
     }));
     rt.step().unwrap();
     let bal_nudged = rt.state().audio.as_ref().unwrap().target_balance(false);

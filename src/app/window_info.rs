@@ -138,9 +138,9 @@ impl WindowInfoState {
         self.reel.tick_second(count);
     }
 
-    pub fn step_animation(&mut self, boost_badge: Option<&'static str>) {
+    pub fn advance_animation(&mut self, now: std::time::Instant, boost_badge: Option<&'static str>) {
         let count = self.info_items(boost_badge).len();
-        self.reel.step_animation(count);
+        self.reel.advance(now, count);
     }
 
     #[must_use]

@@ -71,6 +71,7 @@ pub fn build_tray(state: &State) -> Element<Msg> {
                 .key(("tray-item", idx))
                 .size(Size::new(18.logical_px(), 18.logical_px()))
                 .opacity(opacity)
+                .cursor(CursorShape::Pointer)
                 .on_hover(Msg::Hover(HoverTarget::TrayItem(idx)))
                 .on_leave(Msg::Leave(HoverTarget::TrayItem(idx)))
                 .on_pointer_down(move |ev| Msg::TrayClick { index: idx, ev })

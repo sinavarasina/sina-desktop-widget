@@ -158,6 +158,7 @@ pub fn build_notification_card(state: &State, item: &NotificationItem) -> Elemen
     Group::new()
         .key(("notif-card", id))
         .size(Size::new(Length::Fill, height.logical_px()))
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(HoverTarget::NotifCenterItem(id)))
         .on_leave(Msg::Leave(HoverTarget::NotifCenterItem(id)))
         .on_pointer_down(move |ev| Msg::NotifCenterCardPointerDown { id, ev })
@@ -216,6 +217,7 @@ fn build_actions_row(
         let btn = Group::new()
             .key(("notif-action-btn", id, action_idx))
             .size(Size::auto())
+            .cursor(CursorShape::Pointer)
             .on_hover(Msg::Hover(HoverTarget::NotifAction { id, action_idx }))
             .on_leave(Msg::Leave(HoverTarget::NotifAction { id, action_idx }))
             .on_pointer_down(move |ev| {

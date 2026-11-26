@@ -27,7 +27,7 @@ pub fn handle_mixer_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &Effec
             let module_left = ev.position.x.get() - ev.local_position.x.get();
             state.audio_ui.popup_left_x = (module_left + SEP_WIDTH).max(8.0);
             state.audio_ui.toggle_popup();
-            let cue = if state.audio_ui.popup_target {
+            let cue = if state.audio_ui.is_popup_open() {
                 SoundCue::MenuPopup
             } else {
                 SoundCue::MenuPopdown

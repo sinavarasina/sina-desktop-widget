@@ -64,7 +64,7 @@ pub fn metric_module(cfg: MetricModuleConfig) -> Element<Msg> {
         .child(content_group);
 
     if let Some(cb) = cfg.on_pointer_down {
-        group = group.on_pointer_down(cb);
+        group = group.cursor(CursorShape::Pointer).on_pointer_down(cb);
     }
     if let Some(sc) = cfg.on_scroll {
         group = group.on_scroll(sc);

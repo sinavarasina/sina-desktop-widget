@@ -104,8 +104,7 @@ pub fn build_reel_slot_accented(
         let next_accent = first_char_palette
             .filter(|pal| !pal.is_empty())
             .map(|pal| pal[next_idx % pal.len()]);
-        let p = reel.progress.clamp(0.0, 1.0);
-        let ease = 1.0 - (1.0 - p).powi(3);
+        let ease = reel.progress();
         let (cur_dx, cur_dy, next_dx, next_dy) = match direction {
             ReelDirection::SlideUp => (0.0, -ease * height, 0.0, (1.0 - ease) * height),
             ReelDirection::SlideLeft => (-ease * width, 0.0, (1.0 - ease) * width, 0.0),

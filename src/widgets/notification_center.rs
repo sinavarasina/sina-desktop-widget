@@ -71,8 +71,7 @@ fn collect_visible_cards(
 }
 
 pub fn build_notification_center_surface(state: &State) -> Surface<Msg> {
-    let p = state.notifications.center_progress.clamp(0.0, 1.0);
-    let ease = 1.0 - (1.0 - p).powi(3);
+    let ease = state.notifications.center_progress();
 
     let start = state.notifications.scroll_index.min(max_notif_scroll_index(
         &state.notifications.items,

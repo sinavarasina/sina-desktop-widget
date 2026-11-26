@@ -67,6 +67,7 @@ pub fn build_mpris(state: &State) -> Element<Msg> {
         .key("mod-mpris")
         .size(Size::new(Length::Auto, BAR_HEIGHT.logical_px()))
         .align(Align::Center)
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(HoverTarget::MprisBar))
         .on_leave(Msg::Leave(HoverTarget::MprisBar))
         .on_pointer_down(Msg::MprisBarPointerDown)

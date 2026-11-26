@@ -27,8 +27,7 @@ const SPRITE_FRAME_W: f32 = 168.0;
 const SPRITE_FRAME_H: f32 = 172.0;
 
 pub fn build_quick_menu_surface(state: &State) -> Surface<Msg> {
-    let p = state.quick_menu.popup_progress.clamp(0.0, 1.0);
-    let ease = 1.0 - (1.0 - p).powi(3);
+    let ease = state.quick_menu.popup_progress();
 
     let main_card = build_main_card(state);
     let lower_panel: Option<(Element<Msg>, f32)> = if state.quick_menu.settings_open {
@@ -147,6 +146,7 @@ fn build_main_card(state: &State) -> Element<Msg> {
     let settings_btn = Group::new()
         .key("quick-settings-toggle")
         .size(Size::new(34.logical_px(), 34.logical_px()))
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(HoverTarget::QuickSettingsToggle))
         .on_leave(Msg::Leave(HoverTarget::QuickSettingsToggle))
         .on_click(Msg::QuickMenuToggleSettings)
@@ -213,6 +213,7 @@ fn build_main_card(state: &State) -> Element<Msg> {
     let power_btn = Group::new()
         .key("quick-power-toggle")
         .size(Size::new(34.logical_px(), 34.logical_px()))
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(HoverTarget::QuickPowerToggle))
         .on_leave(Msg::Leave(HoverTarget::QuickPowerToggle))
         .on_click(Msg::QuickMenuTogglePower)
@@ -243,6 +244,7 @@ fn build_main_card(state: &State) -> Element<Msg> {
         let cancel_btn = Group::new()
             .key("quick-power-cancel")
             .size(Size::auto())
+            .cursor(CursorShape::Pointer)
             .on_hover(Msg::Hover(HoverTarget::QuickPowerCancel))
             .on_leave(Msg::Leave(HoverTarget::QuickPowerCancel))
             .on_click(Msg::QuickMenuCancelPower)
@@ -384,6 +386,7 @@ fn build_sprite_box(state: &State) -> Element<Msg> {
             SPRITE_FRAME_W.logical_px(),
             SPRITE_FRAME_H.logical_px(),
         ))
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(HoverTarget::QuickSprite))
         .on_leave(Msg::Leave(HoverTarget::QuickSprite))
         .on_click(Msg::QuickMenuSpriteClick)
@@ -540,6 +543,7 @@ fn power_icon_btn(state: &State, action: PowerAction, idx: usize) -> Element<Msg
             POWER_BTN_SIZE.logical_px(),
             POWER_BTN_SIZE.logical_px(),
         ))
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(target))
         .on_leave(Msg::Leave(target))
         .on_click(Msg::QuickMenuPowerAction(action))

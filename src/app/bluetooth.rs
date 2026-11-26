@@ -1,10 +1,11 @@
 //! Bluetooth management popup state and BlueZ pairing agent state.
 
 use std::collections::HashMap;
+use std::time::Instant;
 
 use waywi::prelude::*;
 
-const BT_POPUP_ANIM_STEP: f32 = 16.0 / 180.0;
+use super::anim::RevealAnim;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingPairingPrompt {
@@ -24,8 +25,7 @@ pub enum BtDeviceMenuAction {
 
 #[derive(Default)]
 pub struct BluetoothUiState {
-    pub popup_target: bool,
-    pub popup_progress: f32,
+    pub popup_anim: RevealAnim,
     pub popup_left_x: f32,
     pub scroll_index: usize,
     /// Object path of the device whose context menu (Connect / Trust / Forget) is open.
@@ -38,14 +38,23 @@ pub struct BluetoothUiState {
 
 impl BluetoothUiState {
     #[must_use]
+    pub const fn is_popup_open(&self) -> bool {
+        self.popup_anim.is_open()
+    }
+
+    #[must_use]
+    pub fn popup_progress(&self) -> f32 {
+        self.popup_anim.progress()
+    }
+
+    #[must_use]
     pub fn is_popup_visible(&self) -> bool {
-        self.popup_target || self.popup_progress > 0.001
+        self.popup_anim.is_visible()
     }
 
     #[must_use]
     pub fn is_animating_popup(&self) -> bool {
-        let target = if self.popup_target { 1.0 } else { 0.0 };
-        (self.popup_progress - target).abs() > 0.001
+        self.popup_anim.is_animating()
     }
 
     #[must_use]
@@ -86,27 +95,24 @@ impl BluetoothUiState {
         });
     }
 
-    pub fn step_popup_animation(&mut self) {
-        let target = if self.popup_target { 1.0_f32 } else { 0.0_f32 };
-        if (self.popup_progress - target).abs() <= BT_POPUP_ANIM_STEP {
-            self.popup_progress = target;
-        } else if self.popup_progress < target {
-            self.popup_progress = (self.popup_progress + BT_POPUP_ANIM_STEP).min(1.0);
-        } else {
-            self.popup_progress = (self.popup_progress - BT_POPUP_ANIM_STEP).max(0.0);
-        }
+    pub fn advance_popup_animation(&mut self, now: Instant) {
+        self.popup_anim.advance(now);
+    }
+
+    pub fn open_popup(&mut self) {
+        self.popup_anim.set_open(true);
+        self.last_error = None;
     }
 
     pub fn toggle_popup(&mut self) {
-        self.popup_target = !self.popup_target;
         self.last_error = None;
-        if !self.popup_target {
+        if !self.popup_anim.toggle() {
             self.menu_path = None;
         }
     }
 
     pub fn close_popup(&mut self) {
-        self.popup_target = false;
+        self.popup_anim.set_open(false);
         self.menu_path = None;
         self.last_error = None;
     }

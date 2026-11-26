@@ -134,27 +134,27 @@ fn ipc_triggers_toggle_overlays_exclusively() {
 
     rt.enqueue(parse_ipc_command("volume").unwrap());
     rt.step().unwrap();
-    assert!(rt.state().audio_ui.popup_target);
+    assert!(rt.state().audio_ui.is_popup_open());
 
     rt.enqueue(parse_ipc_command("bluetooth").unwrap());
     rt.step().unwrap();
-    assert!(rt.state().bt_ui.popup_target);
-    assert!(!rt.state().audio_ui.popup_target);
+    assert!(rt.state().bt_ui.is_popup_open());
+    assert!(!rt.state().audio_ui.is_popup_open());
 
     rt.enqueue(parse_ipc_command("disk").unwrap());
     rt.step().unwrap();
-    assert!(rt.state().disk_ui.popup_target);
-    assert!(!rt.state().bt_ui.popup_target);
+    assert!(rt.state().disk_ui.is_popup_open());
+    assert!(!rt.state().bt_ui.is_popup_open());
 
     rt.enqueue(parse_ipc_command("mpris").unwrap());
     rt.step().unwrap();
-    assert!(rt.state().mpris.popup_target);
-    assert!(!rt.state().disk_ui.popup_target);
+    assert!(rt.state().mpris.is_popup_open());
+    assert!(!rt.state().disk_ui.is_popup_open());
 
     rt.enqueue(parse_ipc_command("notifications").unwrap());
     rt.step().unwrap();
-    assert!(rt.state().notifications.center_target);
-    assert!(!rt.state().mpris.popup_target);
+    assert!(rt.state().notifications.is_center_open());
+    assert!(!rt.state().mpris.is_popup_open());
 
     rt.enqueue(parse_ipc_command("dnd").unwrap());
     rt.step().unwrap();
@@ -162,7 +162,7 @@ fn ipc_triggers_toggle_overlays_exclusively() {
 
     rt.enqueue(parse_ipc_command("close").unwrap());
     rt.step().unwrap();
-    assert!(!rt.state().notifications.center_target);
+    assert!(!rt.state().notifications.is_center_open());
 }
 
 #[test]
@@ -178,7 +178,7 @@ fn drun_filters_grows_input_navigates_past_top5_and_renders() {
     ]));
     rt.enqueue(Msg::ToggleDrun);
     rt.step().unwrap();
-    assert!(rt.state().drun.target);
+    assert!(rt.state().drun.is_open());
     assert_eq!(rt.state().drun.visible_match_indices().len(), 5);
     assert!(
         rt.rendered_buffer("bar-drun").is_some(),
@@ -212,5 +212,5 @@ fn drun_filters_grows_input_navigates_past_top5_and_renders() {
     // Escape closes drun.
     rt.enqueue(Msg::DrunKey(key_ev(Key::Escape, None)));
     rt.step().unwrap();
-    assert!(!rt.state().drun.target);
+    assert!(!rt.state().drun.is_open());
 }

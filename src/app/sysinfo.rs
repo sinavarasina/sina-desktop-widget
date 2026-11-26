@@ -135,11 +135,16 @@ impl SysInfoState {
         self.reel_b.tick_second(count_b);
     }
 
-    pub fn step_animation(&mut self, cpu: Option<&CpuSnapshot>, memory: Option<&MemorySnapshot>) {
+    pub fn advance_animation(
+        &mut self,
+        now: std::time::Instant,
+        cpu: Option<&CpuSnapshot>,
+        memory: Option<&MemorySnapshot>,
+    ) {
         let count_a = self.text_a_items().len();
         let count_b = self.text_b_items(cpu, memory).len();
-        self.reel_a.step_animation(count_a);
-        self.reel_b.step_animation(count_b);
+        self.reel_a.advance(now, count_a);
+        self.reel_b.advance(now, count_b);
     }
 
     #[must_use]

@@ -7,11 +7,12 @@ pub mod ticker;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::time::UNIX_EPOCH;
+use std::time::{Instant, UNIX_EPOCH};
 
 use waywi::desktop::icons::XdgIconLookup;
 use waywi::prelude::*;
 
+use crate::app::anim::RevealAnim;
 use crate::app::asset_lru::PathAssetCache;
 
 use icons::resolve_notification_icon;
@@ -34,8 +35,7 @@ pub struct NotificationStore {
     pub items: Vec<NotificationItem>,
     pub total_count: usize,
     pub dnd: bool,
-    pub center_target: bool,
-    pub center_progress: f32,
+    pub center_anim: RevealAnim,
     pub marquee_tick: u32,
     pub scroll_index: usize,
     pub action_scroll_x: HashMap<u32, f32>,
@@ -44,8 +44,6 @@ pub struct NotificationStore {
     store_path: PathBuf,
     disk_overflow: Vec<StoredNotification>,
 }
-
-const CENTER_ANIM_STEP: f32 = 16.0 / 180.0;
 
 impl NotificationStore {
     /// Loads persisted notification metadata from disk without decoding icons upfront so the
@@ -75,8 +73,7 @@ impl NotificationStore {
             items: in_ram,
             total_count,
             dnd: persisted.dnd,
-            center_target: false,
-            center_progress: 0.0,
+            center_anim: RevealAnim::popup(),
             marquee_tick: 0,
             scroll_index: 0,
             action_scroll_x: HashMap::new(),
@@ -283,37 +280,44 @@ impl NotificationStore {
     }
 
     #[must_use]
+    pub const fn is_center_open(&self) -> bool {
+        self.center_anim.is_open()
+    }
+
+    #[must_use]
+    pub fn center_progress(&self) -> f32 {
+        self.center_anim.progress()
+    }
+
+    #[must_use]
     pub fn is_center_visible(&self) -> bool {
-        self.center_target || self.center_progress > 0.001
+        self.center_anim.is_visible()
     }
 
     #[must_use]
     pub fn is_animating_center(&self) -> bool {
-        let target = if self.center_target { 1.0 } else { 0.0 };
-        (self.center_progress - target).abs() > 0.001
+        self.center_anim.is_animating()
     }
 
-    pub fn step_center_animation(&mut self) {
-        let target = if self.center_target { 1.0_f32 } else { 0.0_f32 };
-        if (self.center_progress - target).abs() <= CENTER_ANIM_STEP {
-            self.center_progress = target;
-        } else if self.center_progress < target {
-            self.center_progress = (self.center_progress + CENTER_ANIM_STEP).min(1.0);
-        } else {
-            self.center_progress = (self.center_progress - CENTER_ANIM_STEP).max(0.0);
-        }
+    pub fn advance_center_animation(&mut self, now: Instant) {
+        self.center_anim.advance(now);
+    }
+
+    pub fn open_center(&mut self) {
+        self.center_anim.set_open(true);
+        self.marquee_tick = 0;
     }
 
     pub fn toggle_center(&mut self) -> bool {
-        self.center_target = !self.center_target;
-        if self.center_target {
+        let open = self.center_anim.toggle();
+        if open {
             self.marquee_tick = 0;
         }
-        self.center_target
+        open
     }
 
     pub fn close_center(&mut self) {
-        self.center_target = false;
+        self.center_anim.set_open(false);
     }
 
     pub fn advance_marquee(&mut self) {

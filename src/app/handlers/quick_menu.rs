@@ -13,19 +13,19 @@ pub fn handle_logind_event(state: &mut State, ev: LogindEvent) {
 }
 
 pub fn handle_clock_menu_click(state: &mut State, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
-    if state.quick_menu.popup_target {
+    if state.quick_menu.is_popup_open() {
         state.quick_menu.close_popup();
         state.settings_ui.unfocus_inputs();
         state.settings_ui.open_dropdown = None;
         if !state.hovered.is_clock_group() {
-            state.clock_menu_target = false;
+            state.clock_menu_anim.set_open(false);
         }
         state.play_sound(SoundCue::MenuPopdown, ctx);
     } else {
         close_other_overlays(state, Some("quick_menu"));
         refresh_power_capabilities_if_empty(state, ctx);
         state.quick_menu.open_popup(ctx);
-        state.clock_menu_target = true;
+        state.clock_menu_anim.set_open(true);
         state.clock_menu_leave_deadline = None;
         state.play_sound(SoundCue::MenuPopup, ctx);
     }
@@ -124,7 +124,7 @@ fn execute_power_action(state: &mut State, action: PowerAction, ctx: &EffectCtx<
         state.play_sound(power_lifecycle_cue(action), ctx);
         state.quick_menu.close_popup();
         if !state.hovered.is_clock_group() {
-            state.clock_menu_target = false;
+            state.clock_menu_anim.set_open(false);
         }
     }
 }

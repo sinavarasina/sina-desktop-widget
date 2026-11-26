@@ -409,6 +409,7 @@ fn build_select_row(
     let mut row = Group::new()
         .key(key)
         .size(Size::new(CONTENT_W.logical_px(), ITEM_H.logical_px()))
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(target))
         .on_leave(Msg::Leave(target))
         .on_click(on_click)
@@ -501,6 +502,7 @@ fn build_profile_trigger(state: &State, active_desc: &str) -> Element<Msg> {
     Group::new()
         .key("mixer-profile-toggle")
         .size(Size::new(CONTENT_W.logical_px(), ITEM_H.logical_px()))
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(HoverTarget::MixerProfileToggle))
         .on_leave(Msg::Leave(HoverTarget::MixerProfileToggle))
         .on_click(Msg::MixerToggleProfiles)
@@ -570,6 +572,7 @@ fn build_profile_options(
         let opt = Group::new()
             .key(("mixer-prof-opt", idx))
             .size(Size::new(CONTENT_W.logical_px(), PROFILE_OPT_H.logical_px()))
+            .cursor(CursorShape::Pointer)
             .on_hover(Msg::Hover(target))
             .on_leave(Msg::Leave(target))
             .on_click(Msg::MixerSelectProfile {
@@ -654,6 +657,7 @@ fn build_balance_row(state: &State) -> Element<Msg> {
             ((BALANCE_ROW_H - 18.0) * 0.5).logical_px(),
         ))
         .size(Size::new(BALANCE_TRACK_W.logical_px(), 18.logical_px()))
+        .cursor(CursorShape::EwResize)
         .on_hover(Msg::Hover(HoverTarget::MixerBalanceBar))
         .on_leave(Msg::Leave(HoverTarget::MixerBalanceBar))
         .on_pointer_down(Msg::MixerBalanceSeekClick)

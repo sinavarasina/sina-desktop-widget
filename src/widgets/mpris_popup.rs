@@ -14,8 +14,7 @@ use seek::build_seek_box;
 const POPUP_FULL_HEIGHT: f32 = 114.0;
 
 pub fn build_mpris_popup_surface(state: &State) -> Surface<Msg> {
-    let p = state.mpris.popup_progress.clamp(0.0, 1.0);
-    let ease = 1.0 - (1.0 - p).powi(3);
+    let ease = state.mpris.popup_progress();
 
     let fallback_left = {
         let right_margin = HoverTarget::TrayItem(state.tray_items.len().saturating_sub(1))

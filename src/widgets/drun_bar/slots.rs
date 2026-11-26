@@ -269,6 +269,7 @@ fn build_app_slot(
     let mut slot = Group::new()
         .key(("drun-slot", slot_idx))
         .size(Size::new(slot_w.logical_px(), BAR_HEIGHT.logical_px()))
+        .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(HoverTarget::DrunEntry(slot_idx)))
         .on_leave(Msg::Leave(HoverTarget::DrunEntry(slot_idx)))
         .on_click(Msg::DrunLaunchIndex(match_pos))

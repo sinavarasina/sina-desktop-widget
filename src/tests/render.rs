@@ -1,6 +1,8 @@
 //! Headless rendering and steady-state allocation tests.
 
-use super::support::{maybe_dump_argb8888_ppm, populate_sample_metrics, synthetic_rt};
+use super::support::{
+    maybe_dump_argb8888_ppm, populate_sample_metrics, settle_ui_anims, synthetic_rt,
+};
 
 #[test]
 fn renders_24px_bar_with_non_empty_pixels_and_zero_steady_state_heap_fallbacks() {
@@ -51,10 +53,7 @@ fn embedded_wallpaper_reclaims_pixels_after_present_and_sprite_evicts_on_close()
 
     // Opening Quick Status lazily decodes the 4 Yuki Nagato sprite assets.
     rt.enqueue(Msg::ClockMenuClick);
-    for _ in 0..16 {
-        rt.enqueue(Msg::QuickMenuAnimTick);
-    }
-    rt.step().unwrap();
+    settle_ui_anims(&mut rt);
 
     let sprites = rt
         .state()
@@ -67,10 +66,7 @@ fn embedded_wallpaper_reclaims_pixels_after_present_and_sprite_evicts_on_close()
 
     // Closing Quick Status finishes slide-up and evicts all 4 sprite RGBA8 buffers back to ~52 KB.
     rt.enqueue(Msg::CloseQuickMenu);
-    for _ in 0..16 {
-        rt.enqueue(Msg::QuickMenuAnimTick);
-    }
-    rt.step().unwrap();
+    settle_ui_anims(&mut rt);
     assert!(!rt.state().quick_menu.is_popup_visible());
     assert!(!rt.asset_pixels_resident(sprites.base));
     assert!(!rt.asset_pixels_resident(sprites.eye_forward.asset));
@@ -79,10 +75,7 @@ fn embedded_wallpaper_reclaims_pixels_after_present_and_sprite_evicts_on_close()
 
     // Re-opening Quick Status transparently re-decodes the sprite assets and renders again.
     rt.enqueue(Msg::ClockMenuClick);
-    for _ in 0..16 {
-        rt.enqueue(Msg::QuickMenuAnimTick);
-    }
-    rt.step().unwrap();
+    settle_ui_anims(&mut rt);
     assert!(rt.rendered_buffer("bar-quick-menu").is_some());
     assert!(rt.asset_pixels_resident(sprites.base));
 }
@@ -96,10 +89,7 @@ fn desktop_yuki_sprite_fades_rotates_on_workspace_switch_blinks_and_evicts_old_v
 
     let mut rt = synthetic_rt();
     rt.enqueue(Msg::TestLoadDesktopSprite);
-    for _ in 0..45 {
-        rt.enqueue(Msg::DesktopSpriteFadeTick);
-    }
-    rt.step().unwrap();
+    settle_ui_anims(&mut rt);
 
     assert_eq!(rt.state().desktop_sprite.active_idx, 0);
     assert!(matches!(
@@ -195,8 +185,9 @@ fn desktop_yuki_sprite_fades_rotates_on_workspace_switch_blinks_and_evicts_old_v
     assert_eq!(rt.state().desktop_sprite.active_idx, 2);
     assert!(!rt.asset_pixels_resident(sp00_body));
 
-    // Idle rotation (after DESKTOP_SPRITE_HOLD_SECS) uses slow fade-out -> variant 3 (SP02 book) -> fade-in.
-    for _ in 0..crate::app::desktop_sprite::DESKTOP_SPRITE_HOLD_SECS {
+    // Idle rotation (after rotate_interval_secs) uses slow fade-out -> variant 3 (SP02 book) -> fade-in.
+    let hold_secs = rt.state().config.sprite.rotate_interval_secs;
+    for _ in 0..hold_secs {
         rt.enqueue(Msg::TimeTick(waywi::system::TimeSnapshot {
             wall_clock: std::time::SystemTime::UNIX_EPOCH,
             monotonic: std::time::Instant::now(),
@@ -207,10 +198,7 @@ fn desktop_yuki_sprite_fades_rotates_on_workspace_switch_blinks_and_evicts_old_v
         rt.state().desktop_sprite.phase,
         SpriteFadePhase::FadingOut { next_idx: 3, .. }
     ));
-    for _ in 0..90 {
-        rt.enqueue(Msg::DesktopSpriteFadeTick);
-    }
-    rt.step().unwrap();
+    settle_ui_anims(&mut rt);
     assert_eq!(rt.state().desktop_sprite.active_idx, 3);
     assert!(matches!(
         rt.state().desktop_sprite.phase,

@@ -13,6 +13,7 @@ waywi = { version = "0.2", features = [
     "image-svg",
     "image-webp",
     "animation",
+    "cursor-shape",
     "ime",
     "idle-notify",
     "control-ipc",

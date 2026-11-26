@@ -3,7 +3,6 @@
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use waywi::prelude::*;
@@ -338,10 +337,7 @@ impl SoundEngine {
 /// Reads `gtk-sound-theme-name` from GTK4/GTK3 `settings.ini` (falls back to `"freedesktop"`).
 #[must_use]
 fn read_gtk_sound_theme_name() -> String {
-    let config_root = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")));
-    if let Some(root) = config_root {
+    if let Some(root) = XdgBaseDirs::from_env().config_home {
         for rel in ["gtk-4.0/settings.ini", "gtk-3.0/settings.ini"] {
             let Ok(text) = fs::read_to_string(root.join(rel)) else {
                 continue;
@@ -368,10 +364,7 @@ fn read_gtk_sound_theme_name() -> String {
 /// Reads `gtk-enable-event-sounds` once from GTK3/GTK4 `settings.ini` (defaults to `true`).
 #[must_use]
 fn read_gtk_event_sounds_enabled() -> bool {
-    let config_root = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")));
-    let Some(root) = config_root else {
+    let Some(root) = XdgBaseDirs::from_env().config_home else {
         return true;
     };
     for rel in ["gtk-4.0/settings.ini", "gtk-3.0/settings.ini"] {

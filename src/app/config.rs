@@ -614,6 +614,7 @@ impl WidgetsConfig {
             .map_or_else(|| id.default_placement(), |s| s.placement)
     }
 
+    #[cfg(test)]
     pub fn set_metric_placement(&mut self, id: RightMetricId, placement: MetricPlacement) {
         if let Some(slot) = self.right_metrics.iter_mut().find(|s| s.id == id) {
             slot.placement = placement;
@@ -691,9 +692,8 @@ pub struct WidgetConfig {
 impl WidgetConfig {
     #[must_use]
     pub fn default_path() -> PathBuf {
-        let root = std::env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
+        let root = XdgBaseDirs::from_env()
+            .config_home
             .unwrap_or_else(|| PathBuf::from("/tmp"));
         root.join("sina-desktop-widget").join(CONFIG_FILE_NAME)
     }
@@ -950,40 +950,6 @@ impl WidgetConfig {
                     if let Some(s) = parse_toml_string(val) {
                         cfg.widgets.right_metrics = WidgetsConfig::parse_right_metrics_toml(&s);
                         cfg.widgets.normalize_right_metrics();
-                    }
-                }
-                // Backward-compatibility with older boolean widget flags:
-                ("widgets", "show_audio") => {
-                    if let Some(false) = parse_toml_bool(val) {
-                        cfg.widgets
-                            .set_metric_placement(RightMetricId::Audio, MetricPlacement::Hidden);
-                    }
-                }
-                ("widgets", "show_cpu_mem") => {
-                    if let Some(false) = parse_toml_bool(val) {
-                        cfg.widgets
-                            .set_metric_placement(RightMetricId::Cpu, MetricPlacement::Hidden);
-                        cfg.widgets
-                            .set_metric_placement(RightMetricId::Memory, MetricPlacement::Hidden);
-                    }
-                }
-                ("widgets", "show_network") => {
-                    if let Some(false) = parse_toml_bool(val) {
-                        cfg.widgets
-                            .set_metric_placement(RightMetricId::Network, MetricPlacement::Hidden);
-                    }
-                }
-                ("widgets", "show_drawer") => {
-                    if let Some(false) = parse_toml_bool(val) {
-                        for id in [
-                            RightMetricId::Gpu,
-                            RightMetricId::Temp,
-                            RightMetricId::Disk,
-                            RightMetricId::Bluetooth,
-                        ] {
-                            cfg.widgets
-                                .set_metric_placement(id, MetricPlacement::Hidden);
-                        }
                     }
                 }
                 _ => {}
@@ -1273,27 +1239,7 @@ mod tests {
     }
 
     #[test]
-    fn right_metrics_normalizes_partial_lists_and_legacy_flags() {
-        let legacy = r#"
-[widgets]
-show_audio = false
-show_drawer = false
-"#;
-        let parsed_legacy = WidgetConfig::from_toml(legacy);
-        assert_eq!(
-            parsed_legacy.widgets.placement_of(RightMetricId::Audio),
-            MetricPlacement::Hidden
-        );
-        assert!(parsed_legacy.widgets.drawer_metrics().is_empty());
-        assert_eq!(
-            parsed_legacy.widgets.bar_metrics(),
-            vec![
-                RightMetricId::Cpu,
-                RightMetricId::Memory,
-                RightMetricId::Network
-            ]
-        );
-
+    fn right_metrics_normalizes_partial_and_duplicate_lists() {
         let partial = r#"
 [widgets]
 right_metrics = "bluetooth:bar,audio:drawer,bluetooth:off"

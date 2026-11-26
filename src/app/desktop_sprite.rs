@@ -2,14 +2,12 @@
 //! fade-out/fade-in transitions, Hyprland workspace-change trigger, natural eye blinking,
 //! and per-variant RGBA8 pixel eviction.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use waywi::prelude::*;
 
-/// How long each sprite pose/expression holds before gently rotating (3 minutes).
-pub const DESKTOP_SPRITE_HOLD_SECS: u16 = 180;
-/// Opacity delta per 16ms tick (~640ms slow fade-out / ~640ms slow fade-in).
-const FADE_STEP: f32 = 16.0 / 640.0;
+/// Smooth fade-out and fade-in duration per half-transition (640 ms).
+const FADE_DURATION: Duration = Duration::from_millis(640);
 
 // --- Embedded 2x seamlessly upscaled (`waifu2x-ncnn-vulkan` cunet n=1 TTA) lossless WebP slices ---
 // Total embedded size: ~318 KB (40 slices including speaking M1/M2 mouths for notification reaction).
@@ -214,20 +212,20 @@ pub struct LoadedVariantAssets {
 impl LoadedVariantAssets {
     fn load(spec: &VariantSpec, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Option<Self> {
         let mouth_half = match spec.mouth_half_bytes {
-            Some(bytes) => Some(ctx.load_image_bytes(bytes).ok()?),
+            Some(bytes) => Some(ctx.load_image_static(bytes).ok()?),
             None => None,
         };
         let mouth_open = match spec.mouth_open_bytes {
-            Some(bytes) => Some(ctx.load_image_bytes(bytes).ok()?),
+            Some(bytes) => Some(ctx.load_image_static(bytes).ok()?),
             None => None,
         };
         Some(Self {
-            top_hair: ctx.load_image_bytes(spec.top_hair_bytes).ok()?,
-            body: ctx.load_image_bytes(spec.body_bytes).ok()?,
-            eye_open: ctx.load_image_bytes(spec.eye_open_bytes).ok()?,
-            eye_half: ctx.load_image_bytes(spec.eye_half_bytes).ok()?,
-            eye_closed: ctx.load_image_bytes(spec.eye_closed_bytes).ok()?,
-            mouth_closed: ctx.load_image_bytes(spec.mouth_closed_bytes).ok()?,
+            top_hair: ctx.load_image_static(spec.top_hair_bytes).ok()?,
+            body: ctx.load_image_static(spec.body_bytes).ok()?,
+            eye_open: ctx.load_image_static(spec.eye_open_bytes).ok()?,
+            eye_half: ctx.load_image_static(spec.eye_half_bytes).ok()?,
+            eye_closed: ctx.load_image_static(spec.eye_closed_bytes).ok()?,
+            mouth_closed: ctx.load_image_static(spec.mouth_closed_bytes).ok()?,
             mouth_half,
             mouth_open,
         })
@@ -287,8 +285,8 @@ const MOUTH_REACT_STEPS: [(MouthFrame, Duration); 7] = [
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SpriteFadePhase {
     Hold { elapsed_secs: u16 },
-    FadingOut { opacity: f32, next_idx: usize },
-    FadingIn { opacity: f32 },
+    FadingOut { anim: Animated<f32>, next_idx: usize },
+    FadingIn { anim: Animated<f32> },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -354,7 +352,9 @@ impl DesktopSpriteState {
         let idx = self.active_idx % DESKTOP_VARIANTS.len();
         if let Some(loaded) = self.load_or_cached(idx, ctx) {
             self.active_assets = Some(loaded);
-            self.phase = SpriteFadePhase::FadingIn { opacity: 0.0 };
+            let mut fade_in = Animated::new(0.0);
+            fade_in.transition_to(1.0, FADE_DURATION, Easing::CubicOut, Instant::now());
+            self.phase = SpriteFadePhase::FadingIn { anim: fade_in };
             self.blink = BlinkPhase::Open;
         }
     }
@@ -436,11 +436,11 @@ impl DesktopSpriteState {
     }
 
     #[must_use]
-    pub const fn opacity(&self) -> f32 {
+    pub fn opacity(&self) -> f32 {
         match self.phase {
             SpriteFadePhase::Hold { .. } => 1.0,
-            SpriteFadePhase::FadingOut { opacity, .. } | SpriteFadePhase::FadingIn { opacity } => {
-                opacity
+            SpriteFadePhase::FadingOut { anim, .. } | SpriteFadePhase::FadingIn { anim } => {
+                anim.value().clamp(0.0, 1.0)
             }
         }
     }
@@ -516,15 +516,16 @@ impl DesktopSpriteState {
             return;
         }
         let next_idx = (self.active_idx + 1) % DESKTOP_VARIANTS.len();
+        let now = Instant::now();
         match self.phase {
             SpriteFadePhase::Hold { .. } => {
-                self.phase = SpriteFadePhase::FadingOut {
-                    opacity: 1.0,
-                    next_idx,
-                };
+                let mut anim = Animated::new(1.0);
+                anim.transition_to(0.0, FADE_DURATION, Easing::CubicOut, now);
+                self.phase = SpriteFadePhase::FadingOut { anim, next_idx };
             }
-            SpriteFadePhase::FadingIn { opacity } => {
-                self.phase = SpriteFadePhase::FadingOut { opacity, next_idx };
+            SpriteFadePhase::FadingIn { mut anim } => {
+                anim.transition_to(0.0, FADE_DURATION, Easing::CubicOut, now);
+                self.phase = SpriteFadePhase::FadingOut { anim, next_idx };
             }
             SpriteFadePhase::FadingOut { .. } => {}
         }
@@ -563,18 +564,12 @@ impl DesktopSpriteState {
         }
     }
 
-    /// Convenience wrapper using the default 3-minute hold interval (retained for tests).
-    #[allow(dead_code)]
-    pub fn tick_second(&mut self) {
-        self.tick_second_with(DESKTOP_SPRITE_HOLD_SECS, true);
-    }
-
-    /// Advances the 60fps fade animation, swapping and evicting old variant pixels at opacity 0.
-    pub fn step_fade(&mut self, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
+    /// Advances the VSync fade animation, swapping and evicting old variant pixels at opacity 0.
+    pub fn advance_fade(&mut self, now: Instant, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
         match self.phase {
             SpriteFadePhase::Hold { .. } => {}
-            SpriteFadePhase::FadingOut { opacity, next_idx } => {
-                let next_op = (opacity - FADE_STEP).max(0.0);
+            SpriteFadePhase::FadingOut { mut anim, next_idx } => {
+                let next_op = anim.sample(now).clamp(0.0, 1.0);
                 if next_op <= 0.001 {
                     let prev_assets = self.active_assets;
                     let next_assets = self.load_or_cached(next_idx, ctx);
@@ -585,20 +580,19 @@ impl DesktopSpriteState {
                     self.active_assets = next_assets;
                     self.blink = BlinkPhase::Open;
                     self.mouth_step = None;
-                    self.phase = SpriteFadePhase::FadingIn { opacity: 0.0 };
+                    let mut fade_in = Animated::new(0.0);
+                    fade_in.transition_to(1.0, FADE_DURATION, Easing::CubicOut, now);
+                    self.phase = SpriteFadePhase::FadingIn { anim: fade_in };
                 } else {
-                    self.phase = SpriteFadePhase::FadingOut {
-                        opacity: next_op,
-                        next_idx,
-                    };
+                    self.phase = SpriteFadePhase::FadingOut { anim, next_idx };
                 }
             }
-            SpriteFadePhase::FadingIn { opacity } => {
-                let next_op = (opacity + FADE_STEP).min(1.0);
+            SpriteFadePhase::FadingIn { mut anim } => {
+                let next_op = anim.sample(now).clamp(0.0, 1.0);
                 if next_op >= 0.999 {
                     self.phase = SpriteFadePhase::Hold { elapsed_secs: 0 };
                 } else {
-                    self.phase = SpriteFadePhase::FadingIn { opacity: next_op };
+                    self.phase = SpriteFadePhase::FadingIn { anim };
                 }
             }
         }

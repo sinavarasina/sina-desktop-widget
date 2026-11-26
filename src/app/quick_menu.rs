@@ -1,14 +1,13 @@
 //! Quick status/settings popup state, logind power capability mapping, and lazy-decoded
 //! Yuki Nagato (`21_witch_profile_right`) layered sprite assets.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use waywi::prelude::*;
 use waywi::dbus::{LogindPowerCapabilities, PowerActionSupport};
 
+use crate::app::anim::RevealAnim;
 use crate::theme::{BLUE, MAUVE, RED, SUBTEXT1, TEXT};
-
-const QUICK_MENU_ANIM_STEP: f32 = 16.0 / 180.0;
 
 // Embed ONLY the 1x PNG files needed for the 3 scrollable witch poses (~185 KB total).
 // At ~0.50x display scale, 1x sources avoid >2x single-pass downscale aliasing.
@@ -157,10 +156,10 @@ pub struct YukiSpriteAssets {
 impl YukiSpriteAssets {
     /// Lazily decodes the embedded PNGs for `spec` and builds timed blink & mouth `SpriteSheet`s.
     pub fn load(spec: &WitchPoseSpec, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Option<Self> {
-        let base = ctx.load_image_bytes(spec.base_png).ok()?;
-        let eye_fwd_asset = ctx.load_image_bytes(spec.eye_primary_png).ok()?;
-        let eye_glc_asset = ctx.load_image_bytes(spec.eye_alt_png).ok()?;
-        let mouth_asset = ctx.load_image_bytes(spec.mouth_primary_png).ok()?;
+        let base = ctx.load_image_static(spec.base_png).ok()?;
+        let eye_fwd_asset = ctx.load_image_static(spec.eye_primary_png).ok()?;
+        let eye_glc_asset = ctx.load_image_static(spec.eye_alt_png).ok()?;
+        let mouth_asset = ctx.load_image_static(spec.mouth_primary_png).ok()?;
 
         let make_mouth_sheet = |asset: ImageAsset| {
             SpriteSheet::new(asset)
@@ -178,7 +177,7 @@ impl YukiSpriteAssets {
         };
 
         let mouth_alt = match spec.mouth_alt_png {
-            Some(bytes) => Some(make_mouth_sheet(ctx.load_image_bytes(bytes).ok()?)),
+            Some(bytes) => Some(make_mouth_sheet(ctx.load_image_static(bytes).ok()?)),
             None => None,
         };
 
@@ -340,8 +339,7 @@ pub struct PendingPowerAction {
 pub const POWER_COUNTDOWN_SECS: u8 = 3;
 
 pub struct QuickMenuState {
-    pub popup_target: bool,
-    pub popup_progress: f32,
+    pub popup_anim: RevealAnim,
     pub power_menu_open: bool,
     pub settings_open: bool,
     pub pending_power: Option<PendingPowerAction>,
@@ -365,8 +363,7 @@ impl Default for QuickMenuState {
             .unwrap_or_else(|| String::from("user"));
 
         Self {
-            popup_target: false,
-            popup_progress: 0.0,
+            popup_anim: RevealAnim::popup(),
             power_menu_open: false,
             settings_open: false,
             pending_power: None,
@@ -389,25 +386,27 @@ impl QuickMenuState {
     }
 
     #[must_use]
+    pub const fn is_popup_open(&self) -> bool {
+        self.popup_anim.is_open()
+    }
+
+    #[must_use]
+    pub fn popup_progress(&self) -> f32 {
+        self.popup_anim.progress()
+    }
+
+    #[must_use]
     pub fn is_popup_visible(&self) -> bool {
-        self.popup_target || self.popup_progress > 0.001
+        self.popup_anim.is_visible()
     }
 
     #[must_use]
     pub fn is_animating_popup(&self) -> bool {
-        let target = if self.popup_target { 1.0 } else { 0.0 };
-        (self.popup_progress - target).abs() > 0.001
+        self.popup_anim.is_animating()
     }
 
-    pub fn step_popup_animation(&mut self) {
-        let target = if self.popup_target { 1.0_f32 } else { 0.0_f32 };
-        if (self.popup_progress - target).abs() <= QUICK_MENU_ANIM_STEP {
-            self.popup_progress = target;
-        } else if self.popup_progress < target {
-            self.popup_progress = (self.popup_progress + QUICK_MENU_ANIM_STEP).min(1.0);
-        } else {
-            self.popup_progress = (self.popup_progress - QUICK_MENU_ANIM_STEP).max(0.0);
-        }
+    pub fn advance_popup_animation(&mut self, now: Instant) {
+        self.popup_anim.advance(now);
     }
 
     fn load_or_cached_pose(
@@ -464,7 +463,7 @@ impl QuickMenuState {
             prev.evict_pixels(ctx);
         }
         self.sprite_pose_idx = target;
-        if self.popup_target || self.sprite_assets.is_some() {
+        if self.popup_anim.is_open() || self.sprite_assets.is_some() {
             self.sprite_assets = self.load_or_cached_pose(target, ctx);
         }
         self.mouth_reacting = false;
@@ -479,13 +478,13 @@ impl QuickMenuState {
     }
 
     pub fn open_popup(&mut self, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
-        self.popup_target = true;
+        self.popup_anim.set_open(true);
         self.power_error = None;
         self.ensure_sprite_loaded(ctx);
     }
 
     pub fn close_popup(&mut self) {
-        self.popup_target = false;
+        self.popup_anim.set_open(false);
         self.power_menu_open = false;
         self.settings_open = false;
         self.pending_power = None;

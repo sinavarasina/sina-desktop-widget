@@ -1,4 +1,4 @@
-//! Runtime IPC, system telemetry, and timer subscriptions.
+//! Runtime IPC, system telemetry, VSync animation, and timer subscriptions.
 
 use std::time::Duration;
 
@@ -58,25 +58,17 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
     subs.push(Dbus::logind(Msg::LogindEvent));
     subs.push(Idle::notify(IDLE_TRIM_TIMEOUT, Msg::UserIdle));
 
+    // Single monitor-synchronized VSync subscription for all UI animations (0% idle CPU/GPU
+    // once settled, automatic 60/120/144/240Hz adaptation, zero wakeups during DPMS off).
+    if state.is_animating_ui() {
+        subs.push(Animation::frames("ui-anim", Msg::AnimationFrame));
+    }
+
     if state.scroller.needs_scroll() {
         subs.push(Timer::every(
             "window-scroll-tick",
             Duration::from_millis(180),
             Msg::ScrollTick,
-        ));
-    }
-    if state.is_animating_drawer() {
-        subs.push(Timer::every(
-            "drawer-anim",
-            Duration::from_millis(16),
-            Msg::DrawerTick,
-        ));
-    }
-    if state.is_animating_reels() {
-        subs.push(Timer::every(
-            "reel-anim",
-            Duration::from_millis(16),
-            Msg::ReelAnimTick,
         ));
     }
     if state.drawer_leave_deadline.is_some() {
@@ -86,25 +78,11 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
             Msg::DrawerTimeoutCheck,
         ));
     }
-    if state.is_animating_clock_menu() {
-        subs.push(Timer::every(
-            "clock-menu-anim",
-            Duration::from_millis(16),
-            Msg::ClockMenuTick,
-        ));
-    }
     if state.clock_menu_leave_deadline.is_some() {
         subs.push(Timer::once(
             "clock-menu-leave-grace",
             Duration::from_millis(145),
             Msg::ClockMenuTimeoutCheck,
-        ));
-    }
-    if state.quick_menu.is_animating_popup() {
-        subs.push(Timer::every(
-            "quick-menu-anim",
-            Duration::from_millis(16),
-            Msg::QuickMenuAnimTick,
         ));
     }
     if state.quick_menu.pending_power.is_some() {
@@ -114,13 +92,7 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
             Msg::QuickMenuPowerTick,
         ));
     }
-    if state.desktop_sprite.is_fading() {
-        subs.push(Timer::every(
-            "desktop-sprite-fade",
-            Duration::from_millis(16),
-            Msg::DesktopSpriteFadeTick,
-        ));
-    } else if state.desktop_sprite.is_visible() {
+    if !state.desktop_sprite.is_fading() && state.desktop_sprite.is_visible() {
         subs.push(Timer::once(
             ("desktop-sprite-blink", state.desktop_sprite.blink as u8),
             state.desktop_sprite.blink.duration(),
@@ -148,39 +120,18 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
             Msg::NotifTickerTick,
         ));
     }
-    if state.notifications.is_animating_center() {
-        subs.push(Timer::every(
-            "notif-center-anim",
-            Duration::from_millis(16),
-            Msg::NotifCenterAnimTick,
-        ));
-    }
-    if state.notifications.center_target && !state.notifications.items.is_empty() {
+    if state.notifications.is_center_open() && !state.notifications.items.is_empty() {
         subs.push(Timer::every(
             "notif-center-marquee",
             Duration::from_millis(200),
             Msg::NotifCenterMarqueeTick,
         ));
     }
-    if state.mpris.has_active_session() || state.mpris.popup_target {
+    if state.mpris.has_active_session() || state.mpris.is_popup_open() {
         subs.push(Timer::every(
             "mpris-tick",
             Duration::from_millis(200),
             Msg::MprisTick,
-        ));
-    }
-    if state.mpris.is_animating_popup() {
-        subs.push(Timer::every(
-            "mpris-popup-anim",
-            Duration::from_millis(16),
-            Msg::MprisPopupAnimTick,
-        ));
-    }
-    if state.bt_ui.is_animating_popup() {
-        subs.push(Timer::every(
-            "bt-popup-anim",
-            Duration::from_millis(16),
-            Msg::BtPopupAnimTick,
         ));
     }
     if state.bt_ui.has_pending_ops() {
@@ -190,13 +141,6 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
             Msg::BtPendingTick,
         ));
     }
-    if state.disk_ui.is_animating_popup() {
-        subs.push(Timer::every(
-            "disk-popup-anim",
-            Duration::from_millis(16),
-            Msg::DiskPopupAnimTick,
-        ));
-    }
     if state.disk_ui.has_pending_ops() {
         subs.push(Timer::every(
             "disk-pending-tick",
@@ -204,35 +148,21 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
             Msg::DiskPendingTick,
         ));
     }
-    if state.disk_ui.popup_target {
+    if state.disk_ui.is_popup_open() {
         subs.push(Timer::every(
             "disk-marquee",
             Duration::from_millis(200),
             Msg::DiskMarqueeTick,
         ));
     }
-    if state.audio_ui.is_animating_popup() {
-        subs.push(Timer::every(
-            "mixer-popup-anim",
-            Duration::from_millis(16),
-            Msg::MixerPopupAnimTick,
-        ));
-    }
-    if state.audio_ui.popup_target {
+    if state.audio_ui.is_popup_open() {
         subs.push(Timer::every(
             "mixer-marquee",
             Duration::from_millis(200),
             Msg::MixerMarqueeTick,
         ));
     }
-    if state.drun.is_animating() {
-        subs.push(Timer::every(
-            "drun-anim",
-            Duration::from_millis(16),
-            Msg::DrunAnimTick,
-        ));
-    }
-    if state.drun.target && !state.drun.match_indices.is_empty() {
+    if state.drun.is_open() && !state.drun.match_indices.is_empty() {
         subs.push(Timer::every(
             "drun-marquee",
             Duration::from_millis(200),

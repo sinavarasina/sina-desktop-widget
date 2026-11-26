@@ -17,8 +17,7 @@ const RUNNER_PILL_W: f32 = 28.0;
 const INPUT_PAD_X: f32 = 6.0;
 
 pub fn build_drun_surface(state: &State) -> Surface<Msg> {
-    let p = state.drun.progress.clamp(0.0, 1.0);
-    let ease = 1.0 - (1.0 - p).powi(3);
+    let ease = state.drun.progress();
     let animated_h = (BAR_HEIGHT * ease).max(1.0);
 
     let input_w = state.drun.input_box_width(state.bar_width);
@@ -184,6 +183,7 @@ fn build_input_field(state: &State, input_w: f32) -> Element<Msg> {
     Group::new()
         .key("drun-input-field")
         .size(Size::new(input_w.logical_px(), BAR_HEIGHT.logical_px()))
+        .cursor(CursorShape::Text)
         .child(Rect::new().size(Size::fill()).fill(MANTLE))
         .child(
             Clip::new(

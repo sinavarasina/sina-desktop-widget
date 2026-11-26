@@ -106,6 +106,7 @@ pub fn build_tray_menu_surface(state: &State, menu: &TrayMenuPopup) -> Surface<M
 
         if item.enabled {
             row_group = row_group
+                .cursor(CursorShape::Pointer)
                 .on_hover(Msg::Hover(HoverTarget::TrayMenuItem(item_id)))
                 .on_leave(Msg::Leave(HoverTarget::TrayMenuItem(item_id)))
                 .on_click(Msg::TrayMenuClick { item_id });
@@ -121,6 +122,7 @@ pub fn build_tray_menu_surface(state: &State, menu: &TrayMenuPopup) -> Surface<M
         Group::new()
             .key("tray-menu-close")
             .size(Size::new(row_w.logical_px(), 20.logical_px()))
+            .cursor(CursorShape::Pointer)
             .on_hover(Msg::Hover(HoverTarget::TrayMenuClose))
             .on_leave(Msg::Leave(HoverTarget::TrayMenuClose))
             .on_click(Msg::CloseTrayMenu)

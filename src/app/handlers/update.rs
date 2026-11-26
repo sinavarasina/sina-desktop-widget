@@ -74,6 +74,7 @@ fn sync_primary_output_size(state: &mut State, ctx: &EffectCtx<'_, crate::app::m
 pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Result<()> {
     sync_primary_output_size(state, ctx);
     match msg {
+        Msg::AnimationFrame(now) => state.advance_ui_animations(now, ctx),
         Msg::SpawnBtop => {
             let _ = spawn_detached("footclient", ["btop"]);
         }
@@ -223,7 +224,7 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
         Msg::ScrollTick => state.scroller.advance(),
         Msg::ToggleDrun => handle_toggle_drun(state, ctx),
         Msg::CloseDrun => {
-            if state.drun.target {
+            if state.drun.is_open() {
                 state.drun.close();
                 state.play_sound(SoundCue::MenuPopdown, ctx);
             }
@@ -232,7 +233,6 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
         Msg::DrunIme(ev) => handle_drun_ime(state, ev, ctx),
         Msg::DrunLaunchIndex(idx) => handle_drun_launch_index(state, idx),
         Msg::DrunScroll(sc) => handle_drun_scroll(state, sc, ctx),
-        Msg::DrunAnimTick => state.drun.step_animation(),
         Msg::DrunMarqueeTick => {
             state.drun.marquee_tick = state.drun.marquee_tick.wrapping_add(1);
         }
@@ -241,10 +241,9 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
         Msg::NotificationEvent(ev) => handle_notification_event(state, *ev, ctx),
         Msg::NotifBarPointerDown(ev) => handle_notif_bar_pointer(state, ev, ctx),
         Msg::NotifTickerTick => state.notifications.step_ticker(),
-        Msg::NotifCenterAnimTick => state.notifications.step_center_animation(),
         Msg::NotifCenterMarqueeTick => state.notifications.advance_marquee(),
         Msg::CloseNotificationCenter => {
-            if state.notifications.center_target {
+            if state.notifications.is_center_open() {
                 state.notifications.close_center();
                 state.play_sound(SoundCue::MenuPopdown, ctx);
             }
@@ -278,9 +277,8 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
         Msg::MprisAction(action) => handle_mpris_action(state, action, ctx),
         Msg::MprisSeekClick(ev) => handle_mpris_seek_click(state, ev, ctx),
         Msg::MprisTick => state.mpris.advance_tick(),
-        Msg::MprisPopupAnimTick => state.mpris.step_popup_animation(),
         Msg::CloseMprisPopup => {
-            if state.mpris.popup_target {
+            if state.mpris.is_popup_open() {
                 state.mpris.close_popup();
                 state.play_sound(SoundCue::MenuPopdown, ctx);
             }
@@ -298,10 +296,9 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
             handle_bt_agent_decision(state, request_id, accept, ctx);
         }
         Msg::BtPopupScroll(sc) => handle_bt_popup_scroll(state, sc),
-        Msg::BtPopupAnimTick => state.bt_ui.step_popup_animation(),
         Msg::BtPendingTick => state.bt_ui.advance_pending_tick(),
         Msg::CloseBtPopup => {
-            if state.bt_ui.popup_target {
+            if state.bt_ui.is_popup_open() {
                 state.bt_ui.close_popup();
                 state.play_sound(SoundCue::MenuPopdown, ctx);
             }
@@ -332,11 +329,10 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
             state.play_sound(SoundCue::DialogCancel, ctx);
         }
         Msg::DiskPopupScroll(sc) => handle_disk_popup_scroll(state, sc),
-        Msg::DiskPopupAnimTick => state.disk_ui.step_popup_animation(),
         Msg::DiskPendingTick => state.disk_ui.advance_pending_tick(),
         Msg::DiskMarqueeTick => state.disk_ui.advance_marquee(),
         Msg::CloseDiskPopup => {
-            if state.disk_ui.popup_target {
+            if state.disk_ui.is_popup_open() {
                 state.disk_ui.close_popup();
                 state.play_sound(SoundCue::MenuPopdown, ctx);
             }
@@ -399,10 +395,9 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
         },
         Msg::AudioScroll(sc) => handle_audio_scroll(state, sc, ctx),
         Msg::MixerBarPointerDown(ev) => handle_mixer_bar_pointer(state, ev, ctx),
-        Msg::MixerPopupAnimTick => state.audio_ui.step_popup_animation(),
         Msg::MixerMarqueeTick => state.audio_ui.advance_marquee(),
         Msg::CloseMixerPopup => {
-            if state.audio_ui.popup_target {
+            if state.audio_ui.is_popup_open() {
                 state.audio_ui.close_popup();
                 state.play_sound(SoundCue::MenuPopdown, ctx);
             }
@@ -444,14 +439,6 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
         }
         Msg::UptimeSampled(snap) => {
             state.sysinfo.uptime = Some(snap);
-        }
-        Msg::ReelAnimTick => {
-            state
-                .sysinfo
-                .step_animation(state.cpu.as_ref(), state.memory.as_ref());
-            state
-                .window_info
-                .step_animation(state.booster.short_badge());
         }
         Msg::StartupHydrate => {
             if !state.startup_hydrated {
@@ -547,22 +534,15 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
             }
         }
         Msg::ClockMenuClick => handle_clock_menu_click(state, ctx),
-        Msg::ClockMenuTick => state.step_clock_menu_animation(),
         Msg::ClockMenuTimeoutCheck => state.expire_clock_menu_leave(),
         Msg::LogindEvent(ev) => handle_logind_event(state, ev),
-        Msg::QuickMenuAnimTick => {
-            state.quick_menu.step_popup_animation();
-            if !state.quick_menu.is_popup_visible() {
-                state.quick_menu.evict_sprite_pixels(ctx);
-            }
-        }
         Msg::CloseQuickMenu => {
-            let was_open = state.quick_menu.popup_target;
+            let was_open = state.quick_menu.is_popup_open();
             state.quick_menu.close_popup();
             state.settings_ui.unfocus_inputs();
             state.settings_ui.open_dropdown = None;
             if !state.hovered.is_clock_group() {
-                state.clock_menu_target = false;
+                state.clock_menu_anim.set_open(false);
             }
             if was_open {
                 state.play_sound(SoundCue::MenuPopdown, ctx);
@@ -610,7 +590,6 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
         Msg::SettingsResetDefaults => handle_reset_defaults(state, ctx),
         Msg::SettingsCycleMetricPlacement(id) => handle_cycle_metric_placement(state, id, ctx),
         Msg::SettingsMoveMetric { id, delta } => handle_move_metric(state, id, delta, ctx),
-        Msg::DesktopSpriteFadeTick => state.desktop_sprite.step_fade(ctx),
         Msg::DesktopSpriteBlinkTick => state.desktop_sprite.step_blink(),
         Msg::DesktopSpriteMouthTick => state.desktop_sprite.step_mouth(),
         Msg::Hover(target) => state.update_hover(target, true),
@@ -623,7 +602,6 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
             }
         }
         Msg::Leave(target) => state.update_hover(target, false),
-        Msg::DrawerTick => state.step_drawer_animation(),
         Msg::DrawerTimeoutCheck => state.expire_drawer_leave(),
         #[cfg(test)]
         Msg::TestSetWorkspaces(ws, active_id) => {

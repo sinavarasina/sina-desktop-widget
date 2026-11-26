@@ -1,6 +1,7 @@
 //! Application message types.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use waywi::prelude::*;
 use waywi::system::{
@@ -21,6 +22,8 @@ use super::types::{AudioControlTarget, HoverTarget};
 
 #[derive(Clone)]
 pub enum Msg {
+    /// Monitor-synchronized VSync frame tick from `waywi::animation::Animation::frames`.
+    AnimationFrame(Instant),
     SwitchWorkspace(WorkspaceId),
     SwitchWorkspaceNamed(String),
     SwitchWorkspacePrevious,
@@ -34,7 +37,6 @@ pub enum Msg {
     DrunIme(ImeEvent),
     DrunLaunchIndex(usize),
     DrunScroll(ScrollEvent),
-    DrunAnimTick,
     DrunMarqueeTick,
     IpcControl {
         action: IpcAction,
@@ -44,7 +46,6 @@ pub enum Msg {
     NotificationEvent(Box<NotificationEvent>),
     NotifBarPointerDown(PointerEvent),
     NotifTickerTick,
-    NotifCenterAnimTick,
     NotifCenterMarqueeTick,
     CloseNotificationCenter,
     NotifCenterScroll(ScrollEvent),
@@ -68,7 +69,6 @@ pub enum Msg {
     MprisAction(MprisControlAction),
     MprisSeekClick(PointerEvent),
     MprisTick,
-    MprisPopupAnimTick,
     CloseMprisPopup,
     BluetoothAgentEvent(Box<BluetoothAgentEvent>),
     BtBarPointerDown(PointerEvent),
@@ -88,7 +88,6 @@ pub enum Msg {
         accept: bool,
     },
     BtPopupScroll(ScrollEvent),
-    BtPopupAnimTick,
     BtPendingTick,
     CloseBtPopup,
     UDisksUpdated(UDisksSnapshot),
@@ -108,7 +107,6 @@ pub enum Msg {
     DiskUnlockSubmit,
     DiskUnlockCancel,
     DiskPopupScroll(ScrollEvent),
-    DiskPopupAnimTick,
     DiskPendingTick,
     DiskMarqueeTick,
     CloseDiskPopup,
@@ -129,7 +127,6 @@ pub enum Msg {
     AudioPointerDown(PointerEvent),
     AudioScroll(ScrollEvent),
     MixerBarPointerDown(PointerEvent),
-    MixerPopupAnimTick,
     MixerMarqueeTick,
     CloseMixerPopup,
     MixerSetTarget(AudioControlTarget),
@@ -166,7 +163,6 @@ pub enum Msg {
     GpuSampled(GpuSnapshot),
     SensorsSampled(Vec<waywi::system::hardware::ThermalSensor>),
     UptimeSampled(waywi::system::UptimeSnapshot),
-    ReelAnimTick,
     StartupHydrate,
     MemorySampled(MemorySnapshot),
     DiskSampled(DiskSnapshot),
@@ -178,10 +174,8 @@ pub enum Msg {
     ClockScroll(ScrollEvent),
     CloseCalendar,
     ClockMenuClick,
-    ClockMenuTick,
     ClockMenuTimeoutCheck,
     LogindEvent(LogindEvent),
-    QuickMenuAnimTick,
     CloseQuickMenu,
     QuickMenuTogglePower,
     QuickMenuToggleSettings,
@@ -216,13 +210,11 @@ pub enum Msg {
         id: RightMetricId,
         delta: i32,
     },
-    DesktopSpriteFadeTick,
     DesktopSpriteBlinkTick,
     DesktopSpriteMouthTick,
     Hover(HoverTarget),
     HoverAnchorX(f32),
     Leave(HoverTarget),
-    DrawerTick,
     DrawerTimeoutCheck,
     SpawnBtop,
     #[cfg(test)]
