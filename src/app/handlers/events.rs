@@ -103,6 +103,8 @@ pub fn handle_hypr_event(state: &mut State, ev: HyprlandEvent, ctx: &mut EffectC
         | HyprlandEvent::FocusedMonitorV2 {
             workspace_id: id, ..
         } => {
+            let prev_key = state.active_workspace_key();
+            state.annotate.finish_active_interaction(&prev_key);
             let prev_ws = state.active_ws_id;
             if id.get() > 0 {
                 state.active_ws_id = id.get();
@@ -126,6 +128,8 @@ pub fn handle_hypr_event(state: &mut State, ev: HyprlandEvent, ctx: &mut EffectC
         }
         HyprlandEvent::ActiveSpecial { workspace_name, .. }
         | HyprlandEvent::ActiveSpecialV2 { workspace_name, .. } => {
+            let prev_key = state.active_workspace_key();
+            state.annotate.finish_active_interaction(&prev_key);
             let trimmed = workspace_name.trim();
             state.active_special = if trimmed.is_empty() {
                 None

@@ -11,6 +11,7 @@ use waywi::prelude::*;
 
 use crate::app::state::{Msg, State};
 use crate::theme::BAR_HEIGHT;
+use crate::widgets::annotate_overlay::build_annotate_surface;
 use crate::widgets::bluetooth_popup::build_bluetooth_popup_surface;
 use crate::widgets::calendar::build_calendar_tooltip_surface;
 use crate::widgets::desktop_sprite::build_desktop_sprite_surface;
@@ -64,6 +65,10 @@ pub fn build_surfaces(state: &State) -> Surfaces<Msg> {
     }
     if state.drun.is_visible() {
         surfaces.push(build_drun_surface(state));
+    }
+    let active_ws = state.active_workspace_key();
+    if state.annotate.should_mount_surface(&active_ws) {
+        surfaces.push(build_annotate_surface(state));
     }
     surfaces
 }

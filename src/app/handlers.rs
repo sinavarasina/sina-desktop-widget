@@ -1,5 +1,6 @@
 //! Initialization, subscriptions, and IPC/input event handlers.
 
+mod annotate;
 mod audio;
 mod bluetooth;
 mod disk;

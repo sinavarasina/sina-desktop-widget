@@ -1,5 +1,6 @@
 //! Reusable UI primitives and overlay popup surfaces.
 
+pub mod annotate_overlay;
 pub mod bluetooth_popup;
 pub mod calendar;
 pub mod desktop_sprite;

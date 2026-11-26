@@ -22,6 +22,7 @@ pub enum IpcTarget {
     Mpris,
     QuickMenu,
     Calendar,
+    Annotate,
     All,
 }
 
@@ -56,6 +57,7 @@ pub fn parse_ipc_command(raw: &str) -> Option<Msg> {
         "mpris" | "media" | "player" => IpcTarget::Mpris,
         "quick" | "quickmenu" | "menu" | "power" => IpcTarget::QuickMenu,
         "calendar" | "cal" => IpcTarget::Calendar,
+        "annotate" | "draw" | "sketch" | "paint" => IpcTarget::Annotate,
         "all" => IpcTarget::All,
         _ => return None,
     };

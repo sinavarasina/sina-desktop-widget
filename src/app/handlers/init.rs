@@ -12,9 +12,10 @@ use crate::app::anim::RevealAnim;
 use crate::app::asset_lru::PathAssetCache;
 use crate::app::config::{DesktopPoseMode, SettingsUiState, WidgetConfig};
 use crate::app::state::{
-    AudioControlTarget, AudioUiState, BluetoothUiState, DRAWER_ANIM_DURATION, DesktopSpriteState,
-    DiskUiState, DrunState, ForegroundBooster, HoverTarget, MprisState, NotificationStore,
-    QuickMenuState, SoundEngine, State, SysInfoState, WindowInfoState, WindowScroller,
+    AnnotateState, AudioControlTarget, AudioUiState, BluetoothUiState, DRAWER_ANIM_DURATION,
+    DesktopSpriteState, DiskUiState, DrunState, ForegroundBooster, HoverTarget, MprisState,
+    NotificationStore, QuickMenuState, SoundEngine, State, SysInfoState, WindowInfoState,
+    WindowScroller,
 };
 use crate::theme::{GENTOO_MAUVE_SVG, WALLPAPER_PNG};
 
@@ -136,6 +137,7 @@ pub fn init_state(ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Result<State
         window_info,
         booster: ForegroundBooster::default(),
         drun: DrunState::default(),
+        annotate: AnnotateState::default(),
         notifications,
         mpris: MprisState::default(),
         tray_items: Vec::new(),

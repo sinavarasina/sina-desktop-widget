@@ -44,6 +44,10 @@ pub fn close_other_overlays(state: &mut State, keep: Option<&str>) {
     if keep != Some("calendar") {
         state.calendar_open = false;
     }
+    if keep != Some("annotate") && state.annotate.is_active() {
+        let ws = state.active_workspace_key();
+        state.annotate.close(&ws);
+    }
     if keep != Some("quick_menu") {
         state.quick_menu.close_popup();
         state.settings_ui.unfocus_inputs();
@@ -191,6 +195,21 @@ pub fn handle_ipc_control(
                 state.calendar_open = false;
             }
             play_overlay_transition(state, was_open, state.calendar_open, ctx);
+        }
+        IpcTarget::Annotate => {
+            let was_open = state.annotate.is_active();
+            let next = resolve_next(was_open, action);
+            let ws = state.active_workspace_key();
+            if next {
+                close_other_overlays(state, Some("annotate"));
+                state.annotate.open();
+            } else {
+                state.annotate.close(&ws);
+                if !state.annotate.should_mount_surface(&ws) {
+                    ctx.trim_memory();
+                }
+            }
+            play_overlay_transition(state, was_open, state.annotate.is_active(), ctx);
         }
     }
 }

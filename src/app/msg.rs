@@ -8,6 +8,7 @@ use waywi::system::{
     CpuSnapshot, DiskSnapshot, GpuSnapshot, MemorySnapshot, NetworkSnapshot, TimeSnapshot,
 };
 
+use super::annotate::AnnotateTool;
 use super::bluetooth::BtDeviceMenuAction;
 use super::config::{
     RightMetricId, SettingStepperId, SettingToggleId, SettingsDropdown, SettingsSection,
@@ -33,6 +34,23 @@ pub enum Msg {
     ScrollTick,
     ToggleDrun,
     CloseDrun,
+    ToggleAnnotate,
+    CloseAnnotate,
+    AnnotatePointerDown(PointerEvent),
+    AnnotatePointerMove(PointerEvent),
+    AnnotatePointerUp(PointerEvent),
+    AnnotateScroll(ScrollEvent),
+    AnnotateTablet(TabletEvent),
+    AnnotateTouch(TouchEvent),
+    AnnotateKey(KeyEvent),
+    AnnotateSetTool(AnnotateTool),
+    AnnotateSetColor(usize),
+    AnnotateSetSize(f32),
+    AnnotateUndo,
+    AnnotateRedo,
+    AnnotateClearWorkspace,
+    AnnotateClearAll,
+    AnnotateTogglePin,
     DrunKey(KeyEvent),
     DrunIme(ImeEvent),
     DrunLaunchIndex(usize),

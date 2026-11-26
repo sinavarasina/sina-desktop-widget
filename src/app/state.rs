@@ -13,6 +13,7 @@ use waywi::system::{
 };
 
 use super::anim::RevealAnim;
+pub use super::annotate::{AnnotateState, WorkspaceKey};
 use super::asset_lru::PathAssetCache;
 pub use super::audio::AudioUiState;
 pub use super::bluetooth::BluetoothUiState;
@@ -58,6 +59,7 @@ pub struct State {
     pub window_info: WindowInfoState,
     pub booster: ForegroundBooster,
     pub drun: DrunState,
+    pub annotate: AnnotateState,
     pub notifications: NotificationStore,
     pub mpris: MprisState,
 
@@ -149,6 +151,7 @@ impl State {
             || self.disk_ui.is_animating_popup()
             || self.audio_ui.is_animating_popup()
             || self.drun.is_animating()
+            || self.annotate.is_animating()
     }
 
     /// Advances all active VSync UI animations to `now`.
@@ -198,6 +201,27 @@ impl State {
         if self.drun.is_animating() {
             self.drun.advance_animation(now);
         }
+        if self.annotate.is_animating() {
+            self.annotate.advance_animation(now);
+            let ws = self.active_workspace_key();
+            if !self.annotate.should_mount_surface(&ws) {
+                ctx.trim_memory();
+            }
+        }
+    }
+
+    /// Resolves the canonical key for the currently focused Hyprland workspace (special, named, or numbered).
+    #[must_use]
+    pub fn active_workspace_key(&self) -> WorkspaceKey {
+        if let Some(ref sp) = self.active_special
+            && !sp.trim().is_empty()
+        {
+            return WorkspaceKey::Special(sp.clone());
+        }
+        if let Some(ws) = self.workspaces.iter().find(|w| w.is_named() && w.focused) {
+            return WorkspaceKey::Named(ws.name.clone());
+        }
+        WorkspaceKey::Numbered(self.active_ws_id.max(1))
     }
 
     #[must_use]

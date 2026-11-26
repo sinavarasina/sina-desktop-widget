@@ -3,6 +3,7 @@
 use waywi::prelude::*;
 use waywi::dbus::TrayMenuItem;
 
+use super::annotate::AnnotateTool;
 use super::config::RightMetricId;
 use super::quick_menu::PowerAction;
 
@@ -79,10 +80,20 @@ pub enum HoverTarget {
     ClockMenu,
     Clock,
     QuickSettingsToggle,
+    QuickAnnotateToggle,
     QuickPowerToggle,
     QuickPowerAction(PowerAction),
     QuickPowerCancel,
     QuickSprite,
+    AnnotateTool(AnnotateTool),
+    AnnotateColor(usize),
+    AnnotateSize(usize),
+    AnnotateUndo,
+    AnnotateRedo,
+    AnnotateClearWs,
+    AnnotateClearAll,
+    AnnotatePin,
+    AnnotateClose,
     SettingsTab(usize),
     SettingsRow(usize),
     SettingsDropdownOpt(usize),

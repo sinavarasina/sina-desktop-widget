@@ -8,6 +8,13 @@ use crate::app::audio::AudioSnapshotExt;
 use crate::app::config::DesktopPoseMode;
 use crate::app::state::{AudioControlTarget, Msg, SoundCue, State};
 
+use super::annotate::{
+    handle_annotate_clear_all, handle_annotate_clear_workspace, handle_annotate_key,
+    handle_annotate_pointer_down, handle_annotate_pointer_move, handle_annotate_pointer_up,
+    handle_annotate_redo, handle_annotate_scroll, handle_annotate_set_color,
+    handle_annotate_set_tool, handle_annotate_tablet, handle_annotate_toggle_pin,
+    handle_annotate_touch, handle_annotate_undo, handle_close_annotate, handle_toggle_annotate,
+};
 use super::audio::{
     handle_audio_updated, handle_mixer_balance_scroll, handle_mixer_balance_seek,
     handle_mixer_bar_pointer, handle_mixer_capture_scroll, handle_mixer_capture_seek_click,
@@ -79,6 +86,8 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
             let _ = spawn_detached("footclient", ["btop"]);
         }
         Msg::SwitchWorkspace(id) => {
+            let prev_key = state.active_workspace_key();
+            state.annotate.finish_active_interaction(&prev_key);
             let prev_ws = state.active_ws_id;
             if let Ok(hc) = ctx.hyprland() {
                 let _ = hc.switch_workspace(id);
@@ -103,6 +112,8 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
             }
         }
         Msg::SwitchWorkspaceNamed(target) => {
+            let prev_key = state.active_workspace_key();
+            state.annotate.finish_active_interaction(&prev_key);
             let prev_ws = state.active_ws_id;
             if let Ok(hc) = ctx.hyprland() {
                 let _ = hc.switch_workspace(waywi::compositor::WorkspaceTarget::Name(&target));
@@ -125,6 +136,8 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
             state.play_sound(SoundCue::TabChanged, ctx);
         }
         Msg::SwitchWorkspacePrevious => {
+            let prev_key = state.active_workspace_key();
+            state.annotate.finish_active_interaction(&prev_key);
             let prev_ws = state.active_ws_id;
             if let Ok(hc) = ctx.hyprland() {
                 let _ = hc.switch_workspace(waywi::compositor::WorkspaceTarget::Previous);
@@ -206,6 +219,8 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
             }
         }
         Msg::ToggleSpecialWorkspace(name) => {
+            let prev_key = state.active_workspace_key();
+            state.annotate.finish_active_interaction(&prev_key);
             let short = name.strip_prefix("special:").unwrap_or(&name);
             let target = (!short.is_empty()).then_some(short);
             if let Ok(hc) = ctx.hyprland() {
@@ -229,6 +244,26 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
                 state.play_sound(SoundCue::MenuPopdown, ctx);
             }
         }
+        Msg::ToggleAnnotate => handle_toggle_annotate(state, ctx),
+        Msg::CloseAnnotate => handle_close_annotate(state, ctx),
+        Msg::AnnotatePointerDown(ev) => handle_annotate_pointer_down(state, ev),
+        Msg::AnnotatePointerMove(ev) => handle_annotate_pointer_move(state, ev),
+        Msg::AnnotatePointerUp(ev) => handle_annotate_pointer_up(state, ev),
+        Msg::AnnotateScroll(sc) => handle_annotate_scroll(state, sc),
+        Msg::AnnotateTablet(ev) => handle_annotate_tablet(state, ev, ctx),
+        Msg::AnnotateTouch(ev) => handle_annotate_touch(state, ev),
+        Msg::AnnotateKey(ev) => handle_annotate_key(state, ev, ctx),
+        Msg::AnnotateSetTool(tool) => handle_annotate_set_tool(state, tool, ctx),
+        Msg::AnnotateSetColor(idx) => handle_annotate_set_color(state, idx, ctx),
+        Msg::AnnotateSetSize(size) => {
+            state.annotate.set_brush_size(size);
+            state.play_sound(SoundCue::TabChanged, ctx);
+        }
+        Msg::AnnotateUndo => handle_annotate_undo(state, ctx),
+        Msg::AnnotateRedo => handle_annotate_redo(state, ctx),
+        Msg::AnnotateClearWorkspace => handle_annotate_clear_workspace(state, ctx),
+        Msg::AnnotateClearAll => handle_annotate_clear_all(state, ctx),
+        Msg::AnnotateTogglePin => handle_annotate_toggle_pin(state, ctx),
         Msg::DrunKey(ev) => handle_drun_key(state, ev, ctx),
         Msg::DrunIme(ev) => handle_drun_ime(state, ev, ctx),
         Msg::DrunLaunchIndex(idx) => handle_drun_launch_index(state, idx),

@@ -170,7 +170,56 @@ fn build_main_card(state: &State) -> Element<Msg> {
                 .anchor(ElementAnchor::Center),
         );
 
-    let settings_hint = if settings_active {
+    let annotate_hovered = state.hovered == HoverTarget::QuickAnnotateToggle;
+    let annotate_active = state.annotate.is_active() || state.annotate.pinned_visible;
+    let annotate_bg = if annotate_active {
+        SURFACE1
+    } else if annotate_hovered {
+        SURFACE0
+    } else {
+        MANTLE
+    };
+    let annotate_border = if annotate_active || annotate_hovered {
+        MAUVE
+    } else {
+        SURFACE1
+    };
+    let annotate_fg = if annotate_active || annotate_hovered {
+        MAUVE
+    } else {
+        TEXT
+    };
+
+    let annotate_btn = Group::new()
+        .key("quick-annotate-toggle")
+        .size(Size::new(34.logical_px(), 34.logical_px()))
+        .cursor(CursorShape::Pointer)
+        .on_hover(Msg::Hover(HoverTarget::QuickAnnotateToggle))
+        .on_leave(Msg::Leave(HoverTarget::QuickAnnotateToggle))
+        .on_click(Msg::ToggleAnnotate)
+        .child(
+            Rect::new()
+                .size(Size::fill())
+                .fill(annotate_bg)
+                .corner_radius(0.logical_px())
+                .border(1.logical_px(), annotate_border),
+        )
+        .child(
+            Text::new("\u{f040}")
+                .font(font_ui())
+                .font_size(14.logical_px())
+                .bounds_mode(TextBoundsMode::Optical)
+                .color(annotate_fg)
+                .position(Position::relative_to_parent(
+                    Percent::new(50.0),
+                    Percent::new(50.0),
+                ))
+                .anchor(ElementAnchor::Center),
+        );
+
+    let settings_hint = if annotate_hovered {
+        ("Annotate", MAUVE)
+    } else if settings_active {
         (state.settings_ui.active_section.title(), MAUVE)
     } else if settings_hovered {
         ("Settings", SUBTEXT1)
@@ -183,6 +232,7 @@ fn build_main_card(state: &State) -> Element<Msg> {
         .gap(8.logical_px())
         .align(Align::Center)
         .child(settings_btn)
+        .child(annotate_btn)
         .child(
             Text::new(settings_hint.0)
                 .font(font_ui_semibold())
