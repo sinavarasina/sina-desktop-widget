@@ -10,12 +10,13 @@ use waywi::system::os::{read_hostname, read_os_info, read_uptime};
 
 use crate::app::anim::RevealAnim;
 use crate::app::asset_lru::PathAssetCache;
+use crate::app::clipboard::probe_has_camera_hardware;
 use crate::app::config::{DesktopPoseMode, SettingsUiState, WidgetConfig};
 use crate::app::state::{
-    AnnotateState, AudioControlTarget, AudioUiState, BluetoothUiState, DRAWER_ANIM_DURATION,
-    DesktopSpriteState, DiskUiState, DrunState, ForegroundBooster, HoverTarget, MprisState,
-    NotificationStore, QuickMenuState, SoundEngine, State, SysInfoState, WindowInfoState,
-    WindowScroller,
+    AnnotateState, AudioControlTarget, AudioUiState, BluetoothUiState, ClipboardState,
+    ColorPickerState, DRAWER_ANIM_DURATION, DesktopSpriteState, DiskUiState, DrunState,
+    ForegroundBooster, HoverTarget, MprisState, NotificationStore, QuickMenuState,
+    ScreenshotState, SoundEngine, State, SysInfoState, WindowInfoState, WindowScroller, ZoomState,
 };
 use crate::theme::{GENTOO_MAUVE_SVG, WALLPAPER_PNG};
 
@@ -138,6 +139,13 @@ pub fn init_state(ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Result<State
         booster: ForegroundBooster::default(),
         drun: DrunState::default(),
         annotate: AnnotateState::default(),
+        zoom: ZoomState::default(),
+        color_picker: ColorPickerState::default(),
+        screenshot: ScreenshotState::default(),
+        clipboard: ClipboardState::default(),
+        privacy: PrivacySnapshot::default(),
+        has_camera_hw: probe_has_camera_hardware(),
+        caffeine_active: false,
         notifications,
         mpris: MprisState::default(),
         tray_items: Vec::new(),
@@ -154,6 +162,7 @@ pub fn init_state(ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Result<State
         memory: None,
         network: None,
         nm: None,
+        telemetry_graph: super::super::state::TelemetryGraphState::default(),
         disk_used_gb: 0.0,
         disk_free_gb: 0.0,
         disk_total_gb: 0.0,

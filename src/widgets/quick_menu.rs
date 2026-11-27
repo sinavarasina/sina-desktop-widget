@@ -6,11 +6,12 @@ pub mod settings;
 
 use waywi::prelude::*;
 
-use crate::app::quick_menu::{PowerAction, YukiGaze};
+use crate::app::quick_menu::{PowerAction, QuickActionSlot, YukiGaze};
 use crate::app::state::{HoverTarget, Msg, State};
+use crate::app::toolbox::ToolboxTool;
 use crate::theme::{
-    CRUST, MANTLE, MAUVE, OVERLAY0, POPUP_TOP_MARGIN, RED, SUBTEXT1, SURFACE0, SURFACE1, TEXT,
-    font_ui, font_ui_bold, font_ui_semibold,
+    CRUST, MANTLE, MAUVE, OVERLAY0, PEACH, POPUP_TOP_MARGIN, RED, SUBTEXT0, SUBTEXT1, SURFACE0,
+    SURFACE1, TEXT, font_ui, font_ui_bold, font_ui_semibold,
 };
 use crate::widgets::text::marquee_slice;
 
@@ -34,6 +35,8 @@ pub fn build_quick_menu_surface(state: &State) -> Surface<Msg> {
         Some((build_settings_panel(state), SETTINGS_PANEL_HEIGHT))
     } else if state.quick_menu.power_menu_open {
         Some((build_power_card(state), POWER_CARD_HEIGHT))
+    } else if state.quick_menu.toolbox_open {
+        Some((build_toolbox_card(state), POWER_CARD_HEIGHT))
     } else {
         None
     };
@@ -123,254 +126,25 @@ fn build_main_card(state: &State) -> Element<Msg> {
     let left_w = QUICK_MENU_WIDTH - QUICK_PAD * 2.0 - SPRITE_FRAME_W - 10.0;
     let inner_h = QUICK_CARD_HEIGHT - QUICK_PAD * 2.0;
 
-    let settings_hovered = state.hovered == HoverTarget::QuickSettingsToggle;
-    let settings_active = state.quick_menu.settings_open;
-    let settings_bg = if settings_active {
-        SURFACE1
-    } else if settings_hovered {
-        SURFACE0
-    } else {
-        MANTLE
-    };
-    let settings_border = if settings_active || settings_hovered {
-        MAUVE
-    } else {
-        SURFACE1
-    };
-    let settings_fg = if settings_active || settings_hovered {
-        MAUVE
-    } else {
-        TEXT
-    };
-
-    let settings_btn = Group::new()
-        .key("quick-settings-toggle")
-        .size(Size::new(34.logical_px(), 34.logical_px()))
-        .cursor(CursorShape::Pointer)
-        .on_hover(Msg::Hover(HoverTarget::QuickSettingsToggle))
-        .on_leave(Msg::Leave(HoverTarget::QuickSettingsToggle))
-        .on_click(Msg::QuickMenuToggleSettings)
-        .child(
-            Rect::new()
-                .size(Size::fill())
-                .fill(settings_bg)
-                .corner_radius(0.logical_px())
-                .border(1.logical_px(), settings_border),
-        )
-        .child(
-            Text::new("\u{f013}")
-                .font(font_ui())
-                .font_size(14.logical_px())
-                .bounds_mode(TextBoundsMode::Optical)
-                .color(settings_fg)
-                .position(Position::relative_to_parent(
-                    Percent::new(50.0),
-                    Percent::new(50.0),
-                ))
-                .anchor(ElementAnchor::Center),
-        );
-
-    let annotate_hovered = state.hovered == HoverTarget::QuickAnnotateToggle;
-    let annotate_active = state.annotate.is_active() || state.annotate.pinned_visible;
-    let annotate_bg = if annotate_active {
-        SURFACE1
-    } else if annotate_hovered {
-        SURFACE0
-    } else {
-        MANTLE
-    };
-    let annotate_border = if annotate_active || annotate_hovered {
-        MAUVE
-    } else {
-        SURFACE1
-    };
-    let annotate_fg = if annotate_active || annotate_hovered {
-        MAUVE
-    } else {
-        TEXT
-    };
-
-    let annotate_btn = Group::new()
-        .key("quick-annotate-toggle")
-        .size(Size::new(34.logical_px(), 34.logical_px()))
-        .cursor(CursorShape::Pointer)
-        .on_hover(Msg::Hover(HoverTarget::QuickAnnotateToggle))
-        .on_leave(Msg::Leave(HoverTarget::QuickAnnotateToggle))
-        .on_click(Msg::ToggleAnnotate)
-        .child(
-            Rect::new()
-                .size(Size::fill())
-                .fill(annotate_bg)
-                .corner_radius(0.logical_px())
-                .border(1.logical_px(), annotate_border),
-        )
-        .child(
-            Text::new("\u{f040}")
-                .font(font_ui())
-                .font_size(14.logical_px())
-                .bounds_mode(TextBoundsMode::Optical)
-                .color(annotate_fg)
-                .position(Position::relative_to_parent(
-                    Percent::new(50.0),
-                    Percent::new(50.0),
-                ))
-                .anchor(ElementAnchor::Center),
-        );
-
-    let settings_hint = if annotate_hovered {
-        ("Annotate", MAUVE)
-    } else if settings_active {
-        (state.settings_ui.active_section.title(), MAUVE)
-    } else if settings_hovered {
-        ("Settings", SUBTEXT1)
-    } else {
-        ("", OVERLAY0)
-    };
-
-    let settings_row = Row::new()
-        .size(Size::new(left_w.logical_px(), 34.logical_px()))
-        .gap(8.logical_px())
-        .align(Align::Center)
-        .child(settings_btn)
-        .child(annotate_btn)
-        .child(
-            Text::new(settings_hint.0)
-                .font(font_ui_semibold())
-                .font_size(10.logical_px())
-                .color(settings_hint.1),
-        );
-
-    let power_hovered = state.hovered == HoverTarget::QuickPowerToggle;
-    let power_active = state.quick_menu.power_menu_open;
-    let power_bg = if power_active {
-        SURFACE1
-    } else if power_hovered {
-        SURFACE0
-    } else {
-        MANTLE
-    };
-    let power_border = if power_active || power_hovered {
-        RED
-    } else {
-        SURFACE1
-    };
-    let power_fg = if power_active || power_hovered {
-        RED
-    } else {
-        TEXT
-    };
-
-    let power_btn = Group::new()
-        .key("quick-power-toggle")
-        .size(Size::new(34.logical_px(), 34.logical_px()))
-        .cursor(CursorShape::Pointer)
-        .on_hover(Msg::Hover(HoverTarget::QuickPowerToggle))
-        .on_leave(Msg::Leave(HoverTarget::QuickPowerToggle))
-        .on_click(Msg::QuickMenuTogglePower)
-        .child(
-            Rect::new()
-                .size(Size::fill())
-                .fill(power_bg)
-                .corner_radius(0.logical_px())
-                .border(1.logical_px(), power_border),
-        )
-        .child(
-            Text::new("\u{f011}")
-                .font(font_ui())
-                .font_size(14.logical_px())
-                .bounds_mode(TextBoundsMode::Optical)
-                .color(power_fg)
-                .position(Position::relative_to_parent(
-                    Percent::new(50.0),
-                    Percent::new(50.0),
-                ))
-                .anchor(ElementAnchor::Center),
-        );
-
-    // Right of the Power icon: when a countdown is active, show `<action> in <N>s`
-    // with a compact `Cancel` pill button directly underneath; otherwise show hover hint / error.
-    let status_slot: Element<Msg> = if let Some(pending) = state.quick_menu.pending_power {
-        let cancel_hovered = state.hovered == HoverTarget::QuickPowerCancel;
-        let cancel_btn = Group::new()
-            .key("quick-power-cancel")
-            .size(Size::auto())
-            .cursor(CursorShape::Pointer)
-            .on_hover(Msg::Hover(HoverTarget::QuickPowerCancel))
-            .on_leave(Msg::Leave(HoverTarget::QuickPowerCancel))
-            .on_click(Msg::QuickMenuCancelPower)
-            .child(
-                Rect::new()
-                    .size(Size::fill())
-                    .fill(if cancel_hovered { SURFACE0 } else { MANTLE })
-                    .corner_radius(0.logical_px())
-                    .border(1.logical_px(), RED),
-            )
-            .child(
-                Row::new()
-                    .padding(Edges::symmetric(2.logical_px(), 8.logical_px()))
-                    .align(Align::Center)
-                    .child(
-                        Text::new("Cancel")
-                            .font(font_ui_semibold())
-                            .font_size(9.5.logical_px())
-                            .color(RED),
-                    ),
-            );
-
-        Column::new()
-            .size(Size::auto())
-            .gap(3.logical_px())
-            .align(Align::Start)
-            .child(
-                Text::new(format!(
-                    "{} in {}s",
-                    pending.action.label(),
-                    pending.seconds_left
-                ))
-                .font(font_ui_semibold())
-                .font_size(10.logical_px())
-                .color(pending.action.accent()),
-            )
-            .child(cancel_btn)
-            .into()
-    } else {
-        let (hint_text, hint_col) = if let Some(ref err) = state.quick_menu.power_error {
-            (marquee_slice(err, 22, 0), RED)
-        } else if let HoverTarget::QuickPowerAction(action) = state.hovered {
-            let support = action.support(&state.quick_menu.logind.power_capabilities);
-            let suffix = if support.needs_auth() { " · auth" } else { "" };
-            (format!("{}{suffix}", action.label()), action.accent())
-        } else if state.hovered == HoverTarget::QuickPowerToggle {
-            (String::from("Power options"), SUBTEXT1)
-        } else {
-            (String::new(), OVERLAY0)
-        };
-
-        Text::new(hint_text)
-            .font(font_ui_semibold())
-            .font_size(10.logical_px())
-            .color(hint_col)
-            .into()
-    };
-
-    let power_row = Row::new()
-        .size(Size::new(left_w.logical_px(), 36.logical_px()))
-        .gap(8.logical_px())
-        .align(Align::Center)
-        .child(power_btn)
-        .child(status_slot);
+    let indicator_row = build_action_scroll_indicator(state, left_w);
+    let visible_slots = state.quick_menu.visible_action_slots();
+    let slot_0 = build_action_slot_row(state, visible_slots[0], left_w);
+    let slot_1 = build_action_slot_row(state, visible_slots[1], left_w);
 
     let bottom_stack = Column::new()
-        .size(Size::new(left_w.logical_px(), 76.logical_px()))
-        .gap(6.logical_px())
+        .key("quick-action-rail")
+        .size(Size::new(left_w.logical_px(), 90.logical_px()))
+        .gap(5.logical_px())
         .align(Align::Start)
         .position(Position::relative_to_parent(
             Percent::new(0.0),
             Percent::new(100.0),
         ))
         .anchor(ElementAnchor::BottomLeft)
-        .child(settings_row)
-        .child(power_row);
+        .on_scroll(Msg::QuickMenuActionScroll)
+        .child(indicator_row)
+        .child(slot_0)
+        .child(slot_1);
 
     let top_info = Column::new()
         .size(Size::new(left_w.logical_px(), Length::Auto))
@@ -423,6 +197,331 @@ fn build_main_card(state: &State) -> Element<Msg> {
                 .border(1.logical_px(), SURFACE1),
         )
         .child(content)
+        .into()
+}
+
+/// Minimalist `34px`-wide scroll indicator above the 2-slot action rail (`^v──` / `v───` / `^───`).
+fn build_action_scroll_indicator(state: &State, left_w: f32) -> Element<Msg> {
+    let has_above = state.quick_menu.has_actions_above();
+    let has_below = state.quick_menu.has_actions_below();
+    let hovered = state.hovered == HoverTarget::QuickActionIndicator;
+    let col = if hovered { MAUVE } else { SUBTEXT0 };
+
+    let canvas = Canvas::new(Size::new(34.logical_px(), 10.logical_px()), move |p| {
+        let mut x = 1.0_f32;
+        if has_above {
+            let mut pb = PathBuilder::new();
+            pb.move_to(x.logical_px(), 7.0.logical_px());
+            pb.line_to((x + 3.0).logical_px(), 2.5.logical_px());
+            pb.line_to((x + 6.0).logical_px(), 7.0.logical_px());
+            p.stroke_path(&pb, 1.4.logical_px(), col);
+            x += 8.0;
+        }
+        if has_below {
+            let mut pb = PathBuilder::new();
+            pb.move_to(x.logical_px(), 2.5.logical_px());
+            pb.line_to((x + 3.0).logical_px(), 7.0.logical_px());
+            pb.line_to((x + 6.0).logical_px(), 2.5.logical_px());
+            p.stroke_path(&pb, 1.4.logical_px(), col);
+            x += 8.0;
+        }
+        let line_x = (x + 1.5).min(34.0);
+        let line_w = (34.0 - line_x).max(0.0);
+        if line_w > 0.5 {
+            p.fill_rect(
+                Bounds::new(
+                    line_x.logical_px(),
+                    4.5.logical_px(),
+                    line_w.logical_px(),
+                    1.4.logical_px(),
+                ),
+                col,
+            );
+        }
+    })
+    .key("quick-action-indicator-canvas")
+    .cache_key(("qm-action-ind", has_above, has_below, hovered))
+    .input_enabled(false);
+
+    let indicator_box = Group::new()
+        .key("quick-action-indicator")
+        .size(Size::new(34.logical_px(), 10.logical_px()))
+        .cursor(CursorShape::Pointer)
+        .on_hover(Msg::Hover(HoverTarget::QuickActionIndicator))
+        .on_leave(Msg::Leave(HoverTarget::QuickActionIndicator))
+        .on_click(Msg::QuickMenuActionCycle)
+        .child(canvas);
+
+    let hint = if hovered {
+        if has_above && has_below {
+            "Scroll"
+        } else if has_below {
+            "Toolbox"
+        } else {
+            "Settings"
+        }
+    } else {
+        ""
+    };
+
+    Row::new()
+        .size(Size::new(left_w.logical_px(), 10.logical_px()))
+        .gap(8.logical_px())
+        .align(Align::Center)
+        .child(indicator_box)
+        .child(
+            Text::new(hint)
+                .font(font_ui())
+                .font_size(8.5.logical_px())
+                .color(OVERLAY0),
+        )
+        .into()
+}
+
+fn build_action_slot_row(state: &State, slot: QuickActionSlot, left_w: f32) -> Element<Msg> {
+    match slot {
+        QuickActionSlot::Settings => build_settings_action_row(state, left_w),
+        QuickActionSlot::Power => build_power_action_row(state, left_w),
+        QuickActionSlot::Toolbox => build_toolbox_action_row(state, left_w),
+    }
+}
+
+fn build_settings_action_row(state: &State, left_w: f32) -> Element<Msg> {
+    let hovered = state.hovered == HoverTarget::QuickSettingsToggle;
+    let active = state.quick_menu.settings_open;
+    let bg = if active {
+        SURFACE1
+    } else if hovered {
+        SURFACE0
+    } else {
+        MANTLE
+    };
+    let border = if active || hovered { MAUVE } else { SURFACE1 };
+    let fg = if active || hovered { MAUVE } else { TEXT };
+
+    let btn = Group::new()
+        .key("quick-settings-toggle")
+        .size(Size::new(34.logical_px(), 34.logical_px()))
+        .cursor(CursorShape::Pointer)
+        .on_hover(Msg::Hover(HoverTarget::QuickSettingsToggle))
+        .on_leave(Msg::Leave(HoverTarget::QuickSettingsToggle))
+        .on_click(Msg::QuickMenuToggleSettings)
+        .child(
+            Rect::new()
+                .size(Size::fill())
+                .fill(bg)
+                .corner_radius(0.logical_px())
+                .border(1.logical_px(), border),
+        )
+        .child(
+            Text::new("\u{f013}")
+                .font(font_ui())
+                .font_size(14.logical_px())
+                .bounds_mode(TextBoundsMode::Optical)
+                .color(fg)
+                .position(Position::relative_to_parent(
+                    Percent::new(50.0),
+                    Percent::new(50.0),
+                ))
+                .anchor(ElementAnchor::Center),
+        );
+
+    let hint = if active {
+        (state.settings_ui.active_section.title(), MAUVE)
+    } else if hovered {
+        ("Settings", SUBTEXT1)
+    } else {
+        ("", OVERLAY0)
+    };
+
+    Row::new()
+        .size(Size::new(left_w.logical_px(), 34.logical_px()))
+        .gap(8.logical_px())
+        .align(Align::Center)
+        .child(btn)
+        .child(
+            Text::new(hint.0)
+                .font(font_ui_semibold())
+                .font_size(10.logical_px())
+                .color(hint.1),
+        )
+        .into()
+}
+
+fn build_power_action_row(state: &State, left_w: f32) -> Element<Msg> {
+    let hovered = state.hovered == HoverTarget::QuickPowerToggle;
+    let active = state.quick_menu.power_menu_open;
+    let bg = if active {
+        SURFACE1
+    } else if hovered {
+        SURFACE0
+    } else {
+        MANTLE
+    };
+    let border = if active || hovered { RED } else { SURFACE1 };
+    let fg = if active || hovered { RED } else { TEXT };
+
+    let btn = Group::new()
+        .key("quick-power-toggle")
+        .size(Size::new(34.logical_px(), 34.logical_px()))
+        .cursor(CursorShape::Pointer)
+        .on_hover(Msg::Hover(HoverTarget::QuickPowerToggle))
+        .on_leave(Msg::Leave(HoverTarget::QuickPowerToggle))
+        .on_click(Msg::QuickMenuTogglePower)
+        .child(
+            Rect::new()
+                .size(Size::fill())
+                .fill(bg)
+                .corner_radius(0.logical_px())
+                .border(1.logical_px(), border),
+        )
+        .child(
+            Text::new("\u{f011}")
+                .font(font_ui())
+                .font_size(14.logical_px())
+                .bounds_mode(TextBoundsMode::Optical)
+                .color(fg)
+                .position(Position::relative_to_parent(
+                    Percent::new(50.0),
+                    Percent::new(50.0),
+                ))
+                .anchor(ElementAnchor::Center),
+        );
+
+    let status_slot: Element<Msg> = if let Some(pending) = state.quick_menu.pending_power {
+        let cancel_hovered = state.hovered == HoverTarget::QuickPowerCancel;
+        let cancel_btn = Group::new()
+            .key("quick-power-cancel")
+            .size(Size::auto())
+            .cursor(CursorShape::Pointer)
+            .on_hover(Msg::Hover(HoverTarget::QuickPowerCancel))
+            .on_leave(Msg::Leave(HoverTarget::QuickPowerCancel))
+            .on_click(Msg::QuickMenuCancelPower)
+            .child(
+                Rect::new()
+                    .size(Size::fill())
+                    .fill(if cancel_hovered { SURFACE0 } else { MANTLE })
+                    .corner_radius(0.logical_px())
+                    .border(1.logical_px(), RED),
+            )
+            .child(
+                Row::new()
+                    .padding(Edges::symmetric(2.logical_px(), 8.logical_px()))
+                    .align(Align::Center)
+                    .child(
+                        Text::new("Cancel")
+                            .font(font_ui_semibold())
+                            .font_size(9.5.logical_px())
+                            .color(RED),
+                    ),
+            );
+
+        Column::new()
+            .size(Size::auto())
+            .gap(3.logical_px())
+            .align(Align::Start)
+            .child(
+                Text::new(format!(
+                    "{} in {}s",
+                    pending.action.label(),
+                    pending.seconds_left
+                ))
+                .font(font_ui_semibold())
+                .font_size(10.logical_px())
+                .color(pending.action.accent()),
+            )
+            .child(cancel_btn)
+            .into()
+    } else {
+        let (hint_text, hint_col) = if let Some(ref err) = state.quick_menu.power_error {
+            (marquee_slice(err, 22, 0), RED)
+        } else if let HoverTarget::QuickPowerAction(action) = state.hovered {
+            let support = action.support(&state.quick_menu.logind.power_capabilities);
+            let suffix = if support.needs_auth() { " · auth" } else { "" };
+            (format!("{}{suffix}", action.label()), action.accent())
+        } else if hovered {
+            (String::from("Power options"), SUBTEXT1)
+        } else {
+            (String::new(), OVERLAY0)
+        };
+
+        Text::new(hint_text)
+            .font(font_ui_semibold())
+            .font_size(10.logical_px())
+            .color(hint_col)
+            .into()
+    };
+
+    Row::new()
+        .size(Size::new(left_w.logical_px(), 34.logical_px()))
+        .gap(8.logical_px())
+        .align(Align::Center)
+        .child(btn)
+        .child(status_slot)
+        .into()
+}
+
+fn build_toolbox_action_row(state: &State, left_w: f32) -> Element<Msg> {
+    let hovered = state.hovered == HoverTarget::QuickToolboxToggle;
+    let active = state.quick_menu.toolbox_open;
+    let bg = if active {
+        SURFACE1
+    } else if hovered {
+        SURFACE0
+    } else {
+        MANTLE
+    };
+    let border = if active || hovered { MAUVE } else { SURFACE1 };
+    let fg = if active || hovered { MAUVE } else { TEXT };
+
+    let btn = Group::new()
+        .key("quick-toolbox-toggle")
+        .size(Size::new(34.logical_px(), 34.logical_px()))
+        .cursor(CursorShape::Pointer)
+        .on_hover(Msg::Hover(HoverTarget::QuickToolboxToggle))
+        .on_leave(Msg::Leave(HoverTarget::QuickToolboxToggle))
+        .on_click(Msg::QuickMenuToggleToolbox)
+        .child(
+            Rect::new()
+                .size(Size::fill())
+                .fill(bg)
+                .corner_radius(0.logical_px())
+                .border(1.logical_px(), border),
+        )
+        .child(
+            Text::new("\u{f0ad}")
+                .font(font_ui())
+                .font_size(14.logical_px())
+                .bounds_mode(TextBoundsMode::Optical)
+                .color(fg)
+                .position(Position::relative_to_parent(
+                    Percent::new(50.0),
+                    Percent::new(50.0),
+                ))
+                .anchor(ElementAnchor::Center),
+        );
+
+    let (hint_text, hint_col) = if let HoverTarget::ToolboxItem(tool) = state.hovered {
+        (tool.label(), tool.accent())
+    } else if active {
+        ("Toolbox", MAUVE)
+    } else if hovered {
+        ("Toolbox", SUBTEXT1)
+    } else {
+        ("", OVERLAY0)
+    };
+
+    Row::new()
+        .size(Size::new(left_w.logical_px(), 34.logical_px()))
+        .gap(8.logical_px())
+        .align(Align::Center)
+        .child(btn)
+        .child(
+            Text::new(hint_text)
+                .font(font_ui_semibold())
+                .font_size(10.logical_px())
+                .color(hint_col),
+        )
         .into()
 }
 
@@ -564,6 +663,99 @@ fn build_power_card(state: &State) -> Element<Msg> {
 
     Group::new()
         .key("quick-power-card")
+        .size(Size::new(
+            QUICK_MENU_WIDTH.logical_px(),
+            POWER_CARD_HEIGHT.logical_px(),
+        ))
+        .child(
+            Rect::new()
+                .size(Size::fill())
+                .fill(CRUST)
+                .corner_radius(0.logical_px())
+                .border(1.logical_px(), SURFACE1),
+        )
+        .child(row)
+        .into()
+}
+
+/// Minimalist icon-only Toolbox strip (Annotate, Magnifier, Color Picker, Screenshot).
+fn build_toolbox_card(state: &State) -> Element<Msg> {
+    let ws = state.active_workspace_key();
+    let mut row = Row::new()
+        .size(Size::auto())
+        .gap(8.logical_px())
+        .align(Align::Center)
+        .position(Position::relative_to_parent(
+            Percent::new(50.0),
+            Percent::new(50.0),
+        ))
+        .anchor(ElementAnchor::Center);
+
+    for (idx, tool) in ToolboxTool::ALL.into_iter().enumerate() {
+        let target = HoverTarget::ToolboxItem(tool);
+        let hovered = state.hovered == target;
+        let active = match tool {
+            ToolboxTool::Annotate => {
+                state.annotate.is_active()
+                    || (state.annotate.pinned_visible && state.annotate.has_strokes(&ws))
+            }
+            ToolboxTool::Zoom => state.zoom.is_open_or_capturing(),
+            ToolboxTool::ColorPicker => state.color_picker.is_open_or_capturing(),
+            ToolboxTool::Screenshot => state.screenshot.is_open_or_capturing(),
+        };
+        let accent = if tool == ToolboxTool::Annotate
+            && !state.annotate.is_active()
+            && state.annotate.pinned_visible
+            && state.annotate.has_strokes(&ws)
+        {
+            PEACH
+        } else {
+            tool.accent()
+        };
+        let bg = if active {
+            SURFACE1
+        } else if hovered {
+            SURFACE0
+        } else {
+            MANTLE
+        };
+        let border = if active || hovered { accent } else { SURFACE1 };
+        let fg = if active || hovered { accent } else { SUBTEXT1 };
+
+        let btn = Group::new()
+            .key(("quick-toolbox-btn", idx))
+            .size(Size::new(
+                POWER_BTN_SIZE.logical_px(),
+                POWER_BTN_SIZE.logical_px(),
+            ))
+            .cursor(CursorShape::Pointer)
+            .on_hover(Msg::Hover(target))
+            .on_leave(Msg::Leave(target))
+            .on_click(Msg::ToolboxLaunch(tool))
+            .child(
+                Rect::new()
+                    .size(Size::fill())
+                    .fill(bg)
+                    .corner_radius(0.logical_px())
+                    .border(1.logical_px(), border),
+            )
+            .child(
+                Text::new(tool.icon())
+                    .font(font_ui())
+                    .font_size(13.logical_px())
+                    .bounds_mode(TextBoundsMode::Optical)
+                    .color(fg)
+                    .position(Position::relative_to_parent(
+                        Percent::new(50.0),
+                        Percent::new(50.0),
+                    ))
+                    .anchor(ElementAnchor::Center),
+            );
+        row = row.child(btn);
+    }
+
+    Group::new()
+        .key("quick-toolbox-card")
         .size(Size::new(
             QUICK_MENU_WIDTH.logical_px(),
             POWER_CARD_HEIGHT.logical_px(),

@@ -99,20 +99,28 @@ pub fn handle_notif_card_pointer(
 ) {
     match ev.button {
         Some(MouseButton::Right) => {
-            if state.notifications.dismiss(id)
+            if let Some(Some(dbus_id)) = state.notifications.dismiss_uid(id)
                 && let Ok(dbus) = ctx.dbus()
             {
-                let _ = dbus.notifications().close(id, NotificationCloseReason::Dismissed);
+                let _ = dbus
+                    .notifications()
+                    .close(dbus_id, NotificationCloseReason::Dismissed);
             }
         }
         Some(MouseButton::Left) => {
-            if let Some((notif_id, action_key, keep_resident)) =
+            if let Some((live_dbus_id, action_key, keep_resident)) =
                 state.notifications.take_action_and_maybe_dismiss(id)
             {
                 if let Some(key) = action_key {
-                    invoke_or_route_action(state, notif_id, &key, keep_resident, ctx);
-                } else if let Ok(dbus) = ctx.dbus() {
-                    let _ = dbus.notifications().close(notif_id, NotificationCloseReason::Dismissed);
+                    if let Some(dbus_id) = live_dbus_id {
+                        invoke_or_route_action(state, dbus_id, &key, keep_resident, ctx);
+                    }
+                } else if let Some(dbus_id) = live_dbus_id
+                    && let Ok(dbus) = ctx.dbus()
+                {
+                    let _ = dbus
+                        .notifications()
+                        .close(dbus_id, NotificationCloseReason::Dismissed);
                 }
             }
         }
@@ -127,8 +135,13 @@ pub fn handle_notif_action_click(
     ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     let keep_resident = state.notifications.is_resident(id);
-    if keep_resident || state.notifications.dismiss(id) {
-        invoke_or_route_action(state, id, action_key, keep_resident, ctx);
+    let live_dbus_id = if keep_resident {
+        state.notifications.dbus_id_for_uid(id)
+    } else {
+        state.notifications.dismiss_uid(id).flatten()
+    };
+    if let Some(dbus_id) = live_dbus_id {
+        invoke_or_route_action(state, dbus_id, action_key, keep_resident, ctx);
     }
 }
 
@@ -145,7 +158,7 @@ pub fn handle_notif_action_scroll(state: &mut State, id: u32, sc: ScrollEvent) {
         (step_y as f32) * ACTION_SCROLL_STEP_PX
     };
 
-    let Some(item) = state.notifications.items.iter().find(|i| i.stored.id == id) else {
+    let Some(item) = state.notifications.items.iter().find(|i| i.uid == id) else {
         return;
     };
     let max_scroll = action_max_scroll_x(item);

@@ -13,7 +13,9 @@ mod notifications;
 mod quick_menu;
 mod settings;
 mod subscriptions;
+mod tools;
 mod update;
+mod zoom;
 
 pub use init::init_state;
 pub use subscriptions::build_subscriptions;

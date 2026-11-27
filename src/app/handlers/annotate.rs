@@ -6,7 +6,7 @@ use crate::app::annotate::{ANNOTATE_PALETTE, ActiveInputSource, AnnotateTool, St
 use crate::app::state::{SoundCue, State};
 
 use super::events::scroll_direction_y;
-use super::ipc::close_other_overlays;
+use super::ipc::close_other_screen_tools;
 
 /// Linux input code for primary stylus side/barrel button (`BTN_STYLUS`).
 const BTN_STYLUS: u32 = 0x14b;
@@ -20,7 +20,7 @@ pub fn handle_toggle_annotate(state: &mut State, ctx: &mut EffectCtx<'_, crate::
         }
         state.play_sound(SoundCue::MenuPopdown, ctx);
     } else {
-        close_other_overlays(state, Some("annotate"));
+        close_other_screen_tools(state, Some("annotate"), ctx);
         state.annotate.open();
         state.play_sound(SoundCue::MenuPopup, ctx);
     }

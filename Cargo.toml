@@ -13,7 +13,10 @@ waywi = { version = "0.2", features = [
     "image-svg",
     "image-webp",
     "animation",
+    "clipboard",
     "cursor-shape",
+    "idle-inhibit",
+    "screencopy",
     "tablet",
     "ime",
     "idle-notify",
@@ -23,5 +26,6 @@ waywi = { version = "0.2", features = [
     "pipewire",
     "audio-playback",
 ] }
+png = "0.18"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

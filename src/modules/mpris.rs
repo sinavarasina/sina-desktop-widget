@@ -1,43 +1,82 @@
-//! Bar MPRIS module: album art chevron badge and adaptive track info pill.
+//! Bar MPRIS module: spinning circular vinyl album art badge and pixel-exact scrolling track pill.
 
 use waywi::prelude::*;
 
+use crate::app::mpris::{MPRIS_BAR_TEXT_INNER_W, MPRIS_MARQUEE_GAP_PX};
 use crate::app::state::{HoverTarget, Msg, State};
 use crate::theme::{
     BAR_HEIGHT, CRUST, MAUVE, MPRIS_ART_SIZE, MPRIS_BAR_TEXT_WIDTH, OVERLAY0, SUBTEXT1, SURFACE0,
-    TEXT, font_ui, font_ui_semibold,
+    SURFACE1, TEXT, font_ui, font_ui_semibold,
 };
 use crate::widgets::separators::{SepShape, separator};
-use crate::widgets::text::{format_artist_album, marquee_slice};
 
-const MAX_BAR_META_COLS: usize = 22;
+const BAR_LINE_H: f32 = 11.0;
 
 pub fn build_mpris(state: &State) -> Element<Msg> {
     let hovered = state.hovered == HoverTarget::MprisBar;
     let badge_bg = if hovered { SURFACE0 } else { CRUST };
+    let playing = state.mpris.is_playing();
 
     let album_inner: Element<Msg> = if let Some(img) = state.mpris.art_asset {
-        // Clip for the same reason as the popup art: non-1:1 Cover art overflows its box.
-        Clip::new(
-            Image::new(img)
-                .size(Size::new(
-                    MPRIS_ART_SIZE.logical_px(),
-                    MPRIS_ART_SIZE.logical_px(),
-                ))
-                .fit(ImageFit::Cover),
-        )
-        .position(Position::RelativeToParent {
-            x: Percent::new(50.0),
-            y: Percent::new(50.0),
-            offset_x: 0.logical_px(),
-            offset_y: 0.logical_px(),
-        })
-        .size(Size::new(
-            MPRIS_ART_SIZE.logical_px(),
-            MPRIS_ART_SIZE.logical_px(),
-        ))
-        .anchor(ElementAnchor::Center)
-        .into()
+        let radius = MPRIS_ART_SIZE * 0.5;
+        let rim_col = if playing {
+            MAUVE.with_opacity(0.65)
+        } else {
+            SURFACE1
+        };
+
+        let spinning_img = Image::new(img)
+            .size(Size::new(
+                MPRIS_ART_SIZE.logical_px(),
+                MPRIS_ART_SIZE.logical_px(),
+            ))
+            .fit(ImageFit::Cover)
+            .transform(
+                Transform::identity()
+                    .pivot(0.5, 0.5)
+                    .rotate_rad(state.mpris.disc_angle_rad),
+            );
+
+        let circular_art = Clip::new(spinning_img)
+            .size(Size::new(
+                MPRIS_ART_SIZE.logical_px(),
+                MPRIS_ART_SIZE.logical_px(),
+            ))
+            .corner_radius(CornerRadius::all(radius.logical_px()));
+
+        // Subtle circular vinyl rim + center spindle dot.
+        let rim = Rect::new()
+            .size(Size::fill())
+            .fill(Color::TRANSPARENT)
+            .corner_radius(CornerRadius::all(radius.logical_px()))
+            .border(1.logical_px(), rim_col);
+
+        let spindle = Rect::new()
+            .size(Size::new(4.logical_px(), 4.logical_px()))
+            .fill(CRUST)
+            .corner_radius(CornerRadius::all(2.logical_px()))
+            .border(0.8.logical_px(), SURFACE1)
+            .position(Position::relative_to_parent(
+                Percent::new(50.0),
+                Percent::new(50.0),
+            ))
+            .anchor(ElementAnchor::Center);
+
+        Group::new()
+            .key("mpris-vinyl-disc")
+            .position(Position::relative_to_parent(
+                Percent::new(50.0),
+                Percent::new(50.0),
+            ))
+            .size(Size::new(
+                MPRIS_ART_SIZE.logical_px(),
+                MPRIS_ART_SIZE.logical_px(),
+            ))
+            .anchor(ElementAnchor::Center)
+            .child(circular_art)
+            .child(rim)
+            .child(spindle)
+            .into()
     } else {
         let icon_col = if state.mpris.has_active_session() {
             MAUVE
@@ -86,20 +125,29 @@ pub fn build_mpris(state: &State) -> Element<Msg> {
             Color::TRANSPARENT,
         ));
 
-    if state.mpris.has_active_session()
-        && let Some(player) = state.mpris.active_player()
-    {
+    if state.mpris.has_active_session() {
         let pill_bg = if hovered { SURFACE0 } else { CRUST };
-        let top_raw = format_artist_album(player);
-        let bot_raw = player
-            .title
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-            .or(player.identity.as_deref())
-            .unwrap_or("Playing");
 
-        let top_text = marquee_slice(&top_raw, MAX_BAR_META_COLS, state.mpris.marquee_tick);
-        let bot_text = marquee_slice(bot_raw, MAX_BAR_META_COLS, state.mpris.marquee_tick);
+        let top_line = build_marquee_line(
+            "mpris-bar-top",
+            &state.mpris.bar_top_text,
+            state.mpris.bar_top_width_px,
+            state.mpris.bar_top_scroll_px,
+            state.mpris.top_overflows(),
+            font_ui(),
+            9.5,
+            MAUVE,
+        );
+        let bot_line = build_marquee_line(
+            "mpris-bar-bot",
+            &state.mpris.bar_bot_text,
+            state.mpris.bar_bot_width_px,
+            state.mpris.bar_bot_scroll_px,
+            state.mpris.bot_overflows(),
+            font_ui_semibold(),
+            10.0,
+            if playing { TEXT } else { SUBTEXT1 },
+        );
 
         let text_col = Column::new()
             .size(Size::new(
@@ -107,24 +155,8 @@ pub fn build_mpris(state: &State) -> Element<Msg> {
                 BAR_HEIGHT.logical_px(),
             ))
             .padding(Edges::symmetric(1.logical_px(), 4.logical_px()))
-            .child(
-                Text::new(top_text)
-                    .font(font_ui())
-                    .font_size(9.5.logical_px())
-                    .line_height(1.05)
-                    .color(MAUVE),
-            )
-            .child(
-                Text::new(bot_text)
-                    .font(font_ui_semibold())
-                    .font_size(10.0.logical_px())
-                    .line_height(1.05)
-                    .color(if player.status == MprisPlaybackStatus::Playing {
-                        TEXT
-                    } else {
-                        SUBTEXT1
-                    }),
-            );
+            .child(top_line)
+            .child(bot_line);
 
         let meta_pill = Group::new()
             .key("mpris-meta-pill")
@@ -133,7 +165,7 @@ pub fn build_mpris(state: &State) -> Element<Msg> {
                 BAR_HEIGHT.logical_px(),
             ))
             .child(Rect::new().size(Size::fill()).fill(pill_bg))
-            .child(Clip::new(text_col).size(Size::fill()));
+            .child(text_col);
 
         row = row
             .child(separator(
@@ -145,19 +177,74 @@ pub fn build_mpris(state: &State) -> Element<Msg> {
             .child(meta_pill)
             .child(separator(
                 "sep-mpris-r",
-                SepShape::SlashRInv,
+                SepShape::ArrowR,
                 pill_bg,
                 Color::TRANSPARENT,
             ));
-    } else {
-        // Minimalist transparent `>` frame when stopped or idle; `sep-r-1` provides the right `\` edge.
-        row = row.child(separator(
-            "sep-mpris-notch-idle",
-            SepShape::ArrowRThin,
-            SURFACE0,
-            Color::TRANSPARENT,
-        ));
     }
 
     row.into()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_marquee_line(
+    key: &'static str,
+    text: &str,
+    measured_w: f32,
+    scroll_px: f32,
+    overflows: bool,
+    font: Font,
+    font_size: f32,
+    color: Color,
+) -> Element<Msg> {
+    let make_text = |s: &str, x: f32| {
+        Text::new(s.to_owned())
+            .font(font.clone())
+            .font_size(font_size.logical_px())
+            .line_height(1.05)
+            .color(color)
+            .position(Position::absolute(x.logical_px(), 0.logical_px()))
+    };
+
+    let inner: Element<Msg> = if !overflows {
+        Group::new()
+            .size(Size::new(
+                MPRIS_BAR_TEXT_INNER_W.logical_px(),
+                BAR_LINE_H.logical_px(),
+            ))
+            .child(make_text(text, 0.0))
+            .into()
+    } else {
+        let cycle = measured_w + MPRIS_MARQUEE_GAP_PX;
+        let x1 = -scroll_px;
+        let dot_x = measured_w + MPRIS_MARQUEE_GAP_PX * 0.5 - scroll_px;
+        let x2 = cycle - scroll_px;
+        Group::new()
+            .size(Size::new(
+                MPRIS_BAR_TEXT_INNER_W.logical_px(),
+                BAR_LINE_H.logical_px(),
+            ))
+            .child(make_text(text, x1))
+            .child(
+                Text::new("\u{2022}")
+                    .font(font_ui())
+                    .font_size((font_size - 1.0).max(7.5).logical_px())
+                    .color(OVERLAY0)
+                    .position(Position::absolute(
+                        dot_x.logical_px(),
+                        (BAR_LINE_H * 0.5).logical_px(),
+                    ))
+                    .anchor(ElementAnchor::Center),
+            )
+            .child(make_text(text, x2))
+            .into()
+    };
+
+    Clip::new(inner)
+        .key(key)
+        .size(Size::new(
+            MPRIS_BAR_TEXT_INNER_W.logical_px(),
+            BAR_LINE_H.logical_px(),
+        ))
+        .into()
 }

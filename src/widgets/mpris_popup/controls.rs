@@ -2,27 +2,28 @@
 
 use waywi::prelude::*;
 
-use crate::app::mpris::MprisControlAction;
+use crate::app::mpris::{MPRIS_MARQUEE_GAP_PX, MPRIS_POPUP_TEXT_INNER_W, MprisControlAction};
 use crate::app::state::{HoverTarget, Msg, State};
 use crate::theme::{
-    CRUST, MANTLE, MAUVE, MPRIS_POPUP_WIDTH, SUBTEXT1, SURFACE0, SURFACE1, TEXT, font_ui,
-    font_ui_bold,
+    CRUST, MANTLE, MAUVE, MPRIS_POPUP_WIDTH, OVERLAY0, SUBTEXT1, SURFACE0, SURFACE1, TEXT,
+    font_ui, font_ui_bold,
 };
-use crate::widgets::text::{format_artist_album, marquee_slice};
 
 const ART_POPUP_SIZE: f32 = 52.0;
-const META_TEXT_WIDTH: f32 = 232.0;
+const META_TEXT_WIDTH: f32 = MPRIS_POPUP_TEXT_INNER_W;
 
 pub fn build_control_box(state: &State) -> Element<Msg> {
     let player = state.mpris.active_player();
-    let title_raw = player
-        .and_then(|p| p.title.as_deref())
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or("No active track");
-    let sub_raw = player.map_or_else(|| String::from("Idle"), format_artist_album);
-
-    let title_text = marquee_slice(title_raw, 25, state.mpris.marquee_tick);
-    let sub_text = marquee_slice(&sub_raw, 26, state.mpris.marquee_tick);
+    let title_str = if state.mpris.bar_bot_text.is_empty() {
+        "No active track"
+    } else {
+        state.mpris.bar_bot_text.as_str()
+    };
+    let sub_str = if state.mpris.bar_top_text.is_empty() {
+        "Idle"
+    } else {
+        state.mpris.bar_top_text.as_str()
+    };
 
     let art_elem: Element<Msg> = if let Some(img) = state.mpris.art_asset {
         // ImageFit::Cover resolves to a rect larger than the box for non-1:1 art (centered
@@ -128,27 +129,34 @@ pub fn build_control_box(state: &State) -> Element<Msg> {
             MprisControlAction::CycleLoop,
         ));
 
+    let title_line = build_popup_marquee_line(
+        "mpris-popup-title",
+        title_str,
+        state.mpris.popup_title_width_px,
+        state.mpris.popup_title_scroll_px,
+        state.mpris.popup_title_overflows(),
+        font_ui_bold(),
+        11.5,
+        16.0,
+        TEXT,
+    );
+    let sub_line = build_popup_marquee_line(
+        "mpris-popup-sub",
+        sub_str,
+        state.mpris.popup_sub_width_px,
+        state.mpris.popup_sub_scroll_px,
+        state.mpris.popup_sub_overflows(),
+        font_ui(),
+        10.5,
+        14.0,
+        SUBTEXT1,
+    );
+
     let right_col = Column::new()
         .size(Size::new(META_TEXT_WIDTH.logical_px(), Length::Auto))
         .gap(4.logical_px())
-        .child(
-            Clip::new(
-                Text::new(title_text)
-                    .font(font_ui_bold())
-                    .font_size(11.5.logical_px())
-                    .color(TEXT),
-            )
-            .size(Size::new(META_TEXT_WIDTH.logical_px(), 16.logical_px())),
-        )
-        .child(
-            Clip::new(
-                Text::new(sub_text)
-                    .font(font_ui())
-                    .font_size(10.5.logical_px())
-                    .color(SUBTEXT1),
-            )
-            .size(Size::new(META_TEXT_WIDTH.logical_px(), 14.logical_px())),
-        )
+        .child(title_line)
+        .child(sub_line)
         .child(controls_row);
 
     Group::new()
@@ -170,6 +178,62 @@ pub fn build_control_box(state: &State) -> Element<Msg> {
                 .child(art_elem)
                 .child(right_col),
         )
+        .into()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_popup_marquee_line(
+    key: &'static str,
+    text: &str,
+    measured_w: f32,
+    scroll_px: f32,
+    overflows: bool,
+    font: Font,
+    font_size: f32,
+    line_h: f32,
+    color: Color,
+) -> Element<Msg> {
+    // Keep `Text` content constant across frames so `TextEngine::buffer_cache` and GPU
+    // `resolve_text_quad` achieve 100% cache hits (eliminating CJK fallback reshapes & stutter).
+    let make_text = |s: &str, x: f32| {
+        Text::new(s.to_owned())
+            .font(font.clone())
+            .font_size(font_size.logical_px())
+            .color(color)
+            .position(Position::absolute(x.logical_px(), 0.logical_px()))
+    };
+
+    let inner: Element<Msg> = if !overflows {
+        Group::new()
+            .size(Size::new(META_TEXT_WIDTH.logical_px(), line_h.logical_px()))
+            .child(make_text(text, 0.0))
+            .into()
+    } else {
+        let cycle = measured_w + MPRIS_MARQUEE_GAP_PX;
+        let x1 = -scroll_px;
+        let dot_x = measured_w + MPRIS_MARQUEE_GAP_PX * 0.5 - scroll_px;
+        let x2 = cycle - scroll_px;
+        Group::new()
+            .size(Size::new(META_TEXT_WIDTH.logical_px(), line_h.logical_px()))
+            .child(make_text(text, x1))
+            .child(
+                Text::new("\u{2022}")
+                    .font(font_ui())
+                    .font_size((font_size - 1.5).max(8.0).logical_px())
+                    .color(OVERLAY0)
+                    .position(Position::absolute(
+                        dot_x.logical_px(),
+                        (line_h * 0.5).logical_px(),
+                    ))
+                    .anchor(ElementAnchor::Center),
+            )
+            .child(make_text(text, x2))
+            .into()
+    };
+
+    Clip::new(inner)
+        .key(key)
+        .size(Size::new(META_TEXT_WIDTH.logical_px(), line_h.logical_px()))
         .into()
 }
 

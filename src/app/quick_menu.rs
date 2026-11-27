@@ -338,10 +338,26 @@ pub struct PendingPowerAction {
 
 pub const POWER_COUNTDOWN_SECS: u8 = 3;
 
+/// Action rail slots displayed in a scrollable 2-slot vertical window inside Quick Menu.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuickActionSlot {
+    Settings,
+    Power,
+    Toolbox,
+}
+
+impl QuickActionSlot {
+    pub const ALL: [Self; 3] = [Self::Settings, Self::Power, Self::Toolbox];
+    pub const VISIBLE: usize = 2;
+}
+
 pub struct QuickMenuState {
     pub popup_anim: RevealAnim,
     pub power_menu_open: bool,
     pub settings_open: bool,
+    pub toolbox_open: bool,
+    /// Scroll window offset (`0..=max_action_scroll()`) into [`QuickActionSlot::ALL`].
+    pub action_scroll: usize,
     pub pending_power: Option<PendingPowerAction>,
     pub logind: LogindSnapshot,
     pub power_error: Option<String>,
@@ -366,6 +382,8 @@ impl Default for QuickMenuState {
             popup_anim: RevealAnim::popup(),
             power_menu_open: false,
             settings_open: false,
+            toolbox_open: false,
+            action_scroll: 0,
             pending_power: None,
             logind: LogindSnapshot::default(),
             power_error: None,
@@ -487,6 +505,17 @@ impl QuickMenuState {
         self.popup_anim.set_open(false);
         self.power_menu_open = false;
         self.settings_open = false;
+        self.toolbox_open = false;
+        self.pending_power = None;
+        self.mouth_reacting = false;
+    }
+
+    /// Instantly hides Quick Menu without closing animation (prevents fading UI in screencopy).
+    pub fn close_popup_immediate(&mut self) {
+        self.popup_anim = RevealAnim::popup();
+        self.power_menu_open = false;
+        self.settings_open = false;
+        self.toolbox_open = false;
         self.pending_power = None;
         self.mouth_reacting = false;
     }
@@ -507,6 +536,7 @@ impl QuickMenuState {
         self.power_menu_open = !self.power_menu_open;
         if self.power_menu_open {
             self.settings_open = false;
+            self.toolbox_open = false;
         }
         self.power_error = None;
     }
@@ -515,8 +545,75 @@ impl QuickMenuState {
         self.settings_open = !self.settings_open;
         if self.settings_open {
             self.power_menu_open = false;
+            self.toolbox_open = false;
         }
         self.power_error = None;
+    }
+
+    pub fn toggle_toolbox_menu(&mut self) {
+        self.toolbox_open = !self.toolbox_open;
+        if self.toolbox_open {
+            self.settings_open = false;
+            self.power_menu_open = false;
+            self.action_scroll = Self::max_action_scroll();
+        }
+        self.power_error = None;
+    }
+
+    #[must_use]
+    pub const fn max_action_scroll() -> usize {
+        QuickActionSlot::ALL
+            .len()
+            .saturating_sub(QuickActionSlot::VISIBLE)
+    }
+
+    #[must_use]
+    pub const fn has_actions_above(&self) -> bool {
+        self.action_scroll > 0
+    }
+
+    #[must_use]
+    pub const fn has_actions_below(&self) -> bool {
+        self.action_scroll + QuickActionSlot::VISIBLE < QuickActionSlot::ALL.len()
+    }
+
+    #[must_use]
+    pub fn visible_action_slots(&self) -> [QuickActionSlot; QuickActionSlot::VISIBLE] {
+        let start = self.action_scroll.min(Self::max_action_scroll());
+        [QuickActionSlot::ALL[start], QuickActionSlot::ALL[start + 1]]
+    }
+
+    /// Scrolls the 2-slot left action rail by `delta` (`>0` reveals items below, `<0` reveals items above).
+    pub fn scroll_actions(&mut self, delta: i32) -> bool {
+        if delta == 0 {
+            return false;
+        }
+        let max_scroll = Self::max_action_scroll();
+        let next = if delta > 0 {
+            (self.action_scroll + 1).min(max_scroll)
+        } else {
+            self.action_scroll.saturating_sub(1)
+        };
+        if next != self.action_scroll {
+            self.action_scroll = next;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Cycles the action rail on click of the scroll indicator bar.
+    pub fn cycle_action_scroll(&mut self) -> bool {
+        let max_scroll = Self::max_action_scroll();
+        if max_scroll == 0 {
+            return false;
+        }
+        self.action_scroll = if self.action_scroll < max_scroll {
+            self.action_scroll + 1
+        } else {
+            0
+        };
+        true
     }
 
     pub fn interact_sprite(&mut self) {

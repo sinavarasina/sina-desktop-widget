@@ -1,6 +1,5 @@
 //! Message dispatch and state transitions.
 
-use waywi::desktop::spawn_detached;
 use waywi::prelude::*;
 
 use crate::app::audio::AudioSnapshotExt;
@@ -13,7 +12,7 @@ use super::annotate::{
     handle_annotate_pointer_down, handle_annotate_pointer_move, handle_annotate_pointer_up,
     handle_annotate_redo, handle_annotate_scroll, handle_annotate_set_color,
     handle_annotate_set_tool, handle_annotate_tablet, handle_annotate_toggle_pin,
-    handle_annotate_touch, handle_annotate_undo, handle_close_annotate, handle_toggle_annotate,
+    handle_annotate_touch, handle_annotate_undo, handle_close_annotate,
 };
 use super::audio::{
     handle_audio_updated, handle_mixer_balance_scroll, handle_mixer_balance_seek,
@@ -53,7 +52,7 @@ use super::notifications::{
 };
 use super::quick_menu::{
     handle_clock_menu_click, handle_logind_event, handle_power_action, handle_power_countdown_tick,
-    handle_quick_menu_toggle_power,
+    handle_quick_menu_toggle_power, handle_quick_menu_toggle_toolbox,
 };
 use super::settings::{
     handle_cycle_metric_placement, handle_list_scroll, handle_move_metric, handle_preview_sound,
@@ -61,6 +60,22 @@ use super::settings::{
     handle_settings_ime, handle_settings_key, handle_step_setting, handle_toggle_dropdown,
     handle_toggle_setting, handle_toggle_settings, handle_wallpaper_path_apply,
     handle_wallpaper_path_clear, handle_wallpaper_path_focus,
+};
+use super::tools::{
+    handle_close_color_picker, handle_close_screenshot, handle_color_picker_capture_now,
+    handle_color_picker_captured, handle_color_picker_key, handle_color_picker_pointer_down,
+    handle_color_picker_pointer_move, handle_color_picker_scroll, handle_screenshot_capture_now,
+    handle_screenshot_captured, handle_screenshot_key, handle_screenshot_pointer_down,
+    handle_screenshot_pointer_move, handle_screenshot_pointer_up, handle_screenshot_preview_copy,
+    handle_screenshot_preview_delete, handle_screenshot_preview_dismiss,
+    handle_screenshot_preview_folder, handle_screenshot_preview_open,
+    handle_screenshot_preview_timeout, handle_screenshot_set_mode,
+};
+use super::zoom::{
+    handle_close_zoom, handle_toolbox_launch, handle_zoom_capture_now, handle_zoom_captured,
+    handle_zoom_key, handle_zoom_pointer_down, handle_zoom_pointer_move, handle_zoom_pointer_up,
+    handle_zoom_recapture, handle_zoom_reset, handle_zoom_scroll, handle_zoom_step,
+    handle_zoom_toggle_filter, handle_zoom_toggle_live,
 };
 
 /// Keeps `bar_width` and `screen_height` synchronized with the primary Wayland output across
@@ -82,9 +97,6 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
     sync_primary_output_size(state, ctx);
     match msg {
         Msg::AnimationFrame(now) => state.advance_ui_animations(now, ctx),
-        Msg::SpawnBtop => {
-            let _ = spawn_detached("footclient", ["btop"]);
-        }
         Msg::SwitchWorkspace(id) => {
             let prev_key = state.active_workspace_key();
             state.annotate.finish_active_interaction(&prev_key);
@@ -244,7 +256,6 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
                 state.play_sound(SoundCue::MenuPopdown, ctx);
             }
         }
-        Msg::ToggleAnnotate => handle_toggle_annotate(state, ctx),
         Msg::CloseAnnotate => handle_close_annotate(state, ctx),
         Msg::AnnotatePointerDown(ev) => handle_annotate_pointer_down(state, ev),
         Msg::AnnotatePointerMove(ev) => handle_annotate_pointer_move(state, ev),
@@ -264,6 +275,67 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
         Msg::AnnotateClearWorkspace => handle_annotate_clear_workspace(state, ctx),
         Msg::AnnotateClearAll => handle_annotate_clear_all(state, ctx),
         Msg::AnnotateTogglePin => handle_annotate_toggle_pin(state, ctx),
+        Msg::ToolboxLaunch(tool) => handle_toolbox_launch(state, tool, ctx),
+        Msg::CloseZoom => handle_close_zoom(state, ctx),
+        Msg::ZoomCaptureNow { seq } => handle_zoom_capture_now(state, seq, ctx),
+        Msg::ZoomCaptured { seq, frame } => handle_zoom_captured(state, seq, &frame, ctx),
+        Msg::ZoomPointerDown(ev) => handle_zoom_pointer_down(state, ev, ctx),
+        Msg::ZoomPointerMove(ev) => handle_zoom_pointer_move(state, ev),
+        Msg::ZoomPointerUp => handle_zoom_pointer_up(state),
+        Msg::ZoomScroll(sc) => handle_zoom_scroll(state, sc),
+        Msg::ZoomKey(ev) => handle_zoom_key(state, ev, ctx),
+        Msg::ZoomStep(delta) => handle_zoom_step(state, delta, ctx),
+        Msg::ZoomReset => handle_zoom_reset(state, ctx),
+        Msg::ZoomToggleFilter => handle_zoom_toggle_filter(state, ctx),
+        Msg::ZoomToggleLive => handle_zoom_toggle_live(state, ctx),
+        Msg::ZoomRecapture => handle_zoom_recapture(state, ctx),
+        Msg::ZoomHudHover(over) => {
+            state.zoom.pointer_over_hud = over;
+        }
+        Msg::ColorPickerCaptureNow { seq } => handle_color_picker_capture_now(state, seq, ctx),
+        Msg::ColorPickerCaptured { seq, frame } => {
+            handle_color_picker_captured(state, seq, &frame, ctx);
+        }
+        Msg::ColorPickerPointerMove(ev) => handle_color_picker_pointer_move(state, ev),
+        Msg::ColorPickerPointerDown(ev) => handle_color_picker_pointer_down(state, ev, ctx),
+        Msg::ColorPickerScroll(sc) => handle_color_picker_scroll(state, sc, ctx),
+        Msg::ColorPickerKey(ev) => handle_color_picker_key(state, ev, ctx),
+        Msg::CloseColorPicker => handle_close_color_picker(state, ctx),
+        Msg::ScreenshotCaptureNow { seq } => handle_screenshot_capture_now(state, seq, ctx),
+        Msg::ScreenshotCaptured { seq, frame } => {
+            handle_screenshot_captured(state, seq, &frame, ctx);
+        }
+        Msg::ScreenshotSetMode(mode) => handle_screenshot_set_mode(state, mode, ctx),
+        Msg::ScreenshotToggleCopy => {
+            state.screenshot.copy_to_clipboard = !state.screenshot.copy_to_clipboard;
+            if !state.screenshot.copy_to_clipboard && !state.screenshot.save_to_file {
+                state.screenshot.save_to_file = true;
+            }
+            state.play_sound(SoundCue::TabChanged, ctx);
+        }
+        Msg::ScreenshotToggleSave => {
+            state.screenshot.save_to_file = !state.screenshot.save_to_file;
+            if !state.screenshot.copy_to_clipboard && !state.screenshot.save_to_file {
+                state.screenshot.copy_to_clipboard = true;
+            }
+            state.play_sound(SoundCue::TabChanged, ctx);
+        }
+        Msg::ScreenshotPointerDown(ev) => handle_screenshot_pointer_down(state, ev, ctx),
+        Msg::ScreenshotPointerMove(ev) => handle_screenshot_pointer_move(state, ev),
+        Msg::ScreenshotPointerUp(ev) => handle_screenshot_pointer_up(state, ev, ctx),
+        Msg::ScreenshotKey(ev) => handle_screenshot_key(state, ev, ctx),
+        Msg::CloseScreenshot => handle_close_screenshot(state, ctx),
+        Msg::ScreenshotPreviewHover(over) => {
+            if let Some(p) = state.screenshot.preview.as_mut() {
+                p.hovered = over;
+            }
+        }
+        Msg::ScreenshotPreviewOpen => handle_screenshot_preview_open(state, ctx),
+        Msg::ScreenshotPreviewFolder => handle_screenshot_preview_folder(state, ctx),
+        Msg::ScreenshotPreviewCopy => handle_screenshot_preview_copy(state, ctx),
+        Msg::ScreenshotPreviewDelete => handle_screenshot_preview_delete(state, ctx),
+        Msg::ScreenshotPreviewDismiss => handle_screenshot_preview_dismiss(state, ctx),
+        Msg::ScreenshotPreviewTimeout(seq) => handle_screenshot_preview_timeout(state, seq),
         Msg::DrunKey(ev) => handle_drun_key(state, ev, ctx),
         Msg::DrunIme(ev) => handle_drun_ime(state, ev, ctx),
         Msg::DrunLaunchIndex(idx) => handle_drun_launch_index(state, idx),
@@ -304,6 +376,116 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
             state.notifications.toggle_dnd(ctx);
             if !state.notifications.dnd {
                 state.play_sound(SoundCue::ToggleOn, ctx);
+            }
+        }
+        Msg::ClipboardEvent(ev) => {
+            if let ClipboardEvent::Changed(snap) = *ev {
+                let keep = state.screenshot.preview_asset_id();
+                state.clipboard.push_snapshot(snap, ctx, keep);
+            }
+        }
+        Msg::PrivacySampled(snap) => {
+            state.privacy = snap;
+        }
+        Msg::ClipboardBarPointerDown(ev) => match ev.button {
+            Some(MouseButton::Left) => {
+                let was_open = state.clipboard.is_popup_open();
+                if was_open {
+                    state.clipboard.close_popup();
+                    state.play_sound(SoundCue::MenuPopdown, ctx);
+                } else {
+                    close_other_overlays(state, Some("clipboard"));
+                    state.clipboard.popup_left_x =
+                        (ev.position.x.get() - 160.0).clamp(8.0, (state.bar_width - 336.0).max(8.0));
+                    state.clipboard.ensure_thumbs_loaded(ctx);
+                    state.clipboard.open_popup();
+                    state.play_sound(SoundCue::MenuPopup, ctx);
+                }
+            }
+            Some(MouseButton::Right) => {
+                state.caffeine_active = !state.caffeine_active;
+                state.play_sound(
+                    if state.caffeine_active {
+                        SoundCue::ToggleOn
+                    } else {
+                        SoundCue::ToggleOff
+                    },
+                    ctx,
+                );
+            }
+            _ => {}
+        },
+        Msg::CloseClipboardPopup => {
+            if state.clipboard.is_popup_open() {
+                state.clipboard.close_popup();
+                state.play_sound(SoundCue::MenuPopdown, ctx);
+            }
+        }
+        Msg::ClipboardPopupScroll(sc) => {
+            let step = scroll_direction_y(sc);
+            if step != 0 && !state.clipboard.entries.is_empty() {
+                let max_idx = state.clipboard.entries.len().saturating_sub(1);
+                let next = if step > 0 {
+                    state.clipboard.scroll_index.saturating_add(step as usize)
+                } else {
+                    state
+                        .clipboard
+                        .scroll_index
+                        .saturating_sub(step.unsigned_abs() as usize)
+                };
+                state.clipboard.scroll_index = next.min(max_idx);
+            }
+        }
+        Msg::ClipboardCopyEntry(id) => {
+            if state.clipboard.copy_entry(id, ctx) {
+                state.clipboard.close_popup();
+                state.play_sound(SoundCue::ToggleOn, ctx);
+            }
+        }
+        Msg::ClipboardOpenEntry(id) => {
+            if state.clipboard.open_entry(id) {
+                state.clipboard.close_popup();
+                state.play_sound(SoundCue::TabChanged, ctx);
+            }
+        }
+        Msg::ClipboardPinEntry(id) => {
+            if state.clipboard.toggle_pin(id) {
+                state.play_sound(SoundCue::TabChanged, ctx);
+            }
+        }
+        Msg::ClipboardDeleteEntry(id) => {
+            let keep = state.screenshot.preview_asset_id();
+            if state.clipboard.delete_entry(id, ctx, keep) {
+                state.play_sound(SoundCue::ToggleOff, ctx);
+            }
+        }
+        Msg::ClipboardClearUnpinned => {
+            let keep = state.screenshot.preview_asset_id();
+            if state.clipboard.clear_unpinned(ctx, keep) {
+                state.play_sound(SoundCue::ToggleOff, ctx);
+            }
+        }
+        Msg::ToggleCaffeine => {
+            state.caffeine_active = !state.caffeine_active;
+            state.play_sound(
+                if state.caffeine_active {
+                    SoundCue::ToggleOn
+                } else {
+                    SoundCue::ToggleOff
+                },
+                ctx,
+            );
+        }
+        Msg::ActiveToolBadgeClick => {
+            if state.zoom.is_live() {
+                handle_close_zoom(state, ctx);
+            } else {
+                let ws = state.active_workspace_key();
+                if state.annotate.pinned_visible && state.annotate.has_strokes(&ws) {
+                    super::ipc::close_other_screen_tools(state, Some("annotate"), ctx);
+                    state.annotate.open();
+                    state.play_sound(SoundCue::MenuPopup, ctx);
+                }
             }
         }
         Msg::MprisEvent(ev) => handle_mpris_event(state, *ev, ctx),
@@ -461,13 +643,49 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
         }
         Msg::CpuSampled(snap) => {
             let now = snap.timestamp;
+            state.telemetry_graph.record_cpu(&snap);
             state.cpu = Some(snap);
             if let Some(watts) = state.cpu_power_tracker.sample_now(now) {
                 state.cpu_power_watts = Some(watts);
             }
         }
         Msg::GpuSampled(snap) => {
+            state.telemetry_graph.record_gpu(&snap);
             state.gpu = Some(snap);
+        }
+        Msg::TelemetryBarPointerDown { kind, ev } => {
+            if ev.button == Some(MouseButton::Left) {
+                if state.telemetry_graph.is_popup_open() && state.telemetry_graph.active == kind {
+                    state.telemetry_graph.close();
+                    state.play_sound(SoundCue::MenuPopdown, ctx);
+                } else {
+                    let was_open = state.telemetry_graph.is_popup_open();
+                    close_other_overlays(state, Some("telemetry"));
+                    let left_x = (ev.position.x.get() - 173.0)
+                        .clamp(8.0, (state.bar_width - 354.0).max(8.0));
+                    state.telemetry_graph.open(kind, left_x);
+                    state.play_sound(
+                        if was_open {
+                            SoundCue::TabChanged
+                        } else {
+                            SoundCue::MenuPopup
+                        },
+                        ctx,
+                    );
+                }
+            }
+        }
+        Msg::TelemetrySelectKind(kind) => {
+            if state.telemetry_graph.active != kind {
+                state.telemetry_graph.select(kind);
+                state.play_sound(SoundCue::TabChanged, ctx);
+            }
+        }
+        Msg::CloseTelemetryPopup => {
+            if state.telemetry_graph.is_popup_open() {
+                state.telemetry_graph.close();
+                state.play_sound(SoundCue::MenuPopdown, ctx);
+            }
         }
         Msg::SensorsSampled(sensors) => {
             state.cpu_temp_celsius = crate::app::telemetry::pick_cpu_temperature(&sensors);
@@ -509,12 +727,14 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
             }
         }
         Msg::MemorySampled(snap) => {
+            state.telemetry_graph.record_memory(&snap);
             state.memory = Some(snap);
         }
         Msg::DiskSampled(snap) => {
             state.apply_disk_snapshot(&snap);
         }
         Msg::NetworkSampled(snap) => {
+            state.telemetry_graph.record_network(&snap);
             state.network = Some(snap);
         }
         Msg::NetworkManagerUpdated(snap) => {
@@ -576,7 +796,7 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
             state.quick_menu.close_popup();
             state.settings_ui.unfocus_inputs();
             state.settings_ui.open_dropdown = None;
-            if !state.hovered.is_clock_group() {
+            if !state.hovered.is_clock_group() && !state.is_clock_slide_pinned() {
                 state.clock_menu_anim.set_open(false);
             }
             if was_open {
@@ -585,6 +805,18 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
         }
         Msg::QuickMenuTogglePower => handle_quick_menu_toggle_power(state, ctx),
         Msg::QuickMenuToggleSettings => handle_toggle_settings(state, ctx),
+        Msg::QuickMenuToggleToolbox => handle_quick_menu_toggle_toolbox(state, ctx),
+        Msg::QuickMenuActionScroll(sc) => {
+            let dir = scroll_direction_y(sc);
+            if state.quick_menu.scroll_actions(dir) {
+                state.play_sound(SoundCue::TabChanged, ctx);
+            }
+        }
+        Msg::QuickMenuActionCycle => {
+            if state.quick_menu.cycle_action_scroll() {
+                state.play_sound(SoundCue::TabChanged, ctx);
+            }
+        }
         Msg::QuickMenuPowerAction(action) => handle_power_action(state, action, ctx),
         Msg::QuickMenuPowerTick => handle_power_countdown_tick(state, ctx),
         Msg::QuickMenuCancelPower => {

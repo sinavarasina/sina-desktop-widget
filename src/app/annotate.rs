@@ -431,12 +431,17 @@ impl AnnotateState {
         self.anim.progress()
     }
 
+    /// Returns true if the given workspace has at least one committed stroke.
+    #[must_use]
+    pub fn has_strokes(&self, ws: &WorkspaceKey) -> bool {
+        self.boards.get(ws).is_some_and(|b| !b.is_empty())
+    }
+
     /// Whether the overlay surface should be mounted (either interactive mode, animating out,
     /// or pinned pass-through with at least one stroke on the current workspace).
     #[must_use]
     pub fn should_mount_surface(&self, ws: &WorkspaceKey) -> bool {
-        self.anim.is_visible()
-            || (self.pinned_visible && self.boards.get(ws).is_some_and(|b| !b.is_empty()))
+        self.anim.is_visible() || (self.pinned_visible && self.has_strokes(ws))
     }
 
     pub fn open(&mut self) {

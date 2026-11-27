@@ -383,19 +383,17 @@ pub enum RightMetricId {
     Memory,
     Network,
     Gpu,
-    Temp,
     Disk,
     Bluetooth,
 }
 
 impl RightMetricId {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 7] = [
         Self::Audio,
         Self::Cpu,
         Self::Memory,
         Self::Network,
         Self::Gpu,
-        Self::Temp,
         Self::Disk,
         Self::Bluetooth,
     ];
@@ -408,7 +406,6 @@ impl RightMetricId {
             Self::Memory => "memory",
             Self::Network => "network",
             Self::Gpu => "gpu",
-            Self::Temp => "temp",
             Self::Disk => "disk",
             Self::Bluetooth => "bluetooth",
         }
@@ -422,7 +419,6 @@ impl RightMetricId {
             "memory" | "mem" => Some(Self::Memory),
             "network" | "net" => Some(Self::Network),
             "gpu" => Some(Self::Gpu),
-            "temp" | "thermal" => Some(Self::Temp),
             "disk" | "storage" => Some(Self::Disk),
             "bluetooth" | "bt" => Some(Self::Bluetooth),
             _ => None,
@@ -437,7 +433,6 @@ impl RightMetricId {
             Self::Memory => "Memory",
             Self::Network => "Network",
             Self::Gpu => "GPU",
-            Self::Temp => "Temp",
             Self::Disk => "Disk",
             Self::Bluetooth => "Bluetooth",
         }
@@ -447,7 +442,7 @@ impl RightMetricId {
     pub const fn default_placement(self) -> MetricPlacement {
         match self {
             Self::Audio | Self::Cpu | Self::Memory | Self::Network => MetricPlacement::Bar,
-            Self::Gpu | Self::Temp | Self::Disk | Self::Bluetooth => MetricPlacement::Drawer,
+            Self::Gpu | Self::Disk | Self::Bluetooth => MetricPlacement::Drawer,
         }
     }
 
@@ -460,7 +455,6 @@ impl RightMetricId {
             Self::Memory => 58.0,
             Self::Network => 68.0,
             Self::Gpu => crate::theme::GPU_EXPANDED_WIDTH,
-            Self::Temp => crate::theme::TEMP_EXPANDED_WIDTH,
             Self::Disk => crate::theme::DISK_EXPANDED_WIDTH,
             Self::Bluetooth => crate::theme::BT_EXPANDED_WIDTH,
         }
@@ -1242,10 +1236,13 @@ mod tests {
     fn right_metrics_normalizes_partial_and_duplicate_lists() {
         let partial = r#"
 [widgets]
-right_metrics = "bluetooth:bar,audio:drawer,bluetooth:off"
+right_metrics = "bluetooth:bar,temp:drawer,audio:drawer,bluetooth:off"
 "#;
         let parsed_partial = WidgetConfig::from_toml(partial);
-        assert_eq!(parsed_partial.widgets.right_metrics.len(), 8);
+        assert_eq!(
+            parsed_partial.widgets.right_metrics.len(),
+            RightMetricId::ALL.len()
+        );
         assert_eq!(
             parsed_partial.widgets.right_metrics[0],
             RightMetricSlot {

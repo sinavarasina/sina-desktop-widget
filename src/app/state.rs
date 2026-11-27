@@ -18,6 +18,8 @@ use super::asset_lru::PathAssetCache;
 pub use super::audio::AudioUiState;
 pub use super::bluetooth::BluetoothUiState;
 pub use super::booster::ForegroundBooster;
+pub use super::clipboard::ClipboardState;
+pub use super::color_picker::ColorPickerState;
 pub use super::config::{SettingsUiState, WidgetConfig};
 pub use super::desktop_sprite::DesktopSpriteState;
 pub use super::disk::DiskUiState;
@@ -26,14 +28,17 @@ pub use super::mpris::MprisState;
 pub use super::msg::Msg;
 pub use super::notifications::NotificationStore;
 pub use super::quick_menu::QuickMenuState;
+pub use super::screenshot::ScreenshotState;
 pub use super::scroller::WindowScroller;
 pub use super::sounds::{SoundCue, SoundEngine};
 pub use super::sysinfo::SysInfoState;
 pub use super::telemetry::CpuPowerTracker;
+pub use super::telemetry_graph::{TelemetryGraphKind, TelemetryGraphState};
 pub use super::tray_cache::resolve_tray_icon;
 use super::tray_cache::upsert_tray_entry_into;
 pub use super::types::{AudioControlTarget, HoverTarget, TrayEntry, TrayMenuPopup};
 pub use super::window_info::WindowInfoState;
+pub use super::zoom::ZoomState;
 
 pub const DRAWER_ANIM_DURATION: Duration = Duration::from_millis(260);
 
@@ -60,6 +65,13 @@ pub struct State {
     pub booster: ForegroundBooster,
     pub drun: DrunState,
     pub annotate: AnnotateState,
+    pub zoom: ZoomState,
+    pub color_picker: ColorPickerState,
+    pub screenshot: ScreenshotState,
+    pub clipboard: ClipboardState,
+    pub privacy: PrivacySnapshot,
+    pub has_camera_hw: bool,
+    pub caffeine_active: bool,
     pub notifications: NotificationStore,
     pub mpris: MprisState,
 
@@ -80,6 +92,7 @@ pub struct State {
 
     pub network: Option<NetworkSnapshot>,
     pub nm: Option<NetworkManagerSnapshot>,
+    pub telemetry_graph: TelemetryGraphState,
 
     pub disk_used_gb: f64,
     pub disk_free_gb: f64,
@@ -146,12 +159,17 @@ impl State {
             || self.quick_menu.is_animating_popup()
             || self.desktop_sprite.is_fading()
             || self.notifications.is_animating_center()
+            || self.clipboard.is_animating_popup()
             || self.mpris.is_animating_popup()
+            || self.mpris.is_animating_bar()
             || self.bt_ui.is_animating_popup()
             || self.disk_ui.is_animating_popup()
             || self.audio_ui.is_animating_popup()
+            || self.telemetry_graph.is_animating_popup()
             || self.drun.is_animating()
             || self.annotate.is_animating()
+            || self.zoom.is_animating()
+            || self.screenshot.is_animating_preview()
     }
 
     /// Advances all active VSync UI animations to `now`.
@@ -186,8 +204,18 @@ impl State {
         if self.notifications.is_animating_center() {
             self.notifications.advance_center_animation(now);
         }
+        if self.clipboard.is_animating_popup() {
+            self.clipboard.advance_popup_animation(now);
+            if !self.clipboard.is_popup_visible() {
+                self.clipboard
+                    .evict_thumbs(ctx, self.screenshot.preview_asset_id());
+            }
+        }
         if self.mpris.is_animating_popup() {
             self.mpris.advance_popup_animation(now);
+        }
+        if self.mpris.is_animating_bar() {
+            self.mpris.advance_bar_animation(now);
         }
         if self.bt_ui.is_animating_popup() {
             self.bt_ui.advance_popup_animation(now);
@@ -197,6 +225,9 @@ impl State {
         }
         if self.audio_ui.is_animating_popup() {
             self.audio_ui.advance_popup_animation(now);
+        }
+        if self.telemetry_graph.is_animating_popup() {
+            self.telemetry_graph.advance_popup_animation(now);
         }
         if self.drun.is_animating() {
             self.drun.advance_animation(now);
@@ -208,6 +239,35 @@ impl State {
                 ctx.trim_memory();
             }
         }
+        if self.zoom.is_animating() {
+            let res = self.zoom.advance(now);
+            if let Some(old_snapshot) = res.unloaded_snapshot {
+                ctx.unload_image(old_snapshot);
+                ctx.trim_memory();
+            }
+            if let Some(live_z) = res.live_zoom_update
+                && let Ok(hc) = ctx.hyprland()
+            {
+                let _ = hc.keyword("cursor:zoom_factor", &format!("{live_z:.3}"));
+                if res.live_finished {
+                    let _ = hc.keyword("cursor:zoom_disable_aa", "false");
+                }
+            }
+        }
+        if self.screenshot.is_animating_preview()
+            && let Some(old_thumb) = self.screenshot.advance_preview_animation(now)
+        {
+            if !self.clipboard.uses_asset(old_thumb.id) {
+                ctx.unload_image(old_thumb);
+            }
+            ctx.trim_memory();
+        }
+    }
+
+    /// True while Quick Menu keeps the Clock slide-out pinned open.
+    #[must_use]
+    pub const fn is_clock_slide_pinned(&self) -> bool {
+        self.quick_menu.is_popup_open()
     }
 
     /// Resolves the canonical key for the currently focused Hyprland workspace (special, named, or numbered).
@@ -252,7 +312,7 @@ impl State {
             if target.is_clock_group() {
                 self.clock_menu_anim.set_open(true);
                 self.clock_menu_leave_deadline = None;
-            } else if !self.quick_menu.is_popup_open() {
+            } else if !self.is_clock_slide_pinned() {
                 self.clock_menu_anim.set_open(false);
                 self.clock_menu_leave_deadline = None;
             }
@@ -263,8 +323,8 @@ impl State {
                 // Brief grace avoids flicker when sliding between `expand_sign` and drawer modules.
                 self.drawer_leave_deadline = Some(Instant::now() + Duration::from_millis(120));
             }
-            if target.is_clock_group() && !self.quick_menu.is_popup_open() {
-                // Brief grace avoids flicker when sliding from `Clock` into `ClockMenu`.
+            if target.is_clock_group() && !self.is_clock_slide_pinned() {
+                // Brief grace avoids flicker when sliding across `Clock`, `ClockMenu`, and `ClockToolbox`.
                 self.clock_menu_leave_deadline = Some(Instant::now() + Duration::from_millis(140));
             }
         }
@@ -279,7 +339,7 @@ impl State {
 
     pub fn expire_clock_menu_leave(&mut self) {
         self.clock_menu_leave_deadline = None;
-        if !self.hovered.is_clock_group() && !self.quick_menu.is_popup_open() {
+        if !self.hovered.is_clock_group() && !self.is_clock_slide_pinned() {
             self.clock_menu_anim.set_open(false);
         }
     }

@@ -7,6 +7,12 @@ use crate::app::state::{SoundCue, State};
 
 use super::drun::resolve_visible_drun_icons;
 use super::quick_menu::refresh_power_capabilities_if_empty;
+use super::tools::{
+    handle_close_color_picker, handle_close_screenshot, open_color_picker, open_screenshot,
+};
+use super::zoom::{
+    any_screen_tool_mounted, handle_close_zoom, open_zoom, reset_hyprland_live_zoom,
+};
 
 fn play_overlay_transition(state: &mut State, was_open: bool, now_open: bool, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     if was_open != now_open {
@@ -21,6 +27,38 @@ fn play_overlay_transition(state: &mut State, was_open: bool, now_open: bool, ct
     }
 }
 
+/// Closes only competing fullscreen screen tools (`annotate`, `zoom`, `color_picker`, `screenshot`)
+/// while preserving all open bar widgets and popups so they can be screenshotted, color-picked,
+/// zoomed, or annotated directly.
+pub fn close_other_screen_tools(
+    state: &mut State,
+    keep: Option<&str>,
+    ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
+) {
+    if keep != Some("annotate") && state.annotate.is_active() {
+        let ws = state.active_workspace_key();
+        state.annotate.close(&ws);
+    }
+    if keep != Some("zoom") && state.zoom.is_open_or_capturing() {
+        if state.zoom.is_live() {
+            reset_hyprland_live_zoom(ctx);
+        }
+        if let Some(asset) = state.zoom.close_immediate() {
+            ctx.unload_image(asset);
+        }
+    }
+    if keep != Some("color_picker") && state.color_picker.is_open_or_capturing()
+        && let Some(asset) = state.color_picker.close_immediate()
+    {
+        ctx.unload_image(asset);
+    }
+    if keep != Some("screenshot") && state.screenshot.is_open_or_capturing()
+        && let Some(asset) = state.screenshot.close_immediate()
+    {
+        ctx.unload_image(asset);
+    }
+}
+
 /// Closes all overlay popups except the named `keep` slot so overlays never collide.
 pub fn close_other_overlays(state: &mut State, keep: Option<&str>) {
     if keep != Some("drun") {
@@ -28,6 +66,9 @@ pub fn close_other_overlays(state: &mut State, keep: Option<&str>) {
     }
     if keep != Some("notifications") {
         state.notifications.close_center();
+    }
+    if keep != Some("clipboard") {
+        state.clipboard.close_popup();
     }
     if keep != Some("mpris") {
         state.mpris.close_popup();
@@ -41,6 +82,9 @@ pub fn close_other_overlays(state: &mut State, keep: Option<&str>) {
     if keep != Some("volume") {
         state.audio_ui.close_popup();
     }
+    if keep != Some("telemetry") {
+        state.telemetry_graph.close();
+    }
     if keep != Some("calendar") {
         state.calendar_open = false;
     }
@@ -48,13 +92,25 @@ pub fn close_other_overlays(state: &mut State, keep: Option<&str>) {
         let ws = state.active_workspace_key();
         state.annotate.close(&ws);
     }
+    if keep != Some("zoom")
+        && state.zoom.is_open_or_capturing()
+        && (keep.is_none() || !state.zoom.is_live())
+    {
+        state.zoom.begin_close(std::time::Instant::now());
+    }
+    if keep != Some("color_picker") && state.color_picker.is_open_or_capturing() {
+        let _ = state.color_picker.close_immediate();
+    }
+    if keep != Some("screenshot") && state.screenshot.is_open_or_capturing() {
+        let _ = state.screenshot.close_immediate();
+    }
     if keep != Some("quick_menu") {
         state.quick_menu.close_popup();
         state.settings_ui.unfocus_inputs();
         state.settings_ui.open_dropdown = None;
-        if !state.hovered.is_clock_group() {
-            state.clock_menu_anim.set_open(false);
-        }
+    }
+    if !state.hovered.is_clock_group() && !state.is_clock_slide_pinned() {
+        state.clock_menu_anim.set_open(false);
     }
 }
 
@@ -107,6 +163,32 @@ pub fn handle_ipc_control(
                 if !state.notifications.dnd {
                     state.play_sound(SoundCue::ToggleOn, ctx);
                 }
+            }
+        }
+        IpcTarget::Clipboard => {
+            let was_open = state.clipboard.is_popup_open();
+            let next = resolve_next(was_open, action);
+            if next {
+                close_other_overlays(state, Some("clipboard"));
+                state.clipboard.ensure_thumbs_loaded(ctx);
+                state.clipboard.open_popup();
+            } else {
+                state.clipboard.close_popup();
+            }
+            play_overlay_transition(state, was_open, state.clipboard.is_popup_open(), ctx);
+        }
+        IpcTarget::Caffeine => {
+            let want_on = resolve_next(state.caffeine_active, action);
+            if want_on != state.caffeine_active {
+                state.caffeine_active = want_on;
+                state.play_sound(
+                    if want_on {
+                        SoundCue::ToggleOn
+                    } else {
+                        SoundCue::ToggleOff
+                    },
+                    ctx,
+                );
             }
         }
         IpcTarget::Volume => {
@@ -179,11 +261,32 @@ pub fn handle_ipc_control(
                 state.clock_menu_leave_deadline = None;
             } else {
                 state.quick_menu.close_popup();
-                if !state.hovered.is_clock_group() {
+                if !state.hovered.is_clock_group() && !state.is_clock_slide_pinned() {
                     state.clock_menu_anim.set_open(false);
                 }
             }
             play_overlay_transition(state, was_open, state.quick_menu.is_popup_open(), ctx);
+        }
+        IpcTarget::Toolbox => {
+            let was_open = state.quick_menu.is_popup_open() && state.quick_menu.toolbox_open;
+            let next = resolve_next(was_open, action);
+            if next {
+                close_other_overlays(state, Some("quick_menu"));
+                refresh_power_capabilities_if_empty(state, ctx);
+                state.quick_menu.open_popup(ctx);
+                if !state.quick_menu.toolbox_open {
+                    state.quick_menu.toggle_toolbox_menu();
+                }
+                state.clock_menu_anim.set_open(true);
+                state.clock_menu_leave_deadline = None;
+            } else {
+                state.quick_menu.close_popup();
+                if !state.hovered.is_clock_group() && !state.is_clock_slide_pinned() {
+                    state.clock_menu_anim.set_open(false);
+                }
+            }
+            let now_open = state.quick_menu.is_popup_open() && state.quick_menu.toolbox_open;
+            play_overlay_transition(state, was_open, now_open, ctx);
         }
         IpcTarget::Calendar => {
             let was_open = state.calendar_open;
@@ -201,7 +304,7 @@ pub fn handle_ipc_control(
             let next = resolve_next(was_open, action);
             let ws = state.active_workspace_key();
             if next {
-                close_other_overlays(state, Some("annotate"));
+                close_other_screen_tools(state, Some("annotate"), ctx);
                 state.annotate.open();
             } else {
                 state.annotate.close(&ws);
@@ -210,6 +313,39 @@ pub fn handle_ipc_control(
                 }
             }
             play_overlay_transition(state, was_open, state.annotate.is_active(), ctx);
+        }
+        IpcTarget::Zoom => {
+            let is_open = state.zoom.is_open_or_capturing() && !state.zoom.is_closing();
+            let next = resolve_next(is_open, action);
+            if next && !is_open {
+                let had_tool = any_screen_tool_mounted(state);
+                open_zoom(state, had_tool, None, ctx);
+            } else if !next && state.zoom.is_open_or_capturing() {
+                handle_close_zoom(state, ctx);
+            }
+        }
+        IpcTarget::ColorPicker => {
+            let is_open = state.color_picker.is_open_or_capturing();
+            let next = resolve_next(is_open, action);
+            if next && !is_open {
+                let had_tool = any_screen_tool_mounted(state);
+                open_color_picker(state, had_tool, ctx);
+            } else if !next && is_open {
+                handle_close_color_picker(state, ctx);
+            }
+        }
+        IpcTarget::Screenshot(mode_opt) => {
+            let is_open = state.screenshot.is_open_or_capturing();
+            let next = resolve_next(is_open, action);
+            if next && !is_open {
+                let had_tool = any_screen_tool_mounted(state);
+                let mode = mode_opt.unwrap_or(crate::app::screenshot::ScreenshotMode::Area);
+                let auto_commit_full =
+                    mode_opt == Some(crate::app::screenshot::ScreenshotMode::Full);
+                open_screenshot(state, mode, auto_commit_full, had_tool, ctx);
+            } else if !next && is_open {
+                handle_close_screenshot(state, ctx);
+            }
         }
     }
 }

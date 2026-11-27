@@ -1,11 +1,27 @@
 //! MPRIS session state, active player selection, album art loading, and marquee scrolling.
 
+use std::f32::consts::TAU;
 use std::path::Path;
 use std::time::Instant;
 
 use crate::app::anim::RevealAnim;
 use crate::app::asset_lru::PathAssetCache;
+use crate::theme::{MPRIS_BAR_TEXT_WIDTH, font_ui, font_ui_bold, font_ui_semibold};
+use crate::widgets::text::format_artist_album;
 use waywi::prelude::*;
+
+/// Inner horizontal clip width of the MPRIS bar text column (`MPRIS_BAR_TEXT_WIDTH - 2*4px` padding).
+pub const MPRIS_BAR_TEXT_INNER_W: f32 = MPRIS_BAR_TEXT_WIDTH - 8.0;
+/// Inner horizontal clip width of the MPRIS popup text column (`310 - 24 pad - 52 art - 12 gap`).
+pub const MPRIS_POPUP_TEXT_INNER_W: f32 = 222.0;
+/// Pixel gap between the end of a scrolling bar label and its next seamless loop.
+pub const MPRIS_MARQUEE_GAP_PX: f32 = 28.0;
+/// Smooth horizontal scroll speed in logical px/s for overflowing MPRIS bar labels.
+const MPRIS_MARQUEE_SPEED_PX_S: f32 = 26.0;
+/// Initial hold before starting / restarting a seamless marquee loop.
+const MPRIS_MARQUEE_PAUSE_SECS: f32 = 1.6;
+/// Vinyl album disc angular velocity (~8.4s per revolution) while playing.
+const MPRIS_DISC_SPIN_RAD_S: f32 = 0.75;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MprisControlAction {
@@ -27,6 +43,26 @@ pub struct MprisState {
     pub sub_ticks: u8,
     pub popup_anim: RevealAnim,
     pub popup_left_x: f32,
+    /// Current vinyl disc rotation angle in radians (advances via VSync while playing).
+    pub disc_angle_rad: f32,
+    /// Exact measured bar top-line text (`artist - album`) and pixel width.
+    pub bar_top_text: String,
+    pub bar_top_width_px: f32,
+    pub bar_top_scroll_px: f32,
+    pub bar_top_pause_secs: f32,
+    /// Exact measured bar bottom-line text (`title`) and pixel width.
+    pub bar_bot_text: String,
+    pub bar_bot_width_px: f32,
+    pub bar_bot_scroll_px: f32,
+    pub bar_bot_pause_secs: f32,
+    /// Exact measured popup title (`11.5px` bold) & subtitle (`10.5px` regular) widths and scroll state.
+    pub popup_title_width_px: f32,
+    pub popup_title_scroll_px: f32,
+    pub popup_title_pause_secs: f32,
+    pub popup_sub_width_px: f32,
+    pub popup_sub_scroll_px: f32,
+    pub popup_sub_pause_secs: f32,
+    last_bar_anim_tick: Option<Instant>,
 }
 
 impl MprisState {
@@ -79,20 +115,114 @@ impl MprisState {
     }
 
     #[must_use]
+    pub fn is_playing(&self) -> bool {
+        self.active_player()
+            .is_some_and(|p| p.status == MprisPlaybackStatus::Playing)
+    }
+
+    #[must_use]
     pub fn is_animating_popup(&self) -> bool {
         self.popup_anim.is_animating()
+    }
+
+    /// True while the bar vinyl disc or any pixel-exact MPRIS marquee needs smooth VSync frames.
+    #[must_use]
+    pub fn is_animating_bar(&self) -> bool {
+        (self.has_active_session() && self.is_playing())
+            || (self.is_popup_visible()
+                && (self.popup_title_overflows() || self.popup_sub_overflows()))
+    }
+
+    #[must_use]
+    pub const fn top_overflows(&self) -> bool {
+        self.bar_top_width_px > MPRIS_BAR_TEXT_INNER_W + 0.5
+    }
+
+    #[must_use]
+    pub const fn bot_overflows(&self) -> bool {
+        self.bar_bot_width_px > MPRIS_BAR_TEXT_INNER_W + 0.5
+    }
+
+    #[must_use]
+    pub const fn popup_title_overflows(&self) -> bool {
+        self.popup_title_width_px > MPRIS_POPUP_TEXT_INNER_W + 0.5
+    }
+
+    #[must_use]
+    pub const fn popup_sub_overflows(&self) -> bool {
+        self.popup_sub_width_px > MPRIS_POPUP_TEXT_INNER_W + 0.5
     }
 
     pub fn advance_popup_animation(&mut self, now: Instant) {
         self.popup_anim.advance(now);
     }
 
+    /// Advances smooth VSync vinyl disc rotation and pixel-exact bar & popup marquee offsets.
+    pub fn advance_bar_animation(&mut self, now: Instant) {
+        if !self.is_animating_bar() {
+            self.last_bar_anim_tick = None;
+            return;
+        }
+        let dt = self.last_bar_anim_tick.map_or(1.0 / 60.0, |prev| {
+            now.saturating_duration_since(prev)
+                .as_secs_f32()
+                .clamp(1.0 / 240.0, 0.05)
+        });
+        self.last_bar_anim_tick = Some(now);
+
+        if self.has_active_session() && self.is_playing() {
+            if self.art_asset.is_some() {
+                self.disc_angle_rad = (self.disc_angle_rad + dt * MPRIS_DISC_SPIN_RAD_S) % TAU;
+            }
+            step_pixel_marquee(
+                self.bar_top_width_px,
+                MPRIS_BAR_TEXT_INNER_W,
+                &mut self.bar_top_scroll_px,
+                &mut self.bar_top_pause_secs,
+                dt,
+            );
+            step_pixel_marquee(
+                self.bar_bot_width_px,
+                MPRIS_BAR_TEXT_INNER_W,
+                &mut self.bar_bot_scroll_px,
+                &mut self.bar_bot_pause_secs,
+                dt,
+            );
+        }
+        if self.is_popup_visible() {
+            step_pixel_marquee(
+                self.popup_title_width_px,
+                MPRIS_POPUP_TEXT_INNER_W,
+                &mut self.popup_title_scroll_px,
+                &mut self.popup_title_pause_secs,
+                dt,
+            );
+            step_pixel_marquee(
+                self.popup_sub_width_px,
+                MPRIS_POPUP_TEXT_INNER_W,
+                &mut self.popup_sub_scroll_px,
+                &mut self.popup_sub_pause_secs,
+                dt,
+            );
+        }
+    }
+
     pub fn open_popup(&mut self) {
         self.popup_anim.set_open(true);
+        self.reset_popup_marquee();
     }
 
     pub fn toggle_popup(&mut self) {
-        self.popup_anim.toggle();
+        if self.popup_anim.toggle() {
+            self.reset_popup_marquee();
+        }
+    }
+
+    fn reset_popup_marquee(&mut self) {
+        self.popup_title_scroll_px = 0.0;
+        self.popup_title_pause_secs = MPRIS_MARQUEE_PAUSE_SECS;
+        self.popup_sub_scroll_px = 0.0;
+        self.popup_sub_pause_secs = MPRIS_MARQUEE_PAUSE_SECS;
     }
 
     pub fn close_popup(&mut self) {
@@ -176,6 +306,84 @@ impl MprisState {
             self.selected_service = Some(first.service_name.clone());
         }
 
+        let (top_raw, bot_raw) = if let Some(player) = self.active_player() {
+            let top = format_artist_album(player);
+            let bot = player
+                .title
+                .as_deref()
+                .filter(|s| !s.trim().is_empty())
+                .or(player.identity.as_deref())
+                .unwrap_or("Playing")
+                .trim()
+                .to_owned();
+            (top, bot)
+        } else {
+            (String::new(), String::new())
+        };
+
+        if top_raw != self.bar_top_text {
+            self.bar_top_text = top_raw;
+            if self.bar_top_text.is_empty() {
+                self.bar_top_width_px = 0.0;
+                self.popup_sub_width_px = 0.0;
+            } else {
+                let bar_opts = TextLayoutOptions::new(font_ui(), 9.5.logical_px()).line_height(1.05);
+                self.bar_top_width_px = ctx
+                    .measure_text_cursor_with(&self.bar_top_text, &bar_opts, self.bar_top_text.len())
+                    .size
+                    .width
+                    .get();
+                let popup_opts = TextLayoutOptions::new(font_ui(), 10.5.logical_px());
+                self.popup_sub_width_px = ctx
+                    .measure_text_cursor_with(
+                        &self.bar_top_text,
+                        &popup_opts,
+                        self.bar_top_text.len(),
+                    )
+                    .size
+                    .width
+                    .get();
+            }
+            self.bar_top_scroll_px = 0.0;
+            self.bar_top_pause_secs = MPRIS_MARQUEE_PAUSE_SECS;
+            self.popup_sub_scroll_px = 0.0;
+            self.popup_sub_pause_secs = MPRIS_MARQUEE_PAUSE_SECS;
+        }
+
+        if bot_raw != self.bar_bot_text {
+            self.bar_bot_text = bot_raw;
+            if self.bar_bot_text.is_empty() {
+                self.bar_bot_width_px = 0.0;
+                self.popup_title_width_px = 0.0;
+            } else {
+                let bar_opts =
+                    TextLayoutOptions::new(font_ui_semibold(), 10.0.logical_px()).line_height(1.05);
+                self.bar_bot_width_px = ctx
+                    .measure_text_cursor_with(&self.bar_bot_text, &bar_opts, self.bar_bot_text.len())
+                    .size
+                    .width
+                    .get();
+                let popup_opts = TextLayoutOptions::new(font_ui_bold(), 11.5.logical_px());
+                self.popup_title_width_px = ctx
+                    .measure_text_cursor_with(
+                        &self.bar_bot_text,
+                        &popup_opts,
+                        self.bar_bot_text.len(),
+                    )
+                    .size
+                    .width
+                    .get();
+            }
+            self.bar_bot_scroll_px = 0.0;
+            self.bar_bot_pause_secs = MPRIS_MARQUEE_PAUSE_SECS;
+            self.popup_title_scroll_px = 0.0;
+            self.popup_title_pause_secs = MPRIS_MARQUEE_PAUSE_SECS;
+        }
+
+        if !self.is_animating_bar() {
+            self.last_bar_anim_tick = None;
+        }
+
         let art_url = self
             .active_player()
             .and_then(|p| p.art_url.clone())
@@ -186,6 +394,33 @@ impl MprisState {
         }
         self.art_url_loaded.clone_from(&art_url);
         self.art_asset = resolve_art_url(&art_url, path_cache, ctx);
+        self.disc_angle_rad = 0.0;
+    }
+}
+
+fn step_pixel_marquee(
+    width_px: f32,
+    box_w: f32,
+    scroll_px: &mut f32,
+    pause_secs: &mut f32,
+    dt: f32,
+) {
+    if width_px <= box_w + 0.5 {
+        *scroll_px = 0.0;
+        *pause_secs = MPRIS_MARQUEE_PAUSE_SECS;
+        return;
+    }
+    if *pause_secs > 0.0 {
+        *pause_secs = (*pause_secs - dt).max(0.0);
+        return;
+    }
+    let cycle = width_px + MPRIS_MARQUEE_GAP_PX;
+    let next = *scroll_px + dt * MPRIS_MARQUEE_SPEED_PX_S;
+    if next >= cycle {
+        *scroll_px = 0.0;
+        *pause_secs = MPRIS_MARQUEE_PAUSE_SECS;
+    } else {
+        *scroll_px = next;
     }
 }
 

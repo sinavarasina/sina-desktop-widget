@@ -17,6 +17,9 @@ use super::disk::DiskMenuAction;
 use super::ipc::{IpcAction, IpcTarget};
 use super::mpris::MprisControlAction;
 use super::quick_menu::PowerAction;
+use super::screenshot::ScreenshotMode;
+use super::telemetry_graph::TelemetryGraphKind;
+use super::toolbox::ToolboxTool;
 #[cfg(test)]
 use super::types::TrayMenuPopup;
 use super::types::{AudioControlTarget, HoverTarget};
@@ -34,7 +37,6 @@ pub enum Msg {
     ScrollTick,
     ToggleDrun,
     CloseDrun,
-    ToggleAnnotate,
     CloseAnnotate,
     AnnotatePointerDown(PointerEvent),
     AnnotatePointerMove(PointerEvent),
@@ -51,6 +53,60 @@ pub enum Msg {
     AnnotateClearWorkspace,
     AnnotateClearAll,
     AnnotateTogglePin,
+    ToolboxLaunch(ToolboxTool),
+    CloseZoom,
+    ZoomCaptureNow {
+        seq: u64,
+    },
+    ZoomCaptured {
+        seq: u64,
+        frame: Arc<std::result::Result<ScreencopyFrame, String>>,
+    },
+    ZoomPointerDown(PointerEvent),
+    ZoomPointerMove(PointerEvent),
+    ZoomPointerUp,
+    ZoomScroll(ScrollEvent),
+    ZoomKey(KeyEvent),
+    ZoomStep(i32),
+    ZoomReset,
+    ZoomToggleFilter,
+    ZoomToggleLive,
+    ZoomRecapture,
+    ZoomHudHover(bool),
+    ColorPickerCaptureNow {
+        seq: u64,
+    },
+    ColorPickerCaptured {
+        seq: u64,
+        frame: Arc<std::result::Result<ScreencopyFrame, String>>,
+    },
+    ColorPickerPointerMove(PointerEvent),
+    ColorPickerPointerDown(PointerEvent),
+    ColorPickerScroll(ScrollEvent),
+    ColorPickerKey(KeyEvent),
+    CloseColorPicker,
+    ScreenshotCaptureNow {
+        seq: u64,
+    },
+    ScreenshotCaptured {
+        seq: u64,
+        frame: Arc<std::result::Result<ScreencopyFrame, String>>,
+    },
+    ScreenshotSetMode(ScreenshotMode),
+    ScreenshotToggleCopy,
+    ScreenshotToggleSave,
+    ScreenshotPointerDown(PointerEvent),
+    ScreenshotPointerMove(PointerEvent),
+    ScreenshotPointerUp(PointerEvent),
+    ScreenshotKey(KeyEvent),
+    CloseScreenshot,
+    ScreenshotPreviewHover(bool),
+    ScreenshotPreviewOpen,
+    ScreenshotPreviewFolder,
+    ScreenshotPreviewCopy,
+    ScreenshotPreviewDelete,
+    ScreenshotPreviewDismiss,
+    ScreenshotPreviewTimeout(u64),
     DrunKey(KeyEvent),
     DrunIme(ImeEvent),
     DrunLaunchIndex(usize),
@@ -81,6 +137,18 @@ pub enum Msg {
     },
     NotifCenterClearAll,
     NotifCenterToggleDnd,
+    ClipboardEvent(Box<ClipboardEvent>),
+    PrivacySampled(PrivacySnapshot),
+    ClipboardBarPointerDown(PointerEvent),
+    CloseClipboardPopup,
+    ClipboardPopupScroll(ScrollEvent),
+    ClipboardCopyEntry(u64),
+    ClipboardOpenEntry(u64),
+    ClipboardPinEntry(u64),
+    ClipboardDeleteEntry(u64),
+    ClipboardClearUnpinned,
+    ToggleCaffeine,
+    ActiveToolBadgeClick,
     MprisEvent(Box<MprisEvent>),
     MprisBarPointerDown(PointerEvent),
     MprisBarScroll(ScrollEvent),
@@ -179,6 +247,12 @@ pub enum Msg {
     },
     CpuSampled(CpuSnapshot),
     GpuSampled(GpuSnapshot),
+    TelemetryBarPointerDown {
+        kind: TelemetryGraphKind,
+        ev: PointerEvent,
+    },
+    TelemetrySelectKind(TelemetryGraphKind),
+    CloseTelemetryPopup,
     SensorsSampled(Vec<waywi::system::hardware::ThermalSensor>),
     UptimeSampled(waywi::system::UptimeSnapshot),
     StartupHydrate,
@@ -197,6 +271,9 @@ pub enum Msg {
     CloseQuickMenu,
     QuickMenuTogglePower,
     QuickMenuToggleSettings,
+    QuickMenuToggleToolbox,
+    QuickMenuActionScroll(ScrollEvent),
+    QuickMenuActionCycle,
     QuickMenuPowerAction(PowerAction),
     QuickMenuPowerTick,
     QuickMenuCancelPower,
@@ -234,7 +311,6 @@ pub enum Msg {
     HoverAnchorX(f32),
     Leave(HoverTarget),
     DrawerTimeoutCheck,
-    SpawnBtop,
     #[cfg(test)]
     TestSetWorkspaces(Vec<WorkspaceInfo>, i32),
     #[cfg(test)]

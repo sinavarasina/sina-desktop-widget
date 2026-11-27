@@ -55,7 +55,7 @@ pub fn settings_list_content_height(state: &State) -> f32 {
     let (base_rows, subsections): (usize, usize) = match state.settings_ui.active_section {
         SettingsSection::General => (8, 2),
         SettingsSection::Audio => (6, 2),
-        SettingsSection::Desktop => (11, 2),
+        SettingsSection::Desktop => (10, 2),
         SettingsSection::Bar => (6 + state.config.widgets.right_metrics.len(), 2),
     };
 
@@ -635,9 +635,6 @@ fn build_desktop_rows(state: &State) -> Vec<Element<Msg>> {
         ));
     }
 
-    let ram_label = if wp.enabled { "0 B idle" } else { "Unmounted" };
-    rows.push(value_row(state, 23, "Memory Mode", ram_label, GREEN));
-
     // Companion / Character Sprite subsection (Yuki Nagato)
     rows.push(subsection_header("desk-yuki", "COMPANION · YUKI"));
     rows.push(toggle_row(
@@ -1034,19 +1031,15 @@ fn build_wallpaper_path_row(state: &State, row_id: usize) -> Element<Msg> {
                 .border(1.logical_px(), if focused { MAUVE } else { SURFACE1 }),
         )
         .child(
-            Clip::new(
-                Text::new(visible_text)
-                    .font(font_ui())
-                    .font_size(9.5.logical_px())
-                    .color(if is_empty { OVERLAY0 } else { TEXT })
-                    .position(Position::relative_to_parent(
-                        Percent::new(0.0),
-                        Percent::new(50.0),
-                    ))
-                    .anchor(ElementAnchor::CenterLeft),
-            )
-            .position(Position::absolute(5.logical_px(), 0.logical_px()))
-            .size(Size::new((input_w - 10.0).logical_px(), input_h.logical_px())),
+            Text::new(visible_text)
+                .font(font_ui())
+                .font_size(9.5.logical_px())
+                .color(if is_empty { OVERLAY0 } else { TEXT })
+                .position(Position::absolute(
+                    5.logical_px(),
+                    (input_h * 0.5).logical_px(),
+                ))
+                .anchor(ElementAnchor::CenterLeft),
         );
 
     if focused {

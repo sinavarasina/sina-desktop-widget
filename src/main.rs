@@ -42,6 +42,15 @@ impl Application for SinaDesktopWidget {
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if !args.is_empty() {
+        let first = args[0].as_str();
+        if matches!(first, "help" | "-h" | "--help") {
+            println!("{}", app::ipc::CLI_HELP_TEXT);
+            return;
+        }
+        if matches!(first, "version" | "-V" | "--version") {
+            println!("sina-desktop-widget {}", env!("CARGO_PKG_VERSION"));
+            return;
+        }
         let cmd = args.join(" ");
         if let Err(err) = waywi::control::send_command(CONTROL_SOCKET_NAME, &cmd) {
             eprintln!("sina-desktop-widget control error: {err}");

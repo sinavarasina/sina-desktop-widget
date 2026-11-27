@@ -68,7 +68,7 @@ fn action_row_content_width(actions: &[(&str, &str)]) -> f32 {
 }
 
 pub fn build_notification_card(state: &State, item: &NotificationItem) -> Element<Msg> {
-    let id = item.stored.id;
+    let id = item.uid;
     let is_hovered = state.hovered == HoverTarget::NotifCenterItem(id)
         || matches!(state.hovered, HoverTarget::NotifAction { id: aid, .. } if aid == id);
     let bg = if is_hovered { SURFACE0 } else { MANTLE };

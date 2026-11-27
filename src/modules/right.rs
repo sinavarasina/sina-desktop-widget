@@ -1,11 +1,11 @@
-//! Right bar group: MPRIS, system tray, dynamically ordered/placed monitoring metrics
-//! (Audio, CPU, Memory, Network, GPU, Temp, Disk, Bluetooth), expandable drawer, and clock.
+//! Right bar group: Privacy, auto-hiding MPRIS, Clipboard, system tray, dynamically ordered/placed
+//! monitoring metrics (Audio, CPU, Memory, Network, GPU, Disk, Bluetooth), expandable drawer, and clock.
 
 use waywi::prelude::*;
 
 use crate::app::config::RightMetricId;
-use crate::app::state::{HoverTarget, Msg, State};
-use crate::modules::{clock, drawer, mpris, tray};
+use crate::app::state::{HoverTarget, Msg, State, TelemetryGraphKind};
+use crate::modules::{clock, drawer, mpris, status_pill, tray};
 use crate::theme::{BAR_HEIGHT, MANTLE, SURFACE0};
 use crate::widgets::metric::{MetricModuleConfig, metric_module};
 use crate::widgets::separators::{SepShape, separator};
@@ -38,12 +38,9 @@ pub fn build_right_metric(
             target: HoverTarget::Cpu,
             hovered: state.hovered == HoverTarget::Cpu,
             fixed_width,
-            on_pointer_down: Some(|ev: PointerEvent| {
-                if ev.button == Some(MouseButton::Right) {
-                    Msg::SpawnBtop
-                } else {
-                    Msg::Hover(HoverTarget::Cpu)
-                }
+            on_pointer_down: Some(|ev: PointerEvent| Msg::TelemetryBarPointerDown {
+                kind: TelemetryGraphKind::Cpu,
+                ev,
             }),
             on_scroll: None,
         }),
@@ -53,12 +50,9 @@ pub fn build_right_metric(
             target: HoverTarget::Memory,
             hovered: state.hovered == HoverTarget::Memory,
             fixed_width,
-            on_pointer_down: Some(|ev: PointerEvent| {
-                if ev.button == Some(MouseButton::Right) {
-                    Msg::SpawnBtop
-                } else {
-                    Msg::Hover(HoverTarget::Memory)
-                }
+            on_pointer_down: Some(|ev: PointerEvent| Msg::TelemetryBarPointerDown {
+                kind: TelemetryGraphKind::Memory,
+                ev,
             }),
             on_scroll: None,
         }),
@@ -68,7 +62,10 @@ pub fn build_right_metric(
             target: HoverTarget::Network,
             hovered: state.hovered == HoverTarget::Network,
             fixed_width,
-            on_pointer_down: None,
+            on_pointer_down: Some(|ev: PointerEvent| Msg::TelemetryBarPointerDown {
+                kind: TelemetryGraphKind::Network,
+                ev,
+            }),
             on_scroll: None,
         }),
         RightMetricId::Gpu => metric_module(MetricModuleConfig {
@@ -77,27 +74,9 @@ pub fn build_right_metric(
             target: HoverTarget::Gpu,
             hovered: state.hovered == HoverTarget::Gpu,
             fixed_width,
-            on_pointer_down: Some(|ev: PointerEvent| {
-                if ev.button == Some(MouseButton::Right) {
-                    Msg::SpawnBtop
-                } else {
-                    Msg::Hover(HoverTarget::Gpu)
-                }
-            }),
-            on_scroll: None,
-        }),
-        RightMetricId::Temp => metric_module(MetricModuleConfig {
-            key: "mod-temp",
-            metric: state.temp_metric(),
-            target: HoverTarget::Temp,
-            hovered: state.hovered == HoverTarget::Temp,
-            fixed_width,
-            on_pointer_down: Some(|ev: PointerEvent| {
-                if ev.button == Some(MouseButton::Right) {
-                    Msg::SpawnBtop
-                } else {
-                    Msg::Hover(HoverTarget::Temp)
-                }
+            on_pointer_down: Some(|ev: PointerEvent| Msg::TelemetryBarPointerDown {
+                kind: TelemetryGraphKind::Gpu,
+                ev,
             }),
             on_scroll: None,
         }),
@@ -131,11 +110,14 @@ pub fn build_right_modules(state: &State) -> Row<Msg> {
     let mut row = Row::new()
         .key("modules-right")
         .size(Size::new(Length::Auto, BAR_HEIGHT.logical_px()))
-        .align(Align::Center);
+        .align(Align::Center)
+        .child(status_pill::build_privacy_pill(state, w.show_mpris));
 
     if w.show_mpris {
         row = row.child(mpris::build_mpris(state));
     }
+
+    row = row.child(status_pill::build_clipboard_pill(state));
 
     if has_mantle_strip {
         row = row.child(separator(

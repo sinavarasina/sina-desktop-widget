@@ -13,8 +13,6 @@ pub enum SepShape {
     ArrowL,
     /// Thin left-pointing chevron (`\u{e0b3}` ``).
     ArrowLThin,
-    /// Thin right-pointing chevron (`\u{e0b1}` ``).
-    ArrowRThin,
     /// Solid block with left-facing triangular notch cutout (`\u{e0d7}` ``).
     CurveL,
     /// Solid block with right-facing triangular notch cutout (`\u{e0d6}` ``).
@@ -29,6 +27,8 @@ pub enum SepShape {
     SlashL,
     /// Solid lower-right diagonal triangle (`\u{e0ba}` ``).
     SlashLInv,
+    /// Thin `\` diagonal stroke (exact mirror of `SlashRThin`).
+    SlashLThin,
 }
 
 /// Renders one separator matching the bar's `18px` MesloLGS separator geometry at full `24px` height.
@@ -146,18 +146,17 @@ fn draw_separator(p: &mut Painter<'_>, shape: SepShape, fg: Color, bg: Color, h:
                 .line_to((w - 0.6).logical_px(), 0.4.logical_px());
             p.stroke_path(&pb, 1.1.logical_px(), fg);
         }
+        SepShape::SlashLThin => {
+            let mut pb = PathBuilder::new();
+            pb.move_to(0.6.logical_px(), 0.4.logical_px())
+                .line_to((w - 0.6).logical_px(), (h - 0.4).logical_px());
+            p.stroke_path(&pb, 1.1.logical_px(), fg);
+        }
         SepShape::ArrowLThin => {
             let mut pb = PathBuilder::new();
             pb.move_to((w - 0.6).logical_px(), 0.6.logical_px())
                 .line_to(1.2.logical_px(), mid_y.logical_px())
                 .line_to((w - 0.6).logical_px(), (h - 0.6).logical_px());
-            p.stroke_path(&pb, 1.15.logical_px(), fg);
-        }
-        SepShape::ArrowRThin => {
-            let mut pb = PathBuilder::new();
-            pb.move_to(0.6.logical_px(), 0.6.logical_px())
-                .line_to((w - 1.2).logical_px(), mid_y.logical_px())
-                .line_to(0.6.logical_px(), (h - 0.6).logical_px());
             p.stroke_path(&pb, 1.15.logical_px(), fg);
         }
     }

@@ -114,7 +114,10 @@ fn annotate_ipc_parses_aliases_and_toggles_overlay_exclusively() {
 #[test]
 fn annotate_mouse_tablet_pressure_eraser_split_undo_redo_and_memory_free() {
     let mut rt = synthetic_rt();
-    rt.enqueue(Msg::ToggleAnnotate);
+    rt.enqueue(Msg::IpcControl {
+        action: IpcAction::Toggle,
+        target: IpcTarget::Annotate,
+    });
     settle_ui_anims(&mut rt);
 
     // 1. Switch to Red (color index 1) and draw a long horizontal stroke with pen tablet pressure.
@@ -243,7 +246,10 @@ fn annotate_mouse_tablet_pressure_eraser_split_undo_redo_and_memory_free() {
     assert_eq!(rt.state().annotate.board(&ws1).unwrap().strokes.len(), 2);
 
     // Re-enter: WS 1 strokes are still there!
-    rt.enqueue(Msg::ToggleAnnotate);
+    rt.enqueue(Msg::IpcControl {
+        action: IpcAction::Toggle,
+        target: IpcTarget::Annotate,
+    });
     settle_ui_anims(&mut rt);
     assert_eq!(rt.state().annotate.board(&ws1).unwrap().strokes.len(), 2);
 
@@ -318,7 +324,10 @@ fn annotate_mouse_tablet_pressure_eraser_split_undo_redo_and_memory_free() {
 
     // 7. Clear Workspace frees only current workspace; Clear All frees every board and capacity.
     rt.enqueue(Msg::SwitchWorkspace(WorkspaceId::new(2)));
-    rt.enqueue(Msg::ToggleAnnotate);
+    rt.enqueue(Msg::IpcControl {
+        action: IpcAction::Toggle,
+        target: IpcTarget::Annotate,
+    });
     rt.enqueue(Msg::AnnotateClearWorkspace);
     rt.step().unwrap();
     assert!(rt.state().annotate.board(&ws2).is_none());

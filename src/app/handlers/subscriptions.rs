@@ -49,6 +49,11 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
     subs.push(System::network().every(Duration::from_secs(1), Msg::NetworkSampled));
     subs.push(System::disk().every(Duration::from_secs(30), Msg::DiskSampled));
     subs.push(System::time().every(Duration::from_secs(1), Msg::TimeTick));
+    subs.push(System::privacy().every(Duration::from_secs(2), Msg::PrivacySampled));
+    subs.push(Clipboard::subscribe_selection(
+        ClipboardSelection::Clipboard,
+        |ev| Msg::ClipboardEvent(Box::new(ev)),
+    ));
     subs.push(Dbus::network_manager(Msg::NetworkManagerUpdated));
     subs.push(Dbus::bluetooth(Msg::BluetoothUpdated));
     subs.push(Dbus::bluetooth_agent(|ev| {
@@ -90,6 +95,13 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
             "power-countdown",
             Duration::from_secs(1),
             Msg::QuickMenuPowerTick,
+        ));
+    }
+    if let Some(seq) = state.screenshot.active_preview_timeout_seq() {
+        subs.push(Timer::once(
+            ("screenshot-preview-timeout", seq),
+            Duration::from_secs(5),
+            Msg::ScreenshotPreviewTimeout(seq),
         ));
     }
     if !state.desktop_sprite.is_fading() && state.desktop_sprite.is_visible() {

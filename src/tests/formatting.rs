@@ -238,7 +238,7 @@ fn native_waywi_datetime_units_and_calendar_work_accurately() {
 }
 
 #[test]
-fn temp_module_and_cpu_tooltip_format_cpu_and_gpu_thermals() {
+fn cpu_and_gpu_tooltips_format_thermals_without_duplicate_temp_metric() {
     use waywi::system::hardware::ThermalSensor;
 
     let mut rt = synthetic_rt();
@@ -274,13 +274,8 @@ fn temp_module_and_cpu_tooltip_format_cpu_and_gpu_thermals() {
     }));
     rt.step().unwrap();
 
-    let temp = rt.state().temp_metric();
-    assert_eq!(temp.lines[0].text, "58°C");
-    assert_eq!(temp.lines[1].text, "47°C");
-    assert!(temp.tooltip.contains("CPU Temp: 58°C"));
-    assert!(temp.tooltip.contains("GPU Temp: 47°C"));
-    assert!(temp.tooltip.contains("GPU Hotspot: 54°C"));
-
     let (_, cpu_tip) = rt.state().cpu_display();
     assert!(cpu_tip.contains("Temp: 58°C"));
+    let gpu = rt.state().gpu_metric();
+    assert!(gpu.tooltip.contains("Temp: 47°C"));
 }

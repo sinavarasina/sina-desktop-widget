@@ -2163,6 +2163,7 @@ dependencies = [
 name = "sina-desktop-widget"
 version = "0.1.0"
 dependencies = [
+ "png",
  "serde",
  "serde_json",
  "waywi",
@@ -2988,6 +2989,7 @@ dependencies = [
  "tiny-skia",
  "wayland-client",
  "wayland-protocols",
+ "wayland-protocols-wlr",
  "wgpu",
  "xkbcommon",
  "zbus",

@@ -26,10 +26,17 @@ pub use ticker::IncomingTicker;
 
 #[derive(Debug, Clone)]
 pub struct NotificationItem {
+    /// Strictly unique UI/interaction ID across persisted + live sessions.
+    pub uid: u32,
+    /// `true` for historical notifications loaded from disk (previous sessions).
+    pub from_disk: bool,
     pub stored: StoredNotification,
     pub icon: Option<ImageAsset>,
     pub icon_loaded: bool,
 }
+
+const DISK_UID_BASE: u32 = 0x8000_0000;
+const LIVE_UID_FALLBACK_BASE: u32 = 0x4000_0000;
 
 pub struct NotificationStore {
     pub items: Vec<NotificationItem>,
@@ -43,6 +50,8 @@ pub struct NotificationStore {
     pub last_sound_plan: NotificationSoundPlan,
     store_path: PathBuf,
     disk_overflow: Vec<StoredNotification>,
+    next_disk_uid: u32,
+    next_live_uid: u32,
 }
 
 impl NotificationStore {
@@ -56,10 +65,15 @@ impl NotificationStore {
 
         let mut in_ram = Vec::with_capacity(MAX_RAM_NOTIFICATIONS.min(total_count));
         let mut overflow = Vec::new();
+        let mut next_disk_uid = DISK_UID_BASE;
 
         for (idx, stored) in persisted.items.into_iter().enumerate() {
             if idx < MAX_RAM_NOTIFICATIONS {
+                let uid = next_disk_uid;
+                next_disk_uid = next_disk_uid.wrapping_add(1);
                 in_ram.push(NotificationItem {
+                    uid,
+                    from_disk: true,
                     stored,
                     icon: None,
                     icon_loaded: false,
@@ -81,6 +95,21 @@ impl NotificationStore {
             last_sound_plan: NotificationSoundPlan::Silent,
             store_path: path,
             disk_overflow: overflow,
+            next_disk_uid,
+            next_live_uid: LIVE_UID_FALLBACK_BASE,
+        }
+    }
+
+    fn allocate_live_uid(&mut self, preferred: u32) -> u32 {
+        if preferred != 0 && !self.items.iter().any(|i| i.uid == preferred) {
+            return preferred;
+        }
+        loop {
+            let candidate = self.next_live_uid;
+            self.next_live_uid = self.next_live_uid.wrapping_add(1);
+            if candidate != 0 && !self.items.iter().any(|i| i.uid == candidate) {
+                return candidate;
+            }
         }
     }
 
@@ -152,13 +181,16 @@ impl NotificationStore {
         };
 
         if notif.replaces_id != 0 {
-            self.items.retain(|i| i.stored.id != notif.replaces_id);
-            self.disk_overflow.retain(|i| i.id != notif.replaces_id);
+            self.items
+                .retain(|i| i.from_disk || i.stored.id != notif.replaces_id);
         }
 
+        let uid = self.allocate_live_uid(stored.id);
         self.items.insert(
             0,
             NotificationItem {
+                uid,
+                from_disk: false,
                 stored,
                 icon,
                 icon_loaded: true,
@@ -216,7 +248,11 @@ impl NotificationStore {
         if visible_end + 4 >= self.items.len() && !self.disk_overflow.is_empty() {
             let take_n = 20.min(self.disk_overflow.len());
             for stored in self.disk_overflow.drain(0..take_n) {
+                let uid = self.next_disk_uid;
+                self.next_disk_uid = self.next_disk_uid.wrapping_add(1);
                 self.items.push(NotificationItem {
+                    uid,
+                    from_disk: true,
                     stored,
                     icon: None,
                     icon_loaded: false,
@@ -225,44 +261,38 @@ impl NotificationStore {
         }
     }
 
-    pub fn dismiss(&mut self, id: u32) -> bool {
-        let mut removed_icons = Vec::new();
-        self.items.retain(|i| {
-            if i.stored.id == id {
-                if let Some(p) = &i.stored.cached_icon_path {
-                    removed_icons.push(p.clone());
-                }
-                false
-            } else {
-                true
-            }
-        });
-        self.disk_overflow.retain(|i| {
-            if i.id == id {
-                if let Some(p) = &i.cached_icon_path {
-                    removed_icons.push(p.clone());
-                }
-                false
-            } else {
-                true
-            }
-        });
-        let after = self.items.len() + self.disk_overflow.len();
-        let changed = after != self.total_count;
-        self.total_count = after;
-        self.action_scroll_x.remove(&id);
+    /// Dismisses exactly one card by its unique UI `uid`.
+    /// Returns `Some(live_dbus_id)` when the dismissed card belonged to the current D-Bus session.
+    pub fn dismiss_uid(&mut self, uid: u32) -> Option<Option<u32>> {
+        let pos = self.items.iter().position(|i| i.uid == uid)?;
+        let removed = self.items.remove(pos);
+        self.total_count = self.items.len() + self.disk_overflow.len();
+        self.action_scroll_x.remove(&uid);
         if self.scroll_index >= self.items.len() && self.scroll_index > 0 {
             self.scroll_index = self.items.len().saturating_sub(1);
         }
-        if changed {
-            for p in removed_icons {
-                self.remove_icon_if_unreferenced(&p);
-            }
-            self.persist();
-            true
-        } else {
-            false
+        if let Some(p) = removed.stored.cached_icon_path {
+            self.remove_icon_if_unreferenced(&p);
         }
+        self.persist();
+        Some((!removed.from_disk).then_some(removed.stored.id))
+    }
+
+    /// Dismisses a live current-session notification by D-Bus `id` (e.g. `ClosedByCaller`).
+    pub fn dismiss(&mut self, id: u32) -> bool {
+        if let Some(pos) = self
+            .items
+            .iter()
+            .position(|i| !i.from_disk && i.stored.id == id)
+        {
+            let uid = self.items[pos].uid;
+            return self.dismiss_uid(uid).is_some();
+        }
+        if let Some(pos) = self.items.iter().position(|i| i.uid == id) {
+            let uid = self.items[pos].uid;
+            return self.dismiss_uid(uid).is_some();
+        }
+        false
     }
 
     fn remove_icon_if_unreferenced(&self, path: &str) {
@@ -325,25 +355,34 @@ impl NotificationStore {
     }
 
     #[must_use]
-    pub fn is_resident(&self, id: u32) -> bool {
+    pub fn is_resident(&self, uid: u32) -> bool {
         self.items
             .iter()
-            .find(|i| i.stored.id == id)
+            .find(|i| i.uid == uid)
             .is_some_and(|i| i.stored.resident)
     }
 
-    pub fn take_action_and_maybe_dismiss(&mut self, id: u32) -> Option<(u32, Option<String>, bool)> {
-        let item = self.items.iter().find(|i| i.stored.id == id)?;
+    #[must_use]
+    pub fn dbus_id_for_uid(&self, uid: u32) -> Option<u32> {
+        self.items
+            .iter()
+            .find(|i| i.uid == uid && !i.from_disk)
+            .map(|i| i.stored.id)
+    }
+
+    pub fn take_action_and_maybe_dismiss(
+        &mut self,
+        uid: u32,
+    ) -> Option<(Option<u32>, Option<String>, bool)> {
+        let item = self.items.iter().find(|i| i.uid == uid)?;
         let action_key = item.stored.actions.first().map(|(k, _)| k.clone());
         let resident = item.stored.resident;
+        let live_dbus_id = (!item.from_disk).then_some(item.stored.id);
         if resident && action_key.is_some() {
-            return Some((id, action_key, true));
+            return Some((live_dbus_id, action_key, true));
         }
-        if self.dismiss(id) {
-            Some((id, action_key, false))
-        } else {
-            None
-        }
+        self.dismiss_uid(uid)
+            .map(|dbus_id| (dbus_id, action_key, false))
     }
 
     pub fn clear_all(&mut self) {

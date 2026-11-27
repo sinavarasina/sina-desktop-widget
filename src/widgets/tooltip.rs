@@ -4,6 +4,7 @@ use waywi::prelude::*;
 
 use crate::app::state::{HoverTarget, Msg, State};
 use crate::modules::left::workspaces::hovered_workspace_tooltip;
+use crate::modules::status_pill::privacy_tooltip;
 use crate::theme::{CRUST, POPUP_TOP_MARGIN, SURFACE1, TEXT, font_ui};
 
 /// Builds the floating hover tooltip surface for the currently hovered target.
@@ -50,9 +51,37 @@ pub fn build_tooltip_surface(state: &State) -> Option<Surface<Msg>> {
         HoverTarget::Memory => (state.memory_metric().tooltip, None),
         HoverTarget::Network => (state.network_metric().tooltip, None),
         HoverTarget::Gpu => (state.gpu_metric().tooltip, None),
-        HoverTarget::Temp => (state.temp_metric().tooltip, None),
         HoverTarget::Disk => (state.disk_metric().tooltip, None),
         HoverTarget::Bluetooth => (state.bluetooth_metric().tooltip, None),
+        HoverTarget::PrivacyStatus => (privacy_tooltip(state), None),
+        HoverTarget::ClipboardBar => {
+            let n = state.clipboard.entries.len();
+            let caff = if state.caffeine_active { "ON" } else { "OFF" };
+            (
+                format!("Clipboard ({n} items)\nLeft-click: history · Right-click: Awake ({caff})"),
+                None,
+            )
+        }
+        HoverTarget::CaffeineBadge => (
+            String::from("Keep-Awake active (idle-inhibit)\nClick to disable"),
+            None,
+        ),
+        HoverTarget::ActiveToolBadge => {
+            if state.zoom.is_live() {
+                (
+                    format!(
+                        "Live Zoom active ({:.1}x)\nClick to exit",
+                        state.zoom.zoom
+                    ),
+                    None,
+                )
+            } else {
+                (
+                    String::from("Pinned annotations visible\nClick to edit"),
+                    None,
+                )
+            }
+        }
         HoverTarget::TrayItem(idx) => {
             let entry = state.tray_items.get(idx)?;
             let text = if let Some(tip) = &entry.snapshot.tooltip

@@ -17,7 +17,7 @@ pub fn handle_clock_menu_click(state: &mut State, ctx: &mut EffectCtx<'_, crate:
         state.quick_menu.close_popup();
         state.settings_ui.unfocus_inputs();
         state.settings_ui.open_dropdown = None;
-        if !state.hovered.is_clock_group() {
+        if !state.hovered.is_clock_group() && !state.is_clock_slide_pinned() {
             state.clock_menu_anim.set_open(false);
         }
         state.play_sound(SoundCue::MenuPopdown, ctx);
@@ -37,6 +37,21 @@ pub fn handle_quick_menu_toggle_power(state: &mut State, ctx: &EffectCtx<'_, cra
     state.settings_ui.unfocus_inputs();
     state.settings_ui.open_dropdown = None;
     let cue = if state.quick_menu.power_menu_open {
+        SoundCue::ToggleOn
+    } else {
+        SoundCue::ToggleOff
+    };
+    state.play_sound(cue, ctx);
+}
+
+pub fn handle_quick_menu_toggle_toolbox(
+    state: &mut State,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
+) {
+    state.quick_menu.toggle_toolbox_menu();
+    state.settings_ui.unfocus_inputs();
+    state.settings_ui.open_dropdown = None;
+    let cue = if state.quick_menu.toolbox_open {
         SoundCue::ToggleOn
     } else {
         SoundCue::ToggleOff
@@ -123,7 +138,7 @@ fn execute_power_action(state: &mut State, action: PowerAction, ctx: &EffectCtx<
     } else {
         state.play_sound(power_lifecycle_cue(action), ctx);
         state.quick_menu.close_popup();
-        if !state.hovered.is_clock_group() {
+        if !state.hovered.is_clock_group() && !state.is_clock_slide_pinned() {
             state.clock_menu_anim.set_open(false);
         }
     }

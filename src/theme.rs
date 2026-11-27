@@ -26,7 +26,6 @@ pub const METRIC_ICON_GAP: f32 = 2.0;
 
 pub const EXPAND_SIGN_WIDTH: f32 = 28.0;
 pub const GPU_EXPANDED_WIDTH: f32 = 56.0;
-pub const TEMP_EXPANDED_WIDTH: f32 = 52.0;
 pub const DISK_EXPANDED_WIDTH: f32 = 72.0;
 pub const BT_EXPANDED_WIDTH: f32 = 56.0;
 

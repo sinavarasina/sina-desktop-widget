@@ -8,10 +8,15 @@ use crate::theme::{OVERLAY0, RED, font_ui};
 
 pub fn build_notif_icon(asset: Option<ImageAsset>, dnd: bool, size: f32) -> Element<Msg> {
     if let Some(img) = asset {
-        Image::new(img)
-            .size(Size::new(size.logical_px(), size.logical_px()))
-            .fit(ImageFit::Cover)
-            .into()
+        // `ImageFit::Cover` scales non-square icons beyond `size` on the longer axis; clip to
+        // the exact square slot so wide/tall notification thumbnails never overflow siblings.
+        Clip::new(
+            Image::new(img)
+                .size(Size::fill())
+                .fit(ImageFit::Cover),
+        )
+        .size(Size::new(size.logical_px(), size.logical_px()))
+        .into()
     } else {
         let glyph_px = (size * 0.65).max(12.0);
         Group::new()

@@ -1,6 +1,5 @@
 //! UDisks2 disk management popup handlers, Polkit mount/unmount/eject/poweroff, and LUKS unlock.
 
-use waywi::desktop::spawn_detached;
 use waywi::prelude::*;
 
 use crate::app::disk::{DiskMenuAction, DiskUiState};
@@ -46,9 +45,6 @@ pub fn handle_disk_bar_pointer(state: &mut State, ev: PointerEvent, ctx: &Effect
         }
         Some(MouseButton::Middle) => {
             state.cycle_selected_mount();
-        }
-        Some(MouseButton::Right) => {
-            let _ = spawn_detached("footclient", ["btop"]);
         }
         _ => {}
     }

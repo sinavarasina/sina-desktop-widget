@@ -50,33 +50,6 @@ impl State {
         }
     }
 
-    #[must_use]
-    pub fn temp_metric(&self) -> ModuleMetric {
-        let gpu_dev = self.gpu.as_ref().and_then(|g| g.gpus.first());
-        let gpu_temp = gpu_dev.and_then(|g| g.temperature_celsius);
-        let cpu_str = self
-            .cpu_temp_celsius
-            .map_or_else(|| String::from("--°C"), |t| format!("{t:.0}°C"));
-        let gpu_str = gpu_temp.map_or_else(|| String::from("--°C"), |t| format!("{t:.0}°C"));
-
-        let mut tip_parts = vec![
-            format!("CPU Temp: {cpu_str}"),
-            format!("GPU Temp: {gpu_str}"),
-        ];
-        if let Some(hotspot) = gpu_dev.and_then(|g| g.hotspot_celsius) {
-            tip_parts.push(format!("GPU Hotspot: {hotspot:.0}°C"));
-        }
-
-        ModuleMetric {
-            lines: vec![
-                MetricLine::new("\u{f2db}", cpu_str),
-                MetricLine::new("\u{f08ae}", gpu_str),
-            ],
-            tooltip: tip_parts.join("\n"),
-            inactive: false,
-        }
-    }
-
     #[cfg(test)]
     #[must_use]
     pub fn cpu_display(&self) -> (String, String) {

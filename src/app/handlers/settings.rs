@@ -226,6 +226,14 @@ pub fn handle_cycle_metric_placement(
             RightMetricId::Audio => state.audio_ui.close_popup(),
             RightMetricId::Disk => state.disk_ui.close_popup(),
             RightMetricId::Bluetooth => state.bt_ui.close_popup(),
+            RightMetricId::Cpu
+            | RightMetricId::Memory
+            | RightMetricId::Gpu
+            | RightMetricId::Network
+                if state.telemetry_graph.active.metric_id() == id =>
+            {
+                state.telemetry_graph.close();
+            }
             _ => {}
         }
     }
@@ -428,7 +436,7 @@ pub fn handle_settings_key(state: &mut State, ev: KeyEvent, ctx: &mut EffectCtx<
                 state.quick_menu.close_popup();
                 state.settings_ui.unfocus_inputs();
                 state.settings_ui.open_dropdown = None;
-                if !state.hovered.is_clock_group() {
+                if !state.hovered.is_clock_group() && !state.is_clock_slide_pinned() {
                     state.clock_menu_anim.set_open(false);
                 }
                 if was_open {
