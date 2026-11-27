@@ -18,10 +18,11 @@ const MAX_VISIBLE_CARDS: usize = 7;
 
 pub fn build_clipboard_popup_surface(state: &State) -> Surface<Msg> {
     let ease = state.clipboard.popup_progress();
+    let max_visible = state.layout().clipboard_max_cards.min(MAX_VISIBLE_CARDS);
     let total = state.clipboard.entries.len();
-    let max_start = total.saturating_sub(MAX_VISIBLE_CARDS);
+    let max_start = total.saturating_sub(max_visible);
     let start = state.clipboard.scroll_index.min(max_start);
-    let end = (start + MAX_VISIBLE_CARDS).min(total);
+    let end = (start + max_visible).min(total);
     let visible = &state.clipboard.entries[start..end];
 
     let body_h = if visible.is_empty() {
@@ -111,7 +112,7 @@ pub fn build_clipboard_popup_surface(state: &State) -> Surface<Msg> {
         .layer(Layer::Overlay)
         .ignore_exclusive_zone()
         .anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT)
-        .size(Size::fill())
+        .size(state.viewport_size())
         .input_mode(InputMode::Full)
         .keyboard_interactivity(KeyboardInteractivity::OnDemand)
         .background(Color::TRANSPARENT)

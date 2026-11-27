@@ -22,13 +22,14 @@ use workspaces::build_workspaces;
 
 pub fn build_left_modules(state: &State) -> Row<Msg> {
     let w = &state.config.widgets;
+    let layout = state.layout();
     let mut row = Row::new()
         .key("modules-left")
         .size(Size::new(Length::Auto, BAR_HEIGHT.logical_px()))
         .align(Align::Center)
         .child(build_logo(state));
 
-    if w.show_sysinfo {
+    if w.show_sysinfo && layout.show_sysinfo {
         row = row.child(build_sysinfo(state));
     } else {
         row = row.child(separator(
@@ -56,7 +57,7 @@ pub fn build_left_modules(state: &State) -> Row<Msg> {
             ));
     }
 
-    if w.show_window_info {
+    if w.show_window_info && layout.show_window_title {
         row = row
             .child(separator(
                 "sep-l-5",
@@ -70,8 +71,17 @@ pub fn build_left_modules(state: &State) -> Row<Msg> {
                 CRUST,
                 Color::TRANSPARENT,
             ))
-            .child(build_window_scroll(state))
-            .child(build_window_info(state));
+            .child(build_window_scroll(state));
+        if layout.show_window_category {
+            row = row.child(build_window_info(state));
+        } else {
+            row = row.child(separator(
+                "sep-l-7-compact",
+                SepShape::SlashR,
+                CRUST,
+                Color::TRANSPARENT,
+            ));
+        }
     }
 
     if w.show_notifications {

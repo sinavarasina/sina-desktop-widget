@@ -38,7 +38,12 @@ pub fn build_surfaces(state: &State) -> Surfaces<Msg> {
     if state.config.wallpaper.enabled
         && let Some(wp) = state.wallpaper_asset
     {
-        surfaces.push(build_wallpaper_surface(wp, state.config.wallpaper.fit));
+        surfaces.push(build_wallpaper_surface(
+            wp,
+            state.config.wallpaper.fit,
+            state.bar_width,
+            state.screen_height,
+        ));
     }
     if let Some(sprite) = build_desktop_sprite_surface(state) {
         surfaces.push(sprite);
@@ -124,7 +129,10 @@ fn build_main_panel(state: &State) -> Surface<Msg> {
         .layer(Layer::Top)
         .inhibit_idle(state.caffeine_active)
         .anchor(Anchor::TOP | Anchor::LEFT | Anchor::RIGHT)
-        .size(Size::new(Length::Fill, BAR_HEIGHT.logical_px()))
+        .size(Size::new(
+            state.bar_width.logical_px(),
+            BAR_HEIGHT.logical_px(),
+        ))
         .exclusive_zone(BAR_HEIGHT.logical_px())
         .input_mode(InputMode::Selective)
         .keyboard_interactivity(KeyboardInteractivity::None)

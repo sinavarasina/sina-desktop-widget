@@ -35,7 +35,7 @@ pub fn build_zoom_surface(state: &State) -> Option<Surface<Msg>> {
             .layer(Layer::Overlay)
             .ignore_exclusive_zone()
             .anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT)
-            .size(Size::fill())
+            .size(state.viewport_size())
             .input_mode(InputMode::Selective)
             .keyboard_interactivity(KeyboardInteractivity::None)
             .background(Color::TRANSPARENT)
@@ -90,7 +90,7 @@ pub fn build_zoom_surface(state: &State) -> Option<Surface<Msg>> {
         .layer(Layer::Overlay)
         .ignore_exclusive_zone()
         .anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT)
-        .size(Size::fill())
+        .size(state.viewport_size())
         .input_mode(InputMode::Full)
         .background(CRUST)
         .on_close(Msg::CloseZoom);

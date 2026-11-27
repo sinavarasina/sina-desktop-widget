@@ -4,11 +4,11 @@ use waywi::prelude::*;
 
 use crate::app::notifications::IncomingTicker;
 use crate::app::state::Msg;
-use crate::theme::{BAR_HEIGHT, NOTIF_ICON_SIZE, NOTIF_TICKER_WIDTH, SURFACE0, TEXT, font_ui};
+use crate::theme::{BAR_HEIGHT, NOTIF_ICON_SIZE, SURFACE0, TEXT, font_ui};
 use crate::widgets::notification_icon::build_notif_icon;
 use crate::widgets::separators::{SepShape, separator};
 
-pub fn build_incoming_ticker(ticker: &IncomingTicker) -> Element<Msg> {
+pub fn build_incoming_ticker(ticker: &IncomingTicker, ticker_width: f32) -> Element<Msg> {
     let text_pos = Position::RelativeToParent {
         x: Percent::new(0.0),
         y: Percent::new(50.0),
@@ -19,7 +19,7 @@ pub fn build_incoming_ticker(ticker: &IncomingTicker) -> Element<Msg> {
     let scrolling_clip = Clip::new(
         Group::new()
             .size(Size::new(
-                NOTIF_TICKER_WIDTH.logical_px(),
+                ticker_width.logical_px(),
                 BAR_HEIGHT.logical_px(),
             ))
             .child(
@@ -33,7 +33,7 @@ pub fn build_incoming_ticker(ticker: &IncomingTicker) -> Element<Msg> {
             ),
     )
     .size(Size::new(
-        NOTIF_TICKER_WIDTH.logical_px(),
+        ticker_width.logical_px(),
         BAR_HEIGHT.logical_px(),
     ));
 

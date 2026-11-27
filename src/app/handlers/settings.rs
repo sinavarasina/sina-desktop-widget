@@ -11,8 +11,8 @@ use crate::app::handlers::events::scroll_direction_y;
 use crate::app::handlers::init::load_embedded_wallpaper;
 use crate::app::state::{SoundCue, State};
 use crate::widgets::quick_menu::settings::{
-    SETTINGS_LIST_VIEW_H, SETTINGS_RAIL_VIEW_H, settings_list_content_height,
-    settings_rail_content_height,
+    settings_list_content_height, settings_list_view_h, settings_rail_content_height,
+    settings_rail_view_h,
 };
 
 const SCROLL_STEP_PX: f32 = 28.0;
@@ -77,7 +77,7 @@ pub fn handle_rail_scroll(state: &mut State, sc: ScrollEvent) {
     if step == 0 {
         return;
     }
-    let max_scroll = (settings_rail_content_height() - SETTINGS_RAIL_VIEW_H).max(0.0);
+    let max_scroll = (settings_rail_content_height() - settings_rail_view_h(state)).max(0.0);
     state.settings_ui.rail_scroll_y =
         (state.settings_ui.rail_scroll_y + (step as f32) * SCROLL_STEP_PX).clamp(0.0, max_scroll);
 }
@@ -88,7 +88,7 @@ pub fn handle_list_scroll(state: &mut State, sc: ScrollEvent) {
         return;
     }
     let content_h = settings_list_content_height(state);
-    let max_scroll = (content_h - SETTINGS_LIST_VIEW_H).max(0.0);
+    let max_scroll = (content_h - settings_list_view_h(state)).max(0.0);
     state.settings_ui.list_scroll_y =
         (state.settings_ui.list_scroll_y + (step as f32) * SCROLL_STEP_PX).clamp(0.0, max_scroll);
 }
@@ -326,7 +326,7 @@ pub fn handle_toggle_dropdown(
         state.play_sound(SoundCue::MenuPopup, ctx);
     }
     // Keep scroll offset clamped whenever dropdown height changes.
-    let max_scroll = (settings_list_content_height(state) - SETTINGS_LIST_VIEW_H).max(0.0);
+    let max_scroll = (settings_list_content_height(state) - settings_list_view_h(state)).max(0.0);
     state.settings_ui.list_scroll_y = state.settings_ui.list_scroll_y.clamp(0.0, max_scroll);
 }
 
@@ -360,7 +360,7 @@ pub fn handle_select_dropdown(
             state.quick_menu.set_sprite_pose(pose, ctx);
         }
     }
-    let max_scroll = (settings_list_content_height(state) - SETTINGS_LIST_VIEW_H).max(0.0);
+    let max_scroll = (settings_list_content_height(state) - settings_list_view_h(state)).max(0.0);
     state.settings_ui.list_scroll_y = state.settings_ui.list_scroll_y.clamp(0.0, max_scroll);
     state.save_config();
     state.play_sound(SoundCue::TabChanged, ctx);

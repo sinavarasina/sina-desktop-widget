@@ -84,7 +84,7 @@ pub fn build_disk_popup_surface(state: &State) -> Surface<Msg> {
         .layer(Layer::Overlay)
         .ignore_exclusive_zone()
         .anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT)
-        .size(Size::fill())
+        .size(state.viewport_size())
         .input_mode(InputMode::Full)
         .keyboard_interactivity(if state.disk_ui.unlock_target.is_some() {
             KeyboardInteractivity::Exclusive

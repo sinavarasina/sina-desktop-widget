@@ -17,7 +17,6 @@ use crate::theme::{
 use crate::widgets::quick_menu::QUICK_MENU_WIDTH;
 use crate::widgets::text::marquee_slice;
 
-pub const SETTINGS_PANEL_HEIGHT: f32 = 278.0;
 pub const SETTINGS_RAIL_W: f32 = 50.0;
 const SETTINGS_GAP: f32 = 6.0;
 const SETTINGS_BODY_W: f32 = QUICK_MENU_WIDTH - SETTINGS_RAIL_W - SETTINGS_GAP;
@@ -25,13 +24,26 @@ const SETTINGS_BODY_W: f32 = QUICK_MENU_WIDTH - SETTINGS_RAIL_W - SETTINGS_GAP;
 const RAIL_PAD: f32 = 4.0;
 const RAIL_TAB_H: f32 = 48.0;
 const RAIL_TAB_GAP: f32 = 4.0;
-pub const SETTINGS_RAIL_VIEW_H: f32 = SETTINGS_PANEL_HEIGHT - RAIL_PAD * 2.0;
 
 const BODY_PAD: f32 = 8.0;
 const HEADER_H: f32 = 24.0;
 const HEADER_GAP: f32 = 8.0;
-pub const SETTINGS_LIST_VIEW_H: f32 = SETTINGS_PANEL_HEIGHT - BODY_PAD * 2.0 - HEADER_H - HEADER_GAP;
 const LIST_CONTENT_W: f32 = SETTINGS_BODY_W - BODY_PAD * 2.0 - 6.0;
+
+#[must_use]
+pub fn settings_panel_height(state: &State) -> f32 {
+    state.layout().settings_panel_height
+}
+
+#[must_use]
+pub fn settings_rail_view_h(state: &State) -> f32 {
+    (settings_panel_height(state) - RAIL_PAD * 2.0).max(48.0)
+}
+
+#[must_use]
+pub fn settings_list_view_h(state: &State) -> f32 {
+    (settings_panel_height(state) - BODY_PAD * 2.0 - HEADER_H - HEADER_GAP).max(64.0)
+}
 
 const ROW_H: f32 = 30.0;
 const SUBSECTION_H: f32 = 18.0;
@@ -99,22 +111,24 @@ pub fn settings_list_content_height(state: &State) -> f32 {
 
 /// Builds the two-column Settings drawer (left scrollable vertical rail + right scrollable pane).
 pub fn build_settings_panel(state: &State) -> Element<Msg> {
+    let panel_h = settings_panel_height(state);
     Row::new()
         .key("quick-settings-panel")
         .size(Size::new(
             QUICK_MENU_WIDTH.logical_px(),
-            SETTINGS_PANEL_HEIGHT.logical_px(),
+            panel_h.logical_px(),
         ))
         .gap(SETTINGS_GAP.logical_px())
-        .child(build_section_rail(state))
-        .child(build_section_body(state))
+        .child(build_section_rail(state, panel_h))
+        .child(build_section_body(state, panel_h))
         .into()
 }
 
-fn build_section_rail(state: &State) -> Element<Msg> {
+fn build_section_rail(state: &State, panel_h: f32) -> Element<Msg> {
     let tab_w = SETTINGS_RAIL_W - RAIL_PAD * 2.0;
+    let rail_view_h = settings_rail_view_h(state);
     let content_h = settings_rail_content_height();
-    let max_scroll = (content_h - SETTINGS_RAIL_VIEW_H).max(0.0);
+    let max_scroll = (content_h - rail_view_h).max(0.0);
     let scroll_y = state.settings_ui.rail_scroll_y.clamp(0.0, max_scroll);
 
     let mut tab_col = Column::new()
@@ -203,16 +217,10 @@ fn build_section_rail(state: &State) -> Element<Msg> {
 
     let viewport = Clip::new(
         Group::new()
-            .size(Size::new(
-                tab_w.logical_px(),
-                SETTINGS_RAIL_VIEW_H.logical_px(),
-            ))
+            .size(Size::new(tab_w.logical_px(), rail_view_h.logical_px()))
             .child(tab_col),
     )
-    .size(Size::new(
-        tab_w.logical_px(),
-        SETTINGS_RAIL_VIEW_H.logical_px(),
-    ))
+    .size(Size::new(tab_w.logical_px(), rail_view_h.logical_px()))
     .position(Position::absolute(
         RAIL_PAD.logical_px(),
         RAIL_PAD.logical_px(),
@@ -223,7 +231,7 @@ fn build_section_rail(state: &State) -> Element<Msg> {
         .key("settings-section-rail")
         .size(Size::new(
             SETTINGS_RAIL_W.logical_px(),
-            SETTINGS_PANEL_HEIGHT.logical_px(),
+            panel_h.logical_px(),
         ))
         .child(
             Rect::new()
@@ -238,7 +246,7 @@ fn build_section_rail(state: &State) -> Element<Msg> {
         rail = rail.child(build_scrollbar_thumb(
             SETTINGS_RAIL_W - 3.0,
             RAIL_PAD,
-            SETTINGS_RAIL_VIEW_H,
+            rail_view_h,
             content_h,
             scroll_y,
         ));
@@ -247,13 +255,14 @@ fn build_section_rail(state: &State) -> Element<Msg> {
     rail.into()
 }
 
-fn build_section_body(state: &State) -> Element<Msg> {
+fn build_section_body(state: &State, panel_h: f32) -> Element<Msg> {
     let section = state.settings_ui.active_section;
     let inner_w = SETTINGS_BODY_W - BODY_PAD * 2.0;
+    let list_view_h = settings_list_view_h(state);
 
     let banner = build_notched_section_banner(section.title(), inner_w);
     let content_h = settings_list_content_height(state);
-    let max_scroll = (content_h - SETTINGS_LIST_VIEW_H).max(0.0);
+    let max_scroll = (content_h - list_view_h).max(0.0);
     let scroll_y = state.settings_ui.list_scroll_y.clamp(0.0, max_scroll);
 
     let rows = match section {
@@ -276,22 +285,19 @@ fn build_section_body(state: &State) -> Element<Msg> {
     }
 
     let mut viewport_group = Group::new()
-        .size(Size::new(
-            inner_w.logical_px(),
-            SETTINGS_LIST_VIEW_H.logical_px(),
-        ))
+        .size(Size::new(inner_w.logical_px(), list_view_h.logical_px()))
         .child(
             Clip::new(
                 Group::new()
                     .size(Size::new(
                         LIST_CONTENT_W.logical_px(),
-                        SETTINGS_LIST_VIEW_H.logical_px(),
+                        list_view_h.logical_px(),
                     ))
                     .child(list_col),
             )
             .size(Size::new(
                 LIST_CONTENT_W.logical_px(),
-                SETTINGS_LIST_VIEW_H.logical_px(),
+                list_view_h.logical_px(),
             ))
             .on_scroll(Msg::SettingsListScroll),
         );
@@ -300,7 +306,7 @@ fn build_section_body(state: &State) -> Element<Msg> {
         viewport_group = viewport_group.child(build_scrollbar_thumb(
             inner_w - 2.0,
             0.0,
-            SETTINGS_LIST_VIEW_H,
+            list_view_h,
             content_h,
             scroll_y,
         ));
@@ -317,7 +323,7 @@ fn build_section_body(state: &State) -> Element<Msg> {
         .key("settings-section-body")
         .size(Size::new(
             SETTINGS_BODY_W.logical_px(),
-            SETTINGS_PANEL_HEIGHT.logical_px(),
+            panel_h.logical_px(),
         ))
         .child(
             Rect::new()

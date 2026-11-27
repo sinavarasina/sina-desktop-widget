@@ -125,7 +125,7 @@ pub fn build_color_picker_surface(state: &State) -> Option<Surface<Msg>> {
         .layer(Layer::Overlay)
         .ignore_exclusive_zone()
         .anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT)
-        .size(Size::fill())
+        .size(state.viewport_size())
         .input_mode(InputMode::Full)
         .keyboard_interactivity(KeyboardInteractivity::Exclusive)
         .background(MANTLE)

@@ -6,8 +6,7 @@ use waywi::prelude::*;
 
 use crate::app::state::{HoverTarget, Msg, State};
 use crate::theme::{
-    BAR_HEIGHT, MANTLE, MAUVE, NOTIF_ICON_SIZE, NOTIF_MAX_BAR_ICONS, RED, SUBTEXT1, SURFACE0,
-    font_ui, font_ui_semibold,
+    BAR_HEIGHT, MANTLE, MAUVE, NOTIF_ICON_SIZE, RED, SUBTEXT1, SURFACE0, font_ui, font_ui_semibold,
 };
 use crate::widgets::notification_icon::build_notif_icon;
 use crate::widgets::separators::{SepShape, separator};
@@ -15,6 +14,7 @@ use crate::widgets::separators::{SepShape, separator};
 use ticker::build_incoming_ticker;
 
 pub fn build_notification_segment(state: &State) -> Element<Msg> {
+    let layout = state.layout();
     let pill_bg = if state.hovered == HoverTarget::Notifications {
         SURFACE0
     } else {
@@ -38,7 +38,7 @@ pub fn build_notification_segment(state: &State) -> Element<Msg> {
             .notifications
             .items
             .iter()
-            .take(NOTIF_MAX_BAR_ICONS)
+            .take(layout.max_notif_icons)
             .enumerate()
         {
             content = content.child(
@@ -111,7 +111,7 @@ pub fn build_notification_segment(state: &State) -> Element<Msg> {
         ));
 
     if let Some(ticker) = &state.notifications.active_ticker {
-        row = row.child(build_incoming_ticker(ticker));
+        row = row.child(build_incoming_ticker(ticker, layout.notif_ticker_width));
     }
 
     row.into()

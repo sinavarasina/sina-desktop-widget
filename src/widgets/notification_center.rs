@@ -155,7 +155,7 @@ pub fn build_notification_center_surface(state: &State) -> Surface<Msg> {
         .layer(Layer::Overlay)
         .ignore_exclusive_zone()
         .anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT)
-        .size(Size::fill())
+        .size(state.viewport_size())
         .input_mode(InputMode::Full)
         .keyboard_interactivity(KeyboardInteractivity::OnDemand)
         .background(Color::TRANSPARENT)

@@ -103,8 +103,7 @@ pub fn build_right_metric(
 
 pub fn build_right_modules(state: &State) -> Row<Msg> {
     let w = &state.config.widgets;
-    let bar_ids = w.bar_metrics();
-    let drawer_ids = w.drawer_metrics();
+    let (bar_ids, drawer_ids) = state.effective_right_metrics();
     let has_mantle_strip = w.has_any_right_mantle();
 
     let mut row = Row::new()

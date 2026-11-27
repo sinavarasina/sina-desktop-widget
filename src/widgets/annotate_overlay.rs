@@ -111,7 +111,7 @@ pub fn build_annotate_surface(state: &State) -> Surface<Msg> {
         .layer(Layer::Overlay)
         .ignore_exclusive_zone()
         .anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT)
-        .size(Size::fill())
+        .size(state.viewport_size())
         .background(Color::TRANSPARENT)
         .on_close(Msg::CloseAnnotate);
 

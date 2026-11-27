@@ -6,10 +6,13 @@ use std::time::Instant;
 
 use crate::app::anim::RevealAnim;
 use crate::app::asset_lru::PathAssetCache;
-use crate::theme::{MPRIS_BAR_TEXT_WIDTH, font_ui, font_ui_bold, font_ui_semibold};
+#[cfg(test)]
+use crate::theme::MPRIS_BAR_TEXT_WIDTH;
+use crate::theme::{font_ui, font_ui_bold, font_ui_semibold};
 use crate::widgets::text::format_artist_album;
 use waywi::prelude::*;
 
+#[cfg(test)]
 /// Inner horizontal clip width of the MPRIS bar text column (`MPRIS_BAR_TEXT_WIDTH - 2*4px` padding).
 pub const MPRIS_BAR_TEXT_INNER_W: f32 = MPRIS_BAR_TEXT_WIDTH - 8.0;
 /// Inner horizontal clip width of the MPRIS popup text column (`310 - 24 pad - 52 art - 12 gap`).
@@ -133,11 +136,13 @@ impl MprisState {
                 && (self.popup_title_overflows() || self.popup_sub_overflows()))
     }
 
+    #[cfg(test)]
     #[must_use]
     pub const fn top_overflows(&self) -> bool {
         self.bar_top_width_px > MPRIS_BAR_TEXT_INNER_W + 0.5
     }
 
+    #[cfg(test)]
     #[must_use]
     pub const fn bot_overflows(&self) -> bool {
         self.bar_bot_width_px > MPRIS_BAR_TEXT_INNER_W + 0.5
@@ -158,7 +163,7 @@ impl MprisState {
     }
 
     /// Advances smooth VSync vinyl disc rotation and pixel-exact bar & popup marquee offsets.
-    pub fn advance_bar_animation(&mut self, now: Instant) {
+    pub fn advance_bar_animation(&mut self, now: Instant, bar_inner_w: f32) {
         if !self.is_animating_bar() {
             self.last_bar_anim_tick = None;
             return;
@@ -176,14 +181,14 @@ impl MprisState {
             }
             step_pixel_marquee(
                 self.bar_top_width_px,
-                MPRIS_BAR_TEXT_INNER_W,
+                bar_inner_w,
                 &mut self.bar_top_scroll_px,
                 &mut self.bar_top_pause_secs,
                 dt,
             );
             step_pixel_marquee(
                 self.bar_bot_width_px,
-                MPRIS_BAR_TEXT_INNER_W,
+                bar_inner_w,
                 &mut self.bar_bot_scroll_px,
                 &mut self.bar_bot_pause_secs,
                 dt,

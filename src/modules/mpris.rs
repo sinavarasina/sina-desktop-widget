@@ -2,11 +2,11 @@
 
 use waywi::prelude::*;
 
-use crate::app::mpris::{MPRIS_BAR_TEXT_INNER_W, MPRIS_MARQUEE_GAP_PX};
+use crate::app::mpris::MPRIS_MARQUEE_GAP_PX;
 use crate::app::state::{HoverTarget, Msg, State};
 use crate::theme::{
-    BAR_HEIGHT, CRUST, MAUVE, MPRIS_ART_SIZE, MPRIS_BAR_TEXT_WIDTH, OVERLAY0, SUBTEXT1, SURFACE0,
-    SURFACE1, TEXT, font_ui, font_ui_semibold,
+    BAR_HEIGHT, CRUST, MAUVE, MPRIS_ART_SIZE, OVERLAY0, SUBTEXT1, SURFACE0, SURFACE1, TEXT,
+    font_ui, font_ui_semibold,
 };
 use crate::widgets::separators::{SepShape, separator};
 
@@ -125,15 +125,19 @@ pub fn build_mpris(state: &State) -> Element<Msg> {
             Color::TRANSPARENT,
         ));
 
-    if state.mpris.has_active_session() {
+    let layout = state.layout();
+    if state.mpris.has_active_session() && layout.show_mpris_text {
         let pill_bg = if hovered { SURFACE0 } else { CRUST };
+        let text_w = layout.mpris_bar_text_width;
+        let inner_w = layout.mpris_bar_text_inner_w();
 
         let top_line = build_marquee_line(
             "mpris-bar-top",
             &state.mpris.bar_top_text,
+            inner_w,
             state.mpris.bar_top_width_px,
             state.mpris.bar_top_scroll_px,
-            state.mpris.top_overflows(),
+            state.mpris.bar_top_width_px > inner_w + 0.5,
             font_ui(),
             9.5,
             MAUVE,
@@ -141,29 +145,24 @@ pub fn build_mpris(state: &State) -> Element<Msg> {
         let bot_line = build_marquee_line(
             "mpris-bar-bot",
             &state.mpris.bar_bot_text,
+            inner_w,
             state.mpris.bar_bot_width_px,
             state.mpris.bar_bot_scroll_px,
-            state.mpris.bot_overflows(),
+            state.mpris.bar_bot_width_px > inner_w + 0.5,
             font_ui_semibold(),
             10.0,
             if playing { TEXT } else { SUBTEXT1 },
         );
 
         let text_col = Column::new()
-            .size(Size::new(
-                MPRIS_BAR_TEXT_WIDTH.logical_px(),
-                BAR_HEIGHT.logical_px(),
-            ))
+            .size(Size::new(text_w.logical_px(), BAR_HEIGHT.logical_px()))
             .padding(Edges::symmetric(1.logical_px(), 4.logical_px()))
             .child(top_line)
             .child(bot_line);
 
         let meta_pill = Group::new()
             .key("mpris-meta-pill")
-            .size(Size::new(
-                MPRIS_BAR_TEXT_WIDTH.logical_px(),
-                BAR_HEIGHT.logical_px(),
-            ))
+            .size(Size::new(text_w.logical_px(), BAR_HEIGHT.logical_px()))
             .child(Rect::new().size(Size::fill()).fill(pill_bg))
             .child(text_col);
 
@@ -190,6 +189,7 @@ pub fn build_mpris(state: &State) -> Element<Msg> {
 fn build_marquee_line(
     key: &'static str,
     text: &str,
+    inner_w: f32,
     measured_w: f32,
     scroll_px: f32,
     overflows: bool,
@@ -208,10 +208,7 @@ fn build_marquee_line(
 
     let inner: Element<Msg> = if !overflows {
         Group::new()
-            .size(Size::new(
-                MPRIS_BAR_TEXT_INNER_W.logical_px(),
-                BAR_LINE_H.logical_px(),
-            ))
+            .size(Size::new(inner_w.logical_px(), BAR_LINE_H.logical_px()))
             .child(make_text(text, 0.0))
             .into()
     } else {
@@ -220,10 +217,7 @@ fn build_marquee_line(
         let dot_x = measured_w + MPRIS_MARQUEE_GAP_PX * 0.5 - scroll_px;
         let x2 = cycle - scroll_px;
         Group::new()
-            .size(Size::new(
-                MPRIS_BAR_TEXT_INNER_W.logical_px(),
-                BAR_LINE_H.logical_px(),
-            ))
+            .size(Size::new(inner_w.logical_px(), BAR_LINE_H.logical_px()))
             .child(make_text(text, x1))
             .child(
                 Text::new("\u{2022}")
@@ -242,9 +236,6 @@ fn build_marquee_line(
 
     Clip::new(inner)
         .key(key)
-        .size(Size::new(
-            MPRIS_BAR_TEXT_INNER_W.logical_px(),
-            BAR_LINE_H.logical_px(),
-        ))
+        .size(Size::new(inner_w.logical_px(), BAR_LINE_H.logical_px()))
         .into()
 }

@@ -15,7 +15,7 @@ use crate::theme::{
 };
 use crate::widgets::text::marquee_slice;
 
-use settings::{SETTINGS_PANEL_HEIGHT, build_settings_panel};
+use settings::{build_settings_panel, settings_panel_height};
 
 pub const QUICK_MENU_WIDTH: f32 = 396.0;
 const QUICK_CARD_HEIGHT: f32 = 192.0;
@@ -32,7 +32,7 @@ pub fn build_quick_menu_surface(state: &State) -> Surface<Msg> {
 
     let main_card = build_main_card(state);
     let lower_panel: Option<(Element<Msg>, f32)> = if state.quick_menu.settings_open {
-        Some((build_settings_panel(state), SETTINGS_PANEL_HEIGHT))
+        Some((build_settings_panel(state), settings_panel_height(state)))
     } else if state.quick_menu.power_menu_open {
         Some((build_power_card(state), POWER_CARD_HEIGHT))
     } else if state.quick_menu.toolbox_open {
@@ -85,7 +85,7 @@ pub fn build_quick_menu_surface(state: &State) -> Surface<Msg> {
         .layer(Layer::Overlay)
         .ignore_exclusive_zone()
         .anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT)
-        .size(Size::fill())
+        .size(state.viewport_size())
         .input_mode(InputMode::Full)
         .keyboard_interactivity(if input_focused {
             KeyboardInteractivity::Exclusive

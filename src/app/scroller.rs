@@ -48,15 +48,22 @@ impl WindowScroller {
         }
     }
 
+    #[cfg(test)]
     #[must_use]
     pub fn visible_text(&self) -> String {
+        self.visible_text_limited(MAX_WINDOW_CHARS)
+    }
+
+    #[must_use]
+    pub fn visible_text_limited(&self, max_chars: usize) -> String {
+        let cap = max_chars.max(4);
         let len = self.raw_title.chars().count();
-        if len <= MAX_WINDOW_CHARS {
+        if len <= cap {
             return self.raw_title.clone();
         }
         let looped: Vec<char> = format!("{}  \u{2022}  ", self.raw_title).chars().collect();
-        let mut out = String::with_capacity(MAX_WINDOW_CHARS * 2);
-        for i in 0..MAX_WINDOW_CHARS {
+        let mut out = String::with_capacity(cap * 2);
+        for i in 0..cap {
             out.push(looped[(self.offset + i) % looped.len()]);
         }
         out

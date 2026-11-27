@@ -595,11 +595,7 @@ impl WidgetsConfig {
                 .any(|s| s.placement != MetricPlacement::Hidden)
     }
 
-    #[must_use]
-    pub fn is_in_drawer(&self, id: RightMetricId) -> bool {
-        self.placement_of(id) == MetricPlacement::Drawer
-    }
-
+    #[cfg(test)]
     #[must_use]
     pub fn placement_of(&self, id: RightMetricId) -> MetricPlacement {
         self.right_metrics

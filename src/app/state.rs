@@ -24,6 +24,7 @@ pub use super::config::{SettingsUiState, WidgetConfig};
 pub use super::desktop_sprite::DesktopSpriteState;
 pub use super::disk::DiskUiState;
 pub use super::drun::DrunState;
+pub use super::layout::ResponsiveLayout;
 pub use super::mpris::MprisState;
 pub use super::msg::Msg;
 pub use super::notifications::NotificationStore;
@@ -123,6 +124,19 @@ pub struct State {
 }
 
 impl State {
+    /// Explicit logical viewport `(bar_width, screen_height)` for primary-output Wayland surfaces
+    /// so live scale/resolution changes immediately send updated `layer_surface.set_size(...)`.
+    #[must_use]
+    pub fn viewport_size(&self) -> Size {
+        Size::new(self.bar_width.logical_px(), self.screen_height.logical_px())
+    }
+
+    /// Computes responsive bar & popup layout sizing for the current logical output viewport.
+    #[must_use]
+    pub fn layout(&self) -> ResponsiveLayout {
+        ResponsiveLayout::for_viewport(self.bar_width, self.screen_height)
+    }
+
     /// Plays a standard XDG Sound Theme cue via the O(1)-cached [`SoundEngine`], honoring DND.
     pub fn play_sound(&mut self, cue: SoundCue, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
         self.sounds.play(cue, self.notifications.dnd, ctx);
@@ -215,7 +229,8 @@ impl State {
             self.mpris.advance_popup_animation(now);
         }
         if self.mpris.is_animating_bar() {
-            self.mpris.advance_bar_animation(now);
+            let inner_w = self.layout().mpris_bar_text_inner_w();
+            self.mpris.advance_bar_animation(now, inner_w);
         }
         if self.bt_ui.is_animating_popup() {
             self.bt_ui.advance_popup_animation(now);
@@ -284,15 +299,36 @@ impl State {
         WorkspaceKey::Numbered(self.active_ws_id.max(1))
     }
 
+    /// Resolves effective `(bar_metrics, drawer_metrics)` after applying responsive overflow on
+    /// narrow logical viewports so left and right bar clusters never collide.
+    #[must_use]
+    pub fn effective_right_metrics(
+        &self,
+    ) -> (
+        Vec<super::config::RightMetricId>,
+        Vec<super::config::RightMetricId>,
+    ) {
+        let mut bar_ids = self.config.widgets.bar_metrics();
+        let mut drawer_ids = self.config.widgets.drawer_metrics();
+        let cap = self.layout().max_bar_metrics;
+        if bar_ids.len() > cap {
+            let mut merged: Vec<_> = bar_ids.drain(cap..).collect();
+            merged.append(&mut drawer_ids);
+            drawer_ids = merged;
+        }
+        (bar_ids, drawer_ids)
+    }
+
     #[must_use]
     pub fn is_drawer_target(&self, target: HoverTarget) -> bool {
-        if self.config.widgets.drawer_metrics().is_empty() {
+        let (_, drawer_ids) = self.effective_right_metrics();
+        if drawer_ids.is_empty() {
             return false;
         }
         target == HoverTarget::ExpandSign
             || target
                 .right_metric_id()
-                .is_some_and(|id| self.config.widgets.is_in_drawer(id))
+                .is_some_and(|id| drawer_ids.contains(&id))
     }
 
     pub fn update_hover(&mut self, target: HoverTarget, entered: bool) {

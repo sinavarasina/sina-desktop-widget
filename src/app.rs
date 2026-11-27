@@ -15,6 +15,7 @@ pub mod drun;
 pub mod format;
 pub mod handlers;
 pub mod ipc;
+pub mod layout;
 pub mod mpris;
 pub mod msg;
 pub mod notifications;

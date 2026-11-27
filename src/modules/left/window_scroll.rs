@@ -18,7 +18,11 @@ pub fn build_window_scroll(state: &State) -> Element<Msg> {
                 .padding(Edges::symmetric(0.logical_px(), WINDOW_PAD_H.logical_px()))
                 .align(Align::Center)
                 .child(
-                    Text::new(state.scroller.visible_text())
+                    Text::new(
+                        state
+                            .scroller
+                            .visible_text_limited(state.layout().max_window_chars),
+                    )
                         .font(font_window_scroll())
                         .font_size(12.logical_px())
                         .line_height(1.15)

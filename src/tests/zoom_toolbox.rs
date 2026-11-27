@@ -971,3 +971,69 @@ fn telemetry_graph_popup_opens_switches_tabs_and_renders_all_four_metrics() {
     assert!(!rt.state().telemetry_graph.is_popup_visible());
     assert!(rt.rendered_buffer("bar-telemetry-popup").is_none());
 }
+
+#[test]
+fn responsive_viewport_resizes_bar_overflows_metrics_and_renders_at_2x_and_narrow() {
+    use crate::app::layout::LayoutTier;
+    use waywi::app::HeadlessRuntime;
+    use waywi::capabilities::{Capabilities, Capability};
+    use waywi::geometry::{LogicalPx, LogicalSize, Point, ScaleFactor};
+
+    let make_rt = |w: f32, h: f32, scale_int: i32| {
+        let mut caps = Capabilities::new();
+        caps.set(Capability::LayerShell, true);
+        let outputs = vec![OutputInfo {
+            id: OutputId(1),
+            name: Some(String::from("DP-1")),
+            description: None,
+            make: String::new(),
+            model: String::new(),
+            logical_position: Point::ZERO,
+            logical_size: LogicalSize::new(LogicalPx(w), LogicalPx(h)),
+            physical_size_mm: (530, 300),
+            scale_factor: ScaleFactor::from_integer(scale_int),
+            transform: OutputTransform::Normal,
+            refresh_mhz: 180_000,
+        }];
+        HeadlessRuntime::<crate::SinaDesktopWidget>::new(caps, outputs).expect("headless init")
+    };
+
+    // 1920x1080 @ scale=2 -> logical 960x540 (Tight tier).
+    let mut rt_2x = make_rt(960.0, 540.0, 2);
+    rt_2x.enqueue(Msg::ClockMenuClick);
+    rt_2x.enqueue(Msg::QuickMenuToggleSettings);
+    settle_ui_anims(&mut rt_2x);
+
+    assert_eq!(rt_2x.state().layout().tier, LayoutTier::Tight);
+    assert_eq!(
+        rt_2x.surface_logical_size("bar"),
+        Some(LogicalSize::new(LogicalPx(960.0), LogicalPx(24.0)))
+    );
+    assert_eq!(
+        rt_2x.surface_logical_size("bar-quick-menu"),
+        Some(LogicalSize::new(LogicalPx(960.0), LogicalPx(540.0)))
+    );
+    let bar_2x = rt_2x.rendered_buffer("bar").expect("bar renders at 960x24");
+    assert!(bar_2x.as_chunks::<4>().0.iter().any(|px| px[3] > 0));
+    let qm_2x = rt_2x
+        .rendered_buffer("bar-quick-menu")
+        .expect("quick menu renders at 960x540");
+    assert!(qm_2x.as_chunks::<4>().0.iter().any(|px| px[3] > 0));
+
+    // Narrow portrait/high-scale display -> logical 720x480 (Minimal tier + drawer overflow).
+    let mut rt_narrow = make_rt(720.0, 480.0, 2);
+    rt_narrow.step().unwrap();
+
+    assert_eq!(rt_narrow.state().layout().tier, LayoutTier::Minimal);
+    assert_eq!(
+        rt_narrow.surface_logical_size("bar"),
+        Some(LogicalSize::new(LogicalPx(720.0), LogicalPx(24.0)))
+    );
+    let (bar_ids, drawer_ids) = rt_narrow.state().effective_right_metrics();
+    assert_eq!(bar_ids.len(), 1);
+    assert!(drawer_ids.len() >= 5);
+    let bar_narrow = rt_narrow
+        .rendered_buffer("bar")
+        .expect("bar renders at 720x24");
+    assert!(bar_narrow.as_chunks::<4>().0.iter().any(|px| px[3] > 0));
+}
