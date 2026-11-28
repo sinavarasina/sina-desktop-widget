@@ -5,7 +5,7 @@ use waywi::prelude::*;
 
 use crate::app::config::RightMetricId;
 use crate::app::state::{HoverTarget, Msg, State, TelemetryGraphKind};
-use crate::modules::{clock, drawer, mpris, status_pill, tray};
+use crate::modules::{clock, drawer, mpris, status_pill, tray, visualizer};
 use crate::theme::{BAR_HEIGHT, MANTLE, SURFACE0};
 use crate::widgets::metric::{MetricModuleConfig, metric_module};
 use crate::widgets::separators::{SepShape, separator};
@@ -109,8 +109,13 @@ pub fn build_right_modules(state: &State) -> Row<Msg> {
     let mut row = Row::new()
         .key("modules-right")
         .size(Size::new(Length::Auto, BAR_HEIGHT.logical_px()))
-        .align(Align::Center)
-        .child(status_pill::build_privacy_pill(state, w.show_mpris));
+        .align(Align::Center);
+
+    if let Some(viz) = visualizer::build_visualizer(state) {
+        row = row.child(viz);
+    }
+
+    row = row.child(status_pill::build_privacy_pill(state, w.show_mpris));
 
     if w.show_mpris {
         row = row.child(mpris::build_mpris(state));

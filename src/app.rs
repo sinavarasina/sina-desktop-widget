@@ -31,6 +31,7 @@ pub mod telemetry_graph;
 pub mod toolbox;
 pub mod tray_cache;
 pub mod types;
+pub mod visualizer;
 pub mod window_info;
 pub mod zoom;
 

@@ -203,6 +203,13 @@ pub fn handle_toggle_setting(state: &mut State, id: SettingToggleId, ctx: &mut E
             }
             state.config.widgets.show_tray
         }
+        SettingToggleId::WidgetVisualizer => {
+            state.config.widgets.show_visualizer = !state.config.widgets.show_visualizer;
+            if !state.config.widgets.show_visualizer {
+                state.visualizer.reset_immediate();
+            }
+            state.config.widgets.show_visualizer
+        }
     };
 
     state.save_config();
@@ -489,6 +496,7 @@ pub fn handle_reset_defaults(state: &mut State, ctx: &mut EffectCtx<'_, crate::a
     state.settings_ui.list_scroll_y = 0.0;
 
     state.clock_alt = state.config.general.clock_alt_default;
+    state.visualizer.mode = state.config.widgets.visualizer_mode;
     state.sounds.apply_config(&state.config.audio);
     state
         .quick_menu

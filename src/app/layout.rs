@@ -30,6 +30,10 @@ pub struct ResponsiveLayout {
     pub notif_ticker_width: f32,
     pub show_mpris_text: bool,
     pub mpris_bar_text_width: f32,
+    /// Whether the right-bar audio visualizer has enough horizontal headroom to mount.
+    pub show_visualizer: bool,
+    /// Logical width of the right-bar audio visualizer canvas.
+    pub visualizer_width: f32,
     /// Maximum right-side `Bar` metrics kept directly on the bar; overflow moves seamlessly into
     /// the expandable `exp` drawer so left and right bar clusters never collide.
     pub max_bar_metrics: usize,
@@ -59,6 +63,8 @@ impl ResponsiveLayout {
                 notif_ticker_width: NOTIF_TICKER_WIDTH,
                 show_mpris_text: true,
                 mpris_bar_text_width: MPRIS_BAR_TEXT_WIDTH,
+                show_visualizer: true,
+                visualizer_width: 108.0,
                 max_bar_metrics: usize::MAX,
                 settings_panel_height,
                 clipboard_max_cards,
@@ -74,6 +80,8 @@ impl ResponsiveLayout {
                 notif_ticker_width: 180.0,
                 show_mpris_text: true,
                 mpris_bar_text_width: 100.0,
+                show_visualizer: true,
+                visualizer_width: 84.0,
                 max_bar_metrics: usize::MAX,
                 settings_panel_height,
                 clipboard_max_cards,
@@ -89,6 +97,8 @@ impl ResponsiveLayout {
                 notif_ticker_width: 132.0,
                 show_mpris_text: true,
                 mpris_bar_text_width: 84.0,
+                show_visualizer: false,
+                visualizer_width: 72.0,
                 max_bar_metrics: if w >= 940.0 { 4 } else { 2 },
                 settings_panel_height,
                 clipboard_max_cards,
@@ -104,6 +114,8 @@ impl ResponsiveLayout {
                 notif_ticker_width: 104.0,
                 show_mpris_text: false,
                 mpris_bar_text_width: 72.0,
+                show_visualizer: false,
+                visualizer_width: 64.0,
                 max_bar_metrics: 1,
                 settings_panel_height,
                 clipboard_max_cards,

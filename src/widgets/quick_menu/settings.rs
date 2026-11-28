@@ -68,7 +68,7 @@ pub fn settings_list_content_height(state: &State) -> f32 {
         SettingsSection::General => (8, 2),
         SettingsSection::Audio => (6, 2),
         SettingsSection::Desktop => (10, 2),
-        SettingsSection::Bar => (6 + state.config.widgets.right_metrics.len(), 2),
+        SettingsSection::Bar => (7 + state.config.widgets.right_metrics.len(), 2),
     };
 
     let item_count = base_rows + subsections;
@@ -763,6 +763,13 @@ fn build_bar_rows(state: &State) -> Vec<Element<Msg>> {
             "System Tray",
             w.show_tray,
             SettingToggleId::WidgetTray,
+        ),
+        toggle_row(
+            state,
+            46,
+            "Audio Visualizer",
+            w.show_visualizer,
+            SettingToggleId::WidgetVisualizer,
         ),
         subsection_header("bar-metrics", "METRICS & DRAWER"),
     ];

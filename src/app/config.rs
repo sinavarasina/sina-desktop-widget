@@ -8,6 +8,8 @@ use waywi::prelude::*;
 
 use crate::theme::font_ui;
 
+use super::visualizer::VisualizerMode;
+
 pub const CONFIG_FILE_NAME: &str = "config.toml";
 
 /// Wallpaper scaling mode mapped directly to `waywi::ImageFit`.
@@ -522,6 +524,8 @@ pub struct WidgetsConfig {
     pub show_notifications: bool,
     pub show_mpris: bool,
     pub show_tray: bool,
+    pub show_visualizer: bool,
+    pub visualizer_mode: VisualizerMode,
     pub right_metrics: Vec<RightMetricSlot>,
 }
 
@@ -534,6 +538,8 @@ impl Default for WidgetsConfig {
             show_notifications: true,
             show_mpris: true,
             show_tray: true,
+            show_visualizer: true,
+            visualizer_mode: VisualizerMode::Bars,
             right_metrics: RightMetricId::ALL
                 .into_iter()
                 .map(|id| RightMetricSlot {
@@ -747,6 +753,8 @@ impl WidgetConfig {
              show_notifications = {}\n\
              show_mpris = {}\n\
              show_tray = {}\n\
+             show_visualizer = {}\n\
+             visualizer_mode = \"{}\"\n\
              right_metrics = \"{}\"\n",
             self.general.clock_24h,
             self.general.clock_alt_default,
@@ -773,6 +781,8 @@ impl WidgetConfig {
             self.widgets.show_notifications,
             self.widgets.show_mpris,
             self.widgets.show_tray,
+            self.widgets.show_visualizer,
+            self.widgets.visualizer_mode.as_str(),
             self.widgets.format_right_metrics_toml(),
         )
     }
@@ -934,6 +944,18 @@ impl WidgetConfig {
                 ("widgets", "show_tray") => {
                     if let Some(b) = parse_toml_bool(val) {
                         cfg.widgets.show_tray = b;
+                    }
+                }
+                ("widgets", "show_visualizer") => {
+                    if let Some(b) = parse_toml_bool(val) {
+                        cfg.widgets.show_visualizer = b;
+                    }
+                }
+                ("widgets", "visualizer_mode") => {
+                    if let Some(s) = parse_toml_string(val)
+                        && let Some(mode) = VisualizerMode::parse(&s)
+                    {
+                        cfg.widgets.visualizer_mode = mode;
                     }
                 }
                 ("widgets", "right_metrics") => {
@@ -1110,6 +1132,7 @@ pub enum SettingToggleId {
     WidgetNotifications,
     WidgetMpris,
     WidgetTray,
+    WidgetVisualizer,
 }
 
 /// All numeric `- value +` stepper controls in the Settings panel.

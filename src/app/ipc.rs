@@ -26,6 +26,7 @@ WIDGET TARGETS (with aliases):
   dnd                                       Toggle Do Not Disturb
   clipboard     (clip)                      Clipboard history popup
   caffeine      (awake, inhibit)            Idle-inhibit / Keep-Awake toggle
+  visualizer    (viz, spectrum)             Audio FFT visualizer toggle
   volume        (audio, mixer, vol)         Audio mixer & routing popup
   bluetooth     (bt)                        Bluetooth device manager popup
   disk          (disks, udisks, storage)    Mounted disks & UDisks2 popup
@@ -66,6 +67,7 @@ pub enum IpcTarget {
     Dnd,
     Clipboard,
     Caffeine,
+    Visualizer,
     Volume,
     Bluetooth,
     Disk,
@@ -143,6 +145,7 @@ pub fn parse_ipc_command(raw: &str) -> Option<Msg> {
         "dnd" => IpcTarget::Dnd,
         "clipboard" | "clip" => IpcTarget::Clipboard,
         "caffeine" | "awake" | "inhibit" => IpcTarget::Caffeine,
+        "visualizer" | "viz" | "spectrum" => IpcTarget::Visualizer,
         "volume" | "audio" | "mixer" | "vol" => IpcTarget::Volume,
         "bluetooth" | "bt" => IpcTarget::Bluetooth,
         "disk" | "disks" | "udisks" | "storage" => IpcTarget::Disk,

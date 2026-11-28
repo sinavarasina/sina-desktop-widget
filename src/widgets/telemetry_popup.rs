@@ -122,7 +122,15 @@ pub fn build_line_chart(spec: ChartSpec<'_>) -> Element<Msg> {
                     fill_pb
                         .line_to(x_of(n - 1).logical_px(), baseline_y.logical_px())
                         .close();
-                    p.fill_path(&fill_pb, color.with_opacity(*fill_alpha));
+                    let grad = LinearGradient::new(
+                        Point::new(0.logical_px(), 0.logical_px()),
+                        Point::new(0.logical_px(), 1.logical_px()),
+                        [
+                            GradientStop::new(0.0, color.with_opacity((*fill_alpha * 1.4).min(0.45))),
+                            GradientStop::new(1.0, color.with_opacity(0.02)),
+                        ],
+                    );
+                    p.fill_path(&fill_pb, grad);
                 }
 
                 let mut line_pb = PathBuilder::new();
@@ -356,18 +364,7 @@ fn build_header(
     let mut right_row = Row::new()
         .size(Size::auto())
         .gap(8.logical_px())
-        .align(Align::Center)
-        .position(Position::relative_to_parent(
-            Percent::new(100.0),
-            Percent::new(50.0),
-        ))
-        .anchor(ElementAnchor::CenterRight)
-        .padding(Edges::new(
-            0.logical_px(),
-            10.logical_px(),
-            0.logical_px(),
-            0.logical_px(),
-        ));
+        .align(Align::Center);
 
     for (val, col) in hero_parts {
         right_row = right_row.child(
@@ -378,24 +375,16 @@ fn build_header(
         );
     }
 
-    Group::new()
-        .size(Size::new(Length::Fill, HEADER_H.logical_px()))
+    Row::new()
+        .size((Length::Fill, HEADER_H.logical_px()))
+        .padding(Edges::symmetric(0.logical_px(), 10.logical_px()))
+        .align(Align::Center)
+        .justify(Justify::SpaceBetween)
         .child(
             Row::new()
                 .size(Size::auto())
                 .gap(6.logical_px())
                 .align(Align::Center)
-                .position(Position::relative_to_parent(
-                    Percent::new(0.0),
-                    Percent::new(50.0),
-                ))
-                .anchor(ElementAnchor::CenterLeft)
-                .padding(Edges::new(
-                    0.logical_px(),
-                    0.logical_px(),
-                    0.logical_px(),
-                    10.logical_px(),
-                ))
                 .child(
                     Text::new(kind.icon())
                         .font(font_ui())
@@ -494,18 +483,18 @@ struct StatItem {
 }
 
 fn build_stat_row(left: &StatItem, right: &StatItem) -> Element<Msg> {
-    let card_w = (CHART_W - STAT_GAP) * 0.5;
     Row::new()
-        .size(Size::new(CHART_W.logical_px(), STAT_CARD_H.logical_px()))
+        .size((CHART_W.logical_px(), STAT_CARD_H.logical_px()))
         .gap(STAT_GAP.logical_px())
-        .child(build_stat_card(card_w, left))
-        .child(build_stat_card(card_w, right))
+        .child(build_stat_card(left))
+        .child(build_stat_card(right))
         .into()
 }
 
-fn build_stat_card(width: f32, item: &StatItem) -> Element<Msg> {
+fn build_stat_card(item: &StatItem) -> Element<Msg> {
     Group::new()
-        .size(Size::new(width.logical_px(), STAT_CARD_H.logical_px()))
+        .size((Length::Fill, STAT_CARD_H.logical_px()))
+        .flex(1.0)
         .child(
             Rect::new()
                 .size(Size::fill())
@@ -522,13 +511,17 @@ fn build_stat_card(width: f32, item: &StatItem) -> Element<Msg> {
                     Text::new(item.label)
                         .font(font_ui())
                         .font_size(8.5.logical_px())
-                        .color(SUBTEXT0),
+                        .color(SUBTEXT0)
+                        .ellipsis()
+                        .max_lines(1),
                 )
                 .child(
                     Text::new(item.value.clone())
                         .font(font_ui_semibold())
                         .font_size(10.logical_px())
-                        .color(item.accent),
+                        .color(item.accent)
+                        .ellipsis()
+                        .max_lines(1),
                 ),
         )
         .into()

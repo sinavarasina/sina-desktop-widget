@@ -54,6 +54,13 @@ pub fn build_tooltip_surface(state: &State) -> Option<Surface<Msg>> {
         HoverTarget::Disk => (state.disk_metric().tooltip, None),
         HoverTarget::Bluetooth => (state.bluetooth_metric().tooltip, None),
         HoverTarget::PrivacyStatus => (privacy_tooltip(state), None),
+        HoverTarget::VisualizerBar => (
+            format!(
+                "Audio Visualizer · {}\nLeft / Right-click: switch mode\nMiddle-click: disable",
+                state.visualizer.mode.label()
+            ),
+            None,
+        ),
         HoverTarget::ClipboardBar => {
             let n = state.clipboard.entries.len();
             let caff = if state.caffeine_active { "ON" } else { "OFF" };
@@ -144,7 +151,13 @@ pub fn build_tooltip_surface(state: &State) -> Option<Surface<Msg>> {
                 .size(Size::fill())
                 .fill(CRUST)
                 .corner_radius(6.logical_px())
-                .border(1.logical_px(), SURFACE1),
+                .border(1.logical_px(), SURFACE1)
+                .shadow(BoxShadow::new(
+                    0.logical_px(),
+                    4.logical_px(),
+                    10.logical_px(),
+                    Color::rgba(0, 0, 0, 110),
+                )),
         )
         .child(lines_col);
 

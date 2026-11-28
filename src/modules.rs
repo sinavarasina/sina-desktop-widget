@@ -7,6 +7,7 @@ pub mod mpris;
 pub mod right;
 pub mod status_pill;
 pub mod tray;
+pub mod visualizer;
 
 use waywi::prelude::*;
 

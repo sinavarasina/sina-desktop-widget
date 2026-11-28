@@ -115,6 +115,8 @@ pub fn init_state(ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Result<State
 
     let mut quick_menu = QuickMenuState::default();
     quick_menu.sprite_pose_idx = config.sprite.quick_menu_pose % 3;
+    let mut visualizer = crate::app::visualizer::VisualizerState::default();
+    visualizer.mode = config.widgets.visualizer_mode;
     let clock_alt = config.general.clock_alt_default;
 
     Ok(State {
@@ -154,6 +156,7 @@ pub fn init_state(ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Result<State
         audio: None,
         audio_target: AudioControlTarget::Sink,
         audio_ui: AudioUiState::default(),
+        visualizer,
         cpu: None,
         cpu_temp_celsius: None,
         cpu_power_watts: None,

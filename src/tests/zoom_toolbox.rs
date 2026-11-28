@@ -1037,3 +1037,107 @@ fn responsive_viewport_resizes_bar_overflows_metrics_and_renders_at_2x_and_narro
         .expect("bar renders at 720x24");
     assert!(bar_narrow.as_chunks::<4>().0.iter().any(|px| px[3] > 0));
 }
+
+#[test]
+fn audio_visualizer_renders_all_five_modes_switches_on_click_and_filters_self_privacy() {
+    use crate::app::visualizer::{FFT_SIZE, VisualizerMode};
+    use std::f32::consts::TAU;
+
+    assert!(matches!(
+        parse_ipc_command("viz"),
+        Some(Msg::IpcControl {
+            action: IpcAction::Toggle,
+            target: IpcTarget::Visualizer,
+        })
+    ));
+
+    let mut rt = synthetic_rt();
+    assert!(!rt.state().visualizer.is_visible());
+
+    // Build a synthetic stereo 440Hz + 2kHz test frame.
+    let mut pcm = Vec::with_capacity(FFT_SIZE * 2);
+    for i in 0..FFT_SIZE {
+        let t = i as f32 / 48_000.0;
+        let l = (TAU * 440.0 * t).sin() * 0.65;
+        let r = (TAU * 2000.0 * t).sin() * 0.55;
+        pcm.push(l);
+        pcm.push(r);
+    }
+    let frame = AudioCaptureFrame {
+        peak_left: 0.65,
+        peak_right: 0.55,
+        rms_left: 0.45,
+        rms_right: 0.38,
+        peak_db: -3.7,
+        silent: false,
+        sample_rate: 48_000,
+        channels: 2,
+        pcm: Arc::from(pcm),
+    };
+
+    // Cycle through all 5 modes via Left-click and verify each renders cleanly on `bar`.
+    for expected in VisualizerMode::ALL {
+        assert_eq!(rt.state().visualizer.mode, expected);
+        rt.enqueue(Msg::AudioCaptureFrame(frame.clone()));
+        rt.step().unwrap();
+        assert!(rt.state().visualizer.is_visible());
+        let bar = rt
+            .rendered_buffer("bar")
+            .expect("bar renders with active visualizer");
+        assert!(bar.as_chunks::<4>().0.iter().any(|px| px[3] > 0));
+        rt.enqueue(Msg::VisualizerPointerDown(ptr_ev(
+            1200.0,
+            12.0,
+            Some(MouseButton::Left),
+        )));
+        rt.step().unwrap();
+    }
+    assert_eq!(rt.state().visualizer.mode, VisualizerMode::Bars);
+
+    // Right-click steps backward.
+    rt.enqueue(Msg::VisualizerPointerDown(ptr_ev(
+        1200.0,
+        12.0,
+        Some(MouseButton::Right),
+    )));
+    rt.step().unwrap();
+    assert_eq!(rt.state().visualizer.mode, VisualizerMode::Wave);
+
+    // PrivacySnapshot transparently reports active audio capture while visualizer is running.
+    rt.enqueue(Msg::PrivacySampled(PrivacySnapshot {
+        active: vec![PrivacyAccessEntry {
+            kind: PrivacyAccessKind::AudioCapture,
+            source: PrivacyAccessSource::PipeWire,
+            app_name: String::from("sina-desktop-widget"),
+            node_name: Some(String::from("waywi-capture")),
+            pid: Some(std::process::id()),
+            device_path: None,
+        }],
+        camera_in_use: false,
+        microphone_in_use: false,
+        audio_capture_in_use: true,
+        screen_share_in_use: false,
+        location_in_use: false,
+    }));
+    rt.step().unwrap();
+    assert!(rt.state().privacy.audio_capture_in_use);
+
+    // Middle-click disables the visualizer completely (0 wakeups, 0 capture, unmounted).
+    rt.enqueue(Msg::VisualizerPointerDown(ptr_ev(
+        1200.0,
+        12.0,
+        Some(MouseButton::Middle),
+    )));
+    rt.step().unwrap();
+    assert!(!rt.state().config.widgets.show_visualizer);
+    assert!(!rt.state().visualizer.is_visible());
+    assert!(!rt.state().should_capture_visualizer());
+
+    // IPC re-enables the visualizer cleanly.
+    rt.enqueue(Msg::IpcControl {
+        action: IpcAction::Open,
+        target: IpcTarget::Visualizer,
+    });
+    rt.step().unwrap();
+    assert!(rt.state().config.widgets.show_visualizer);
+}

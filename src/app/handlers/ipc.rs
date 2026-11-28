@@ -191,6 +191,24 @@ pub fn handle_ipc_control(
                 );
             }
         }
+        IpcTarget::Visualizer => {
+            let want_on = resolve_next(state.config.widgets.show_visualizer, action);
+            if want_on != state.config.widgets.show_visualizer {
+                state.config.widgets.show_visualizer = want_on;
+                if !want_on {
+                    state.visualizer.reset_immediate();
+                }
+                state.save_config();
+                state.play_sound(
+                    if want_on {
+                        SoundCue::ToggleOn
+                    } else {
+                        SoundCue::ToggleOff
+                    },
+                    ctx,
+                );
+            }
+        }
         IpcTarget::Volume => {
             let was_open = state.audio_ui.is_popup_open();
             let next = resolve_next(was_open, action);

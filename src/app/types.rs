@@ -34,6 +34,7 @@ pub enum HoverTarget {
     NotifCenterDnd,
     NotifCenterClear,
     PrivacyStatus,
+    VisualizerBar,
     ClipboardBar,
     CaffeineBadge,
     ActiveToolBadge,
@@ -178,6 +179,7 @@ impl HoverTarget {
             Self::PrivacyStatus | Self::ActiveToolBadge => {
                 475.0 + clock_shift + (tray_count as f32) * 26.0
             }
+            Self::VisualizerBar => 540.0 + clock_shift + (tray_count as f32) * 26.0,
             _ => 8.0,
         }
     }

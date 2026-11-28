@@ -174,6 +174,21 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
             Msg::MixerMarqueeTick,
         ));
     }
+    if state.should_capture_visualizer() {
+        let cfg = AudioCaptureConfig::default()
+            .sample_rate(48_000)
+            .channels(2)
+            .frame_size(crate::app::visualizer::FFT_SIZE)
+            .update_interval(Duration::from_millis(33))
+            .include_pcm(state.visualizer.mode.needs_pcm())
+            .silence_threshold(2e-4);
+        subs.push(Audio::capture(
+            "bar-visualizer",
+            AudioCaptureTarget::DefaultOutputMonitor,
+            cfg,
+            Msg::AudioCaptureFrame,
+        ));
+    }
     if state.drun.is_open() && !state.drun.match_indices.is_empty() {
         subs.push(Timer::every(
             "drun-marquee",

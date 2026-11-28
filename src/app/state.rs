@@ -38,6 +38,7 @@ pub use super::telemetry_graph::{TelemetryGraphKind, TelemetryGraphState};
 pub use super::tray_cache::resolve_tray_icon;
 use super::tray_cache::upsert_tray_entry_into;
 pub use super::types::{AudioControlTarget, HoverTarget, TrayEntry, TrayMenuPopup};
+pub use super::visualizer::VisualizerState;
 pub use super::window_info::WindowInfoState;
 pub use super::zoom::ZoomState;
 
@@ -83,6 +84,7 @@ pub struct State {
     pub audio: Option<Arc<AudioSnapshot>>,
     pub audio_target: AudioControlTarget,
     pub audio_ui: AudioUiState,
+    pub visualizer: VisualizerState,
 
     pub cpu: Option<CpuSnapshot>,
     pub cpu_temp_celsius: Option<f32>,
@@ -164,6 +166,26 @@ impl State {
         self.sysinfo.is_animating() || self.window_info.is_animating()
     }
 
+    /// True when any playback audio stream or playing MPRIS session is active, allowing the
+    /// on-demand `Audio::capture` worker to run only while audio can actually be produced.
+    #[must_use]
+    pub fn has_active_audio_output(&self) -> bool {
+        self.mpris.is_playing()
+            || self.audio.as_ref().is_some_and(|a| {
+                a.streams
+                    .iter()
+                    .any(|s| s.direction == AudioDirection::Output && !s.volume.muted)
+            })
+    }
+
+    /// True when `Audio::capture` should be subscribed for the right-bar visualizer.
+    #[must_use]
+    pub fn should_capture_visualizer(&self) -> bool {
+        self.config.widgets.show_visualizer
+            && self.layout().show_visualizer
+            && self.has_active_audio_output()
+    }
+
     /// True whenever any VSync UI animation is active and needs `Animation::frames`.
     #[must_use]
     pub fn is_animating_ui(&self) -> bool {
@@ -184,6 +206,7 @@ impl State {
             || self.annotate.is_animating()
             || self.zoom.is_animating()
             || self.screenshot.is_animating_preview()
+            || self.visualizer.is_decaying()
     }
 
     /// Advances all active VSync UI animations to `now`.
@@ -276,6 +299,9 @@ impl State {
                 ctx.unload_image(old_thumb);
             }
             ctx.trim_memory();
+        }
+        if self.visualizer.is_decaying() {
+            self.visualizer.advance_decay(now);
         }
     }
 

@@ -195,19 +195,16 @@ fn build_header(state: &State) -> Element<Msg> {
                 ),
         );
 
-    Group::new()
-        .size(Size::new(Length::Fill, HEADER_HEIGHT.logical_px()))
+    Row::new()
+        .size((Length::Fill, HEADER_HEIGHT.logical_px()))
+        .padding(Edges::symmetric(0.logical_px(), 10.logical_px()))
+        .align(Align::Center)
+        .justify(Justify::SpaceBetween)
         .child(
             Row::new()
                 .size(Size::auto())
                 .gap(6.logical_px())
                 .align(Align::Center)
-                .position(Position::relative_to_parent(
-                    Percent::new(0.0),
-                    Percent::new(50.0),
-                ))
-                .anchor(ElementAnchor::CenterLeft)
-                .padding(Edges::new(0.logical_px(), 0.logical_px(), 0.logical_px(), 10.logical_px()))
                 .child(
                     Text::new("\u{f0ea}")
                         .font(font_ui())
@@ -227,12 +224,6 @@ fn build_header(state: &State) -> Element<Msg> {
                 .size(Size::auto())
                 .gap(6.logical_px())
                 .align(Align::Center)
-                .position(Position::relative_to_parent(
-                    Percent::new(100.0),
-                    Percent::new(50.0),
-                ))
-                .anchor(ElementAnchor::CenterRight)
-                .padding(Edges::new(0.logical_px(), 10.logical_px(), 0.logical_px(), 0.logical_px()))
                 .child(caff_btn)
                 .child(clear_btn),
         )
@@ -310,30 +301,11 @@ fn build_entry_card(state: &State, entry: &ClipboardEntry) -> Element<Msg> {
     };
 
     let preview = entry.preview_line();
-    let max_chars = if can_open { 26 } else { 30 };
-    let truncated: String = if preview.chars().count() > max_chars {
-        let mut s: String = preview.chars().take(max_chars - 1).collect();
-        s.push('…');
-        s
-    } else {
-        preview
-    };
 
     let mut right_actions = Row::new()
         .size(Size::auto())
         .gap(4.logical_px())
-        .align(Align::Center)
-        .position(Position::relative_to_parent(
-            Percent::new(100.0),
-            Percent::new(50.0),
-        ))
-        .anchor(ElementAnchor::CenterRight)
-        .padding(Edges::new(
-            0.logical_px(),
-            6.logical_px(),
-            0.logical_px(),
-            0.logical_px(),
-        ));
+        .align(Align::Center);
 
     if can_open {
         let open_btn = Group::new()
@@ -415,24 +387,17 @@ fn build_entry_card(state: &State, entry: &ClipboardEntry) -> Element<Msg> {
 
     right_actions = right_actions.child(pin_btn).child(del_btn);
 
-    let text_w = if can_open { 174.0 } else { 208.0 };
-    let text_box = Group::new()
-        .size(Size::new(text_w.logical_px(), 16.logical_px()))
-        .child(
-            Text::new(truncated)
-                .font(font_ui())
-                .font_size(10.5.logical_px())
-                .color(if hovered { TEXT } else { SUBTEXT1 })
-                .position(Position::relative_to_parent(
-                    Percent::new(0.0),
-                    Percent::new(50.0),
-                ))
-                .anchor(ElementAnchor::CenterLeft),
-        );
+    let text_el = Text::new(preview)
+        .font(font_ui())
+        .font_size(10.5.logical_px())
+        .color(if hovered { TEXT } else { SUBTEXT1 })
+        .ellipsis()
+        .max_lines(1)
+        .flex(1.0);
 
     Group::new()
         .key(("clip-card", id))
-        .size(Size::new(Length::Fill, CARD_HEIGHT.logical_px()))
+        .size((Length::Fill, CARD_HEIGHT.logical_px()))
         .cursor(CursorShape::Pointer)
         .on_hover(Msg::Hover(HoverTarget::ClipboardItem(id)))
         .on_leave(Msg::Leave(HoverTarget::ClipboardItem(id)))
@@ -447,15 +412,13 @@ fn build_entry_card(state: &State, entry: &ClipboardEntry) -> Element<Msg> {
         )
         .child(
             Row::new()
-                .size(Size::auto())
+                .size(Size::fill())
+                .padding(Edges::symmetric(0.logical_px(), 8.logical_px()))
                 .gap(8.logical_px())
                 .align(Align::Center)
-                .position(Position::relative_to_parent(Percent::new(0.0), Percent::new(50.0)))
-                .anchor(ElementAnchor::CenterLeft)
-                .padding(Edges::new(0.logical_px(), 0.logical_px(), 0.logical_px(), 8.logical_px()))
                 .child(lead)
-                .child(text_box),
+                .child(text_el)
+                .child(right_actions),
         )
-        .child(right_actions)
         .into()
 }

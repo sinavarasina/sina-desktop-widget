@@ -81,10 +81,10 @@ pub fn build_header(state: &State) -> Element<Msg> {
         );
 
     Row::new()
-        .size(Size::new(Length::Fill, HEADER_HEIGHT.logical_px()))
+        .size((Length::Fill, HEADER_HEIGHT.logical_px()))
         .padding(Edges::symmetric(0.logical_px(), 10.logical_px()))
         .align(Align::Center)
-        .gap(8.logical_px())
+        .justify(Justify::SpaceBetween)
         .child(
             Text::new(format!(
                 "Notifications ({})",
@@ -94,7 +94,13 @@ pub fn build_header(state: &State) -> Element<Msg> {
             .font_size(12.logical_px())
             .color(MAUVE),
         )
-        .child(dnd_btn)
-        .child(clear_btn)
+        .child(
+            Row::new()
+                .size(Size::auto())
+                .gap(6.logical_px())
+                .align(Align::Center)
+                .child(dnd_btn)
+                .child(clear_btn),
+        )
         .into()
 }

@@ -488,7 +488,12 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
                 }
             }
         }
-        Msg::MprisEvent(ev) => handle_mpris_event(state, *ev, ctx),
+        Msg::MprisEvent(ev) => {
+            handle_mpris_event(state, *ev, ctx);
+            if !state.should_capture_visualizer() {
+                state.visualizer.mark_silent();
+            }
+        }
         Msg::MprisBarPointerDown(ev) => handle_mpris_bar_pointer(state, ev, ctx),
         Msg::MprisBarScroll(sc) => handle_mpris_scroll(state, sc, ctx),
         Msg::MprisAction(action) => handle_mpris_action(state, action, ctx),
@@ -574,7 +579,42 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
         Msg::TrayBlinkTick => {
             state.blink_phase = !state.blink_phase;
         }
-        Msg::AudioUpdated(snap) => handle_audio_updated(state, snap, ctx),
+        Msg::AudioUpdated(snap) => {
+            handle_audio_updated(state, snap, ctx);
+            if !state.should_capture_visualizer() {
+                state.visualizer.mark_silent();
+            }
+        }
+        Msg::AudioCaptureFrame(frame) => {
+            if state.config.widgets.show_visualizer && state.layout().show_visualizer {
+                state.visualizer.ingest_frame(&frame);
+            } else {
+                state.visualizer.reset_immediate();
+            }
+        }
+        Msg::VisualizerPointerDown(ev) => match ev.button {
+            Some(MouseButton::Left) => {
+                state.visualizer.mode = state.visualizer.mode.next();
+                state.config.widgets.visualizer_mode = state.visualizer.mode;
+                state.visualizer.frame_seq = state.visualizer.frame_seq.wrapping_add(1);
+                state.save_config();
+                state.play_sound(SoundCue::TabChanged, ctx);
+            }
+            Some(MouseButton::Right) => {
+                state.visualizer.mode = state.visualizer.mode.prev();
+                state.config.widgets.visualizer_mode = state.visualizer.mode;
+                state.visualizer.frame_seq = state.visualizer.frame_seq.wrapping_add(1);
+                state.save_config();
+                state.play_sound(SoundCue::TabChanged, ctx);
+            }
+            Some(MouseButton::Middle) => {
+                state.config.widgets.show_visualizer = false;
+                state.visualizer.reset_immediate();
+                state.save_config();
+                state.play_sound(SoundCue::ToggleOff, ctx);
+            }
+            _ => {}
+        },
         Msg::AudioPointerDown(ev) => match ev.button {
             Some(MouseButton::Middle) => {
                 state.audio_target = match state.audio_target {

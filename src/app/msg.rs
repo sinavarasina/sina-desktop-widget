@@ -210,6 +210,8 @@ pub enum Msg {
     CloseTrayMenu,
     TrayBlinkTick,
     AudioUpdated(Arc<AudioSnapshot>),
+    AudioCaptureFrame(AudioCaptureFrame),
+    VisualizerPointerDown(PointerEvent),
     AudioPointerDown(PointerEvent),
     AudioScroll(ScrollEvent),
     MixerBarPointerDown(PointerEvent),
