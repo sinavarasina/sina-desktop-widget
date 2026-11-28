@@ -30,7 +30,13 @@ pub fn load_embedded_wallpaper(ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) ->
 
 pub fn init_state(ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) -> Result<State> {
     #[cfg(not(test))]
-    let config_path = WidgetConfig::default_path();
+    let config_path = {
+        let p = WidgetConfig::default_path();
+        if let Some(parent) = p.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        p
+    };
     #[cfg(test)]
     let config_path = {
         use std::sync::atomic::{AtomicU64, Ordering};

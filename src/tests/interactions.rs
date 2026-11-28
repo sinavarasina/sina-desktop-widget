@@ -1676,3 +1676,258 @@ fn mixer_popup_routing_card_switches_devices_ports_profiles_and_balance() {
     assert!(!rt.state().audio_ui.profiles_open);
     assert_eq!(rt.state().audio_ui.routing_scroll_y, 0.0);
 }
+
+#[test]
+fn mixer_per_app_stream_routing_expands_picker_and_moves_stream() {
+    use waywi::audio::AudioStream;
+
+    let mut rt = synthetic_rt();
+    let snap = AudioSnapshot {
+        default_sink_id: Some(1),
+        sinks: vec![
+            AudioDevice {
+                id: 1,
+                name: String::from("alsa_output.pci-0000_0c_00.6.analog-stereo"),
+                description: String::from("Headphones"),
+                is_default: true,
+                volume: AudioVolume {
+                    linear: 0.65,
+                    ..AudioVolume::default()
+                },
+                ..AudioDevice::default()
+            },
+            AudioDevice {
+                id: 2,
+                name: String::from("alsa_output.pci-0000_01_00.1.hdmi-stereo"),
+                description: String::from("HDMI Speakers"),
+                volume: AudioVolume {
+                    linear: 0.80,
+                    ..AudioVolume::default()
+                },
+                ..AudioDevice::default()
+            },
+        ],
+        default_source_id: Some(11),
+        sources: vec![
+            AudioDevice {
+                id: 11,
+                name: String::from("alsa_input.front-mic"),
+                description: String::from("Front Mic"),
+                is_default: true,
+                volume: AudioVolume {
+                    linear: 0.75,
+                    ..AudioVolume::default()
+                },
+                ..AudioDevice::default()
+            },
+            AudioDevice {
+                id: 12,
+                name: String::from("alsa_input.usb-mic"),
+                description: String::from("USB Condenser"),
+                volume: AudioVolume {
+                    linear: 0.90,
+                    ..AudioVolume::default()
+                },
+                ..AudioDevice::default()
+            },
+        ],
+        streams: vec![
+            AudioStream {
+                id: 10,
+                direction: AudioDirection::Output,
+                name: String::from("Firefox"),
+                device_id: Some(1),
+                volume: AudioVolume {
+                    linear: 0.70,
+                    ..AudioVolume::default()
+                },
+                ..AudioStream::default()
+            },
+            AudioStream {
+                id: 20,
+                direction: AudioDirection::Input,
+                name: String::from("OBS Studio"),
+                device_id: Some(11),
+                volume: AudioVolume {
+                    linear: 0.85,
+                    ..AudioVolume::default()
+                },
+                ..AudioStream::default()
+            },
+        ],
+        ..AudioSnapshot::default()
+    };
+
+    rt.enqueue(Msg::AudioUpdated(Arc::new(snap)));
+    rt.enqueue(Msg::MixerBarPointerDown(PointerEvent {
+        position: Point::new(1650.logical_px(), 12.logical_px()),
+        local_position: Point::ZERO,
+        button: Some(MouseButton::Left),
+        modifiers: Modifiers::empty(),
+    }));
+    settle_ui_anims(&mut rt);
+    assert!(rt.state().audio_ui.is_popup_open());
+    assert_eq!(rt.state().audio_ui.expanded_stream_route, None);
+
+    // Expand inline output picker for Firefox (stream 10) and render headless.
+    rt.enqueue(Msg::MixerToggleStreamRoute {
+        direction: AudioDirection::Output,
+        stream_id: 10,
+    });
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state().audio_ui.expanded_stream_route,
+        Some((AudioDirection::Output, 10))
+    );
+    let buf = rt
+        .rendered_buffer("bar-mixer-popup")
+        .expect("mixer popup renders headless with route picker open");
+    let sz = rt.surface_logical_size("bar-mixer-popup").unwrap();
+    let width = sz.width.get().round() as usize;
+    let popup_left = rt
+        .state()
+        .audio_ui
+        .popup_left_x
+        .clamp(8.0, (rt.state().bar_width - crate::theme::MIXER_POPUP_WIDTH - 8.0).max(8.0))
+        .round() as usize;
+    let popup_right = popup_left + crate::theme::MIXER_POPUP_WIDTH.round() as usize;
+    let overflow_px = buf.as_chunks::<4>().0.iter().enumerate().any(|(i, px)| {
+        let x = i % width;
+        x > popup_right + 1 && px[3] > 0
+    });
+    assert!(
+        !overflow_px,
+        "per-app volume readout must not overflow past the right edge of the mixer popup"
+    );
+
+    // Move Firefox to HDMI Speakers (sink 2): updates device_id optimistically & collapses picker.
+    rt.enqueue(Msg::MixerMoveStream {
+        direction: AudioDirection::Output,
+        stream_id: 10,
+        device_id: 2,
+    });
+    rt.step().unwrap();
+    assert_eq!(rt.state().audio_ui.expanded_stream_route, None);
+    let moved_dev = rt
+        .state()
+        .audio
+        .as_ref()
+        .and_then(|a| a.playback_streams().find(|s| s.id == 10))
+        .and_then(|s| s.device_id);
+    assert_eq!(moved_dev, Some(2));
+    assert!(rt.rendered_buffer("bar-mixer-popup").is_some());
+
+    // Switch to Input target, expand capture stream 20, and move it to USB Condenser (source 12).
+    rt.enqueue(Msg::MixerSetTarget(AudioControlTarget::Source));
+    rt.enqueue(Msg::MixerToggleStreamRoute {
+        direction: AudioDirection::Input,
+        stream_id: 20,
+    });
+    rt.step().unwrap();
+    assert_eq!(
+        rt.state().audio_ui.expanded_stream_route,
+        Some((AudioDirection::Input, 20))
+    );
+    assert!(rt.rendered_buffer("bar-mixer-popup").is_some());
+
+    rt.enqueue(Msg::MixerMoveStream {
+        direction: AudioDirection::Input,
+        stream_id: 20,
+        device_id: 12,
+    });
+    rt.step().unwrap();
+    let moved_src = rt
+        .state()
+        .audio
+        .as_ref()
+        .and_then(|a| a.capture_streams().find(|s| s.id == 20))
+        .and_then(|s| s.device_id);
+    assert_eq!(moved_src, Some(12));
+
+    // Re-expand stream 20, then send a snapshot without it -> stale expansion clears automatically.
+    rt.enqueue(Msg::MixerToggleStreamRoute {
+        direction: AudioDirection::Input,
+        stream_id: 20,
+    });
+    rt.step().unwrap();
+    assert!(rt.state().audio_ui.expanded_stream_route.is_some());
+    rt.enqueue(Msg::AudioUpdated(Arc::new(AudioSnapshot::default())));
+    rt.step().unwrap();
+    assert_eq!(rt.state().audio_ui.expanded_stream_route, None);
+}
+
+#[test]
+fn config_toml_hot_reload_applies_live_and_ignores_unchanged_or_deleted() {
+    use crate::app::config::{MetricPlacement, RightMetricId, WidgetConfig};
+    use crate::app::visualizer::VisualizerMode;
+
+    let mut rt = synthetic_rt();
+    let cfg_path = rt.state().config_path.clone();
+
+    // Open mixer popup first so we can verify hiding `audio` via hot-reload closes it automatically.
+    rt.enqueue(Msg::MixerBarPointerDown(PointerEvent {
+        position: Point::new(1650.logical_px(), 12.logical_px()),
+        local_position: Point::ZERO,
+        button: Some(MouseButton::Left),
+        modifiers: Modifiers::empty(),
+    }));
+    rt.step().unwrap();
+    assert!(rt.state().audio_ui.is_popup_open());
+
+    // Prepare externally edited config on disk.
+    let mut external = WidgetConfig::default();
+    external.general.clock_24h = false;
+    external.general.clock_alt_default = true;
+    external.audio.sound_volume_pct = 70;
+    external.sprite.quick_menu_pose = 2;
+    external.widgets.show_visualizer = false;
+    external.widgets.visualizer_mode = VisualizerMode::Oscilloscope;
+    external
+        .widgets
+        .set_metric_placement(RightMetricId::Audio, MetricPlacement::Hidden);
+    external.save_to_path(&cfg_path).unwrap();
+
+    // Deleted event must be safely ignored without touching live state.
+    rt.enqueue(Msg::ConfigFileChanged(FileWatchEvent {
+        path: cfg_path.clone(),
+        kind: FileWatchKind::Deleted,
+    }));
+    rt.step().unwrap();
+    assert!(rt.state().config.general.clock_24h);
+    assert!(rt.state().audio_ui.is_popup_open());
+
+    // Modified event hot-reloads every changed live setting without restarting.
+    rt.enqueue(Msg::ConfigFileChanged(FileWatchEvent {
+        path: cfg_path.clone(),
+        kind: FileWatchKind::Modified,
+    }));
+    rt.step().unwrap();
+    assert!(!rt.state().config.general.clock_24h);
+    assert!(rt.state().clock_alt);
+    assert!((rt.state().sounds.volume_scale - 0.70).abs() < 1e-4);
+    assert_eq!(rt.state().quick_menu.sprite_pose_idx, 2);
+    assert!(!rt.state().config.widgets.show_visualizer);
+    assert_eq!(rt.state().visualizer.mode, VisualizerMode::Oscilloscope);
+    assert!(!rt.state().audio_ui.is_popup_open());
+
+    // Duplicate event with identical file content is a clean no-op.
+    let seq_before = rt.state().visualizer.frame_seq;
+    rt.enqueue(Msg::ConfigFileChanged(FileWatchEvent {
+        path: cfg_path.clone(),
+        kind: FileWatchKind::Modified,
+    }));
+    rt.step().unwrap();
+    assert_eq!(rt.state().visualizer.frame_seq, seq_before);
+
+    // Transient empty file (mid-truncate) must not reset config to defaults.
+    std::fs::write(&cfg_path, "").unwrap();
+    rt.enqueue(Msg::ConfigFileChanged(FileWatchEvent {
+        path: cfg_path.clone(),
+        kind: FileWatchKind::Modified,
+    }));
+    rt.step().unwrap();
+    assert!(!rt.state().config.general.clock_24h);
+    assert_eq!(rt.state().visualizer.mode, VisualizerMode::Oscilloscope);
+
+    let _ = std::fs::remove_file(&cfg_path);
+}

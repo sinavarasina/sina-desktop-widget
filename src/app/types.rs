@@ -79,6 +79,8 @@ pub enum HoverTarget {
     MixerPort(usize),
     MixerProfileToggle,
     MixerProfile(usize),
+    MixerStreamRouteToggle(u32),
+    MixerStreamRouteDevice(u32, u32),
     TrayItem(usize),
     TrayMenuItem(i32),
     TrayMenuClose,

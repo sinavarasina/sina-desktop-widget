@@ -27,12 +27,56 @@ const MASTER_CARD_HEIGHT: f32 = 80.0;
 const APPS_HEADER_HEIGHT: f32 = 24.0;
 const ROW_HEIGHT: f32 = 36.0;
 const ROW_GAP: f32 = 4.0;
+const ROUTE_OPT_HEIGHT: f32 = 22.0;
+const ROUTE_OPT_GAP: f32 = 2.0;
+const ROUTE_PICKER_PAD: f32 = 4.0;
+const ROUTE_PICKER_TOP_GAP: f32 = 2.0;
 const CARD_PAD_H: f32 = 10.0;
-const TEXT_COL_WIDTH: f32 = MIXER_TRACK_WIDTH;
-const NAME_CLIP_WIDTH: f32 = TEXT_COL_WIDTH - 34.0;
 const MASTER_NAME_WIDTH: f32 = 104.0;
 const ICON_BADGE_PX: f32 = 18.0;
 const ICON_PX: f32 = 16.0;
+
+fn device_display_name(dev: &AudioDevice) -> &str {
+    if dev.description.is_empty() {
+        dev.name.as_str()
+    } else {
+        dev.description.as_str()
+    }
+}
+
+fn device_icon(dev: &AudioDevice, is_source: bool) -> &'static str {
+    if let Some(port) = active_port_of(dev) {
+        port_icon(&port.name, is_source)
+    } else {
+        port_icon(device_display_name(dev), is_source)
+    }
+}
+
+fn truncate_chars(s: &str, max_chars: usize) -> String {
+    let mut out = String::new();
+    let mut chars = s.chars();
+    for _ in 0..max_chars {
+        let Some(c) = chars.next() else {
+            return out;
+        };
+        out.push(c);
+    }
+    if chars.next().is_some() {
+        out.pop();
+        out.push('…');
+    }
+    out
+}
+
+fn route_picker_height(device_count: usize) -> f32 {
+    if device_count <= 1 {
+        return 0.0;
+    }
+    ROUTE_PICKER_TOP_GAP
+        + ROUTE_PICKER_PAD * 2.0
+        + (device_count as f32) * ROUTE_OPT_HEIGHT
+        + (device_count.saturating_sub(1) as f32) * ROUTE_OPT_GAP
+}
 
 pub fn build_mixer_popup_surface(state: &State) -> Surface<Msg> {
     let ease = state.audio_ui.popup_progress();
@@ -513,15 +557,32 @@ struct AppRow {
     muted: bool,
     icon: Option<ImageAsset>,
     capture: bool,
+    device_id: Option<u32>,
 }
 
 /// Rows follow the active master target: only playback streams are listed while the sink is
 /// controlled and only capture streams while the source is, so an app is never listed against
 /// the wrong direction (nor does scrolling one move the other).
 fn build_app_rows(state: &State, max_body_height: f32) -> (Vec<Element<Msg>>, f32) {
+    let is_source = state.audio_target == AudioControlTarget::Source;
+    let devices: &[AudioDevice] = state.audio.as_ref().map_or(&[], |a| {
+        if is_source {
+            a.sources.as_slice()
+        } else {
+            a.sinks.as_slice()
+        }
+    });
+    let default_dev_id = state.audio.as_ref().and_then(|a| {
+        if is_source {
+            a.default_source_id.or_else(|| a.default_source().map(|d| d.id))
+        } else {
+            a.default_sink_id.or_else(|| a.default_sink().map(|d| d.id))
+        }
+    });
+
     let mut app_rows: Vec<AppRow> = Vec::new();
     if let Some(audio) = state.audio.as_ref() {
-        if state.audio_target == AudioControlTarget::Source {
+        if is_source {
             for c in audio.capture_streams() {
                 let name = c.binary_name.clone().unwrap_or_else(|| c.name.clone());
                 app_rows.push(AppRow {
@@ -531,6 +592,7 @@ fn build_app_rows(state: &State, max_body_height: f32) -> (Vec<Element<Msg>>, f3
                     muted: c.volume.muted,
                     icon: state.audio_ui.capture_icons.get(&c.id).copied().flatten(),
                     capture: true,
+                    device_id: c.device_id,
                 });
             }
         } else {
@@ -543,6 +605,7 @@ fn build_app_rows(state: &State, max_body_height: f32) -> (Vec<Element<Msg>>, f3
                     muted: s.volume.muted,
                     icon: state.audio_ui.stream_icons.get(&s.id).copied().flatten(),
                     capture: false,
+                    device_id: s.device_id,
                 });
             }
         }
@@ -566,30 +629,60 @@ fn build_app_rows(state: &State, max_body_height: f32) -> (Vec<Element<Msg>>, f3
         return (rows, height);
     }
 
-    let visible_slots =
-        (((max_body_height - ROW_GAP) / (ROW_HEIGHT + ROW_GAP)).floor() as usize).max(1);
+    let can_route = devices.len() > 1;
+    let picker_extra = if can_route {
+        route_picker_height(devices.len())
+    } else {
+        0.0
+    };
     let start = state
         .audio_ui
         .scroll_index
         .min(app_rows.len().saturating_sub(1));
-    let shown: Vec<&AppRow> = app_rows.iter().skip(start).take(visible_slots).collect();
-    let count = shown.len();
-    let body_height =
-        ((count as f32) * ROW_HEIGHT + (count.saturating_sub(1) as f32) * ROW_GAP + 14.0)
-            .min(max_body_height);
 
+    let mut shown: Vec<&AppRow> = Vec::new();
+    let mut used_h = 14.0_f32;
+    for r in app_rows.iter().skip(start) {
+        let dir = if r.capture {
+            AudioDirection::Input
+        } else {
+            AudioDirection::Output
+        };
+        let expanded = can_route && state.audio_ui.expanded_stream_route == Some((dir, r.id));
+        let item_h = ROW_HEIGHT + if expanded { picker_extra } else { 0.0 };
+        let gap = if shown.is_empty() { 0.0 } else { ROW_GAP };
+        if !shown.is_empty() && used_h + gap + item_h > max_body_height {
+            break;
+        }
+        used_h += gap + item_h;
+        shown.push(r);
+    }
+
+    let body_height = used_h.min(max_body_height);
     let rows = shown
         .iter()
-        .map(|r| build_app_row(r, state.audio_ui.marquee_tick))
+        .map(|r| build_app_row(state, r, devices, default_dev_id))
         .collect();
     (rows, body_height)
 }
 
-fn build_app_row(r: &AppRow, tick: u32) -> Element<Msg> {
-    let name_text = marquee_slice(&r.name, (NAME_CLIP_WIDTH / 5.6) as usize, tick);
+fn build_app_row(
+    state: &State,
+    r: &AppRow,
+    devices: &[AudioDevice],
+    default_dev_id: Option<u32>,
+) -> Element<Msg> {
     let pct = (r.linear * 100.0).clamp(0.0, 150.0).round() as u16;
     let ratio = r.linear.clamp(0.0, 1.0);
     let fill_w = MIXER_TRACK_WIDTH * ratio;
+    let direction = if r.capture {
+        AudioDirection::Input
+    } else {
+        AudioDirection::Output
+    };
+    let can_route = devices.len() > 1;
+    let expanded = can_route && state.audio_ui.expanded_stream_route == Some((direction, r.id));
+    let current_dev_id = r.device_id.or(default_dev_id);
 
     let icon: Element<Msg> = match r.icon {
         Some(img) => Image::new(img)
@@ -636,13 +729,123 @@ fn build_app_row(r: &AppRow, tick: u32) -> Element<Msg> {
         }
     };
 
+    let mut header_row = Row::new()
+        .size(Size::new(Length::Fill, Length::Auto))
+        .gap(5.logical_px())
+        .align(Align::Center)
+        .child(
+            Text::new(r.name.clone())
+                .font(font_ui_semibold())
+                .font_size(10.logical_px())
+                .color(TEXT)
+                .ellipsis()
+                .max_lines(1)
+                .flex(1.0),
+        );
+
+    if can_route {
+        let current_dev = current_dev_id.and_then(|id| devices.iter().find(|d| d.id == id));
+        let dev_icon = current_dev.map_or(
+            if r.capture { "\u{f130}" } else { "\u{f028}" },
+            |d| device_icon(d, r.capture),
+        );
+        let dev_short = current_dev
+            .map(|d| truncate_chars(device_display_name(d), 10))
+            .unwrap_or_else(|| String::from("Route"));
+        let custom_routed = r.device_id.is_some()
+            && default_dev_id.is_some()
+            && r.device_id != default_dev_id;
+        let toggle_target = HoverTarget::MixerStreamRouteToggle(r.id);
+        let toggle_hovered = state.hovered == toggle_target;
+        let route_border = if expanded {
+            MAUVE
+        } else if custom_routed {
+            BLUE
+        } else if toggle_hovered {
+            SURFACE1
+        } else {
+            SURFACE0
+        };
+        let route_fg = if expanded {
+            MAUVE
+        } else if custom_routed {
+            BLUE
+        } else if toggle_hovered {
+            TEXT
+        } else {
+            SUBTEXT1
+        };
+        let caret = if expanded { "\u{f0d8}" } else { "\u{f0d7}" };
+
+        header_row = header_row.child(
+            Group::new()
+                .key(("mixer-stream-route-toggle", r.id))
+                .size(Size::auto())
+                .cursor(CursorShape::Pointer)
+                .on_hover(Msg::Hover(toggle_target))
+                .on_leave(Msg::Leave(toggle_target))
+                .on_click(Msg::MixerToggleStreamRoute {
+                    direction,
+                    stream_id: r.id,
+                })
+                .child(
+                    Rect::new()
+                        .size(Size::fill())
+                        .fill(if expanded || toggle_hovered {
+                            SURFACE0
+                        } else {
+                            CRUST
+                        })
+                        .corner_radius(0.logical_px())
+                        .border(1.logical_px(), route_border),
+                )
+                .child(
+                    Row::new()
+                        .padding(Edges::symmetric(1.logical_px(), 5.logical_px()))
+                        .gap(4.logical_px())
+                        .align(Align::Center)
+                        .child(
+                            Text::new(dev_icon)
+                                .font(font_ui())
+                                .font_size(8.5.logical_px())
+                                .bounds_mode(TextBoundsMode::Optical)
+                                .color(route_fg),
+                        )
+                        .child(
+                            Text::new(dev_short)
+                                .font(font_ui_semibold())
+                                .font_size(8.5.logical_px())
+                                .color(route_fg),
+                        )
+                        .child(
+                            Text::new(caret)
+                                .font(font_ui())
+                                .font_size(7.5.logical_px())
+                                .bounds_mode(TextBoundsMode::Optical)
+                                .color(route_fg),
+                        ),
+                ),
+        );
+    }
+
+    header_row = header_row.child(
+        Text::new(if r.muted {
+            String::from("muted")
+        } else {
+            format!("{pct}%")
+        })
+        .font(font_ui_semibold())
+        .font_size(9.5.logical_px())
+        .color(if r.muted { OVERLAY0 } else { SUBTEXT1 }),
+    );
+
     let key = if r.capture {
         ("mixer-capture-row", r.id)
     } else {
         ("mixer-stream-row", r.id)
     };
 
-    Group::new()
+    let main_row = Group::new()
         .key(key)
         .size(Size::new(Length::Fill, ROW_HEIGHT.logical_px()))
         .on_scroll(scroll)
@@ -651,13 +854,13 @@ fn build_app_row(r: &AppRow, tick: u32) -> Element<Msg> {
                 .size(Size::fill())
                 .fill(MANTLE)
                 .corner_radius(0.logical_px())
-                .border(1.logical_px(), SURFACE0),
+                .border(1.logical_px(), if expanded { MAUVE } else { SURFACE0 }),
         )
         .child(
             Row::new()
                 .size(Size::fill())
-                .padding(Edges::symmetric(0.logical_px(), 8.logical_px()))
-                .gap(8.logical_px())
+                .padding(Edges::symmetric(0.logical_px(), 12.logical_px()))
+                .gap(12.logical_px())
                 .align(Align::Center)
                 .child(
                     Group::new()
@@ -669,36 +872,9 @@ fn build_app_row(r: &AppRow, tick: u32) -> Element<Msg> {
                 )
                 .child(
                     Column::new()
-                        .size(Size::new(Length::Fill, Length::Auto))
+                        .size(Size::new(MIXER_TRACK_WIDTH.logical_px(), Length::Auto))
                         .gap(3.logical_px())
-                        .child(
-                            Row::new()
-                                .size(Size::new(Length::Fill, Length::Auto))
-                                .align(Align::Center)
-                                .child(
-                                    Clip::new(
-                                        Text::new(name_text)
-                                            .font(font_ui_semibold())
-                                            .font_size(10.logical_px())
-                                            .color(TEXT),
-                                    )
-                                    .size(Size::new(NAME_CLIP_WIDTH.logical_px(), 13.logical_px())),
-                                )
-                                .child(
-                                    Text::new(if r.muted {
-                                        String::from("muted")
-                                    } else {
-                                        format!("{pct}%")
-                                    })
-                                    .font(font_ui_semibold())
-                                    .font_size(9.5.logical_px())
-                                    .color(if r.muted {
-                                        OVERLAY0
-                                    } else {
-                                        SUBTEXT1
-                                    }),
-                                ),
-                        )
+                        .child(header_row)
                         .child(
                             Group::new()
                                 .size(Size::new(MIXER_TRACK_WIDTH.logical_px(), 5.logical_px()))
@@ -713,6 +889,129 @@ fn build_app_row(r: &AppRow, tick: u32) -> Element<Msg> {
                                 ),
                         ),
                 ),
+        );
+
+    if !expanded {
+        return main_row.into();
+    }
+
+    let picker = build_stream_route_picker(state, r, direction, devices, current_dev_id, default_dev_id);
+    Column::new()
+        .key(("mixer-stream-wrap", r.id))
+        .size(Size::new(Length::Fill, Length::Auto))
+        .gap(ROUTE_PICKER_TOP_GAP.logical_px())
+        .child(main_row)
+        .child(picker)
+        .into()
+}
+
+fn build_stream_route_picker(
+    state: &State,
+    r: &AppRow,
+    direction: AudioDirection,
+    devices: &[AudioDevice],
+    current_dev_id: Option<u32>,
+    default_dev_id: Option<u32>,
+) -> Element<Msg> {
+    let mut opts = Column::new()
+        .size(Size::new(Length::Fill, Length::Auto))
+        .padding(Edges::all(ROUTE_PICKER_PAD.logical_px()))
+        .gap(ROUTE_OPT_GAP.logical_px());
+
+    for dev in devices {
+        let active = current_dev_id == Some(dev.id);
+        let is_default = default_dev_id == Some(dev.id);
+        let target = HoverTarget::MixerStreamRouteDevice(r.id, dev.id);
+        let hovered = state.hovered == target;
+        let bg = if hovered { SURFACE0 } else { MANTLE };
+        let border = if active {
+            MAUVE
+        } else if hovered {
+            SURFACE1
+        } else {
+            SURFACE0
+        };
+        let fg = if active {
+            MAUVE
+        } else if hovered {
+            TEXT
+        } else {
+            SUBTEXT1
+        };
+
+        let mut content = Row::new()
+            .size(Size::fill())
+            .padding(Edges::symmetric(0.logical_px(), 7.logical_px()))
+            .gap(6.logical_px())
+            .align(Align::Center)
+            .child(
+                Text::new(device_icon(dev, r.capture))
+                    .font(font_ui())
+                    .font_size(9.5.logical_px())
+                    .bounds_mode(TextBoundsMode::Optical)
+                    .color(if active { MAUVE } else { fg }),
+            )
+            .child(
+                Text::new(device_display_name(dev).to_owned())
+                    .font(if active { font_ui_semibold() } else { font_ui() })
+                    .font_size(9.logical_px())
+                    .color(fg)
+                    .ellipsis()
+                    .max_lines(1)
+                    .flex(1.0),
+            );
+
+        if is_default {
+            content = content.child(
+                Text::new("def")
+                    .font(font_ui())
+                    .font_size(8.logical_px())
+                    .color(OVERLAY0),
+            );
+        }
+
+        let mut opt = Group::new()
+            .key(("mixer-stream-route-opt", r.id, dev.id))
+            .size(Size::new(Length::Fill, ROUTE_OPT_HEIGHT.logical_px()))
+            .cursor(CursorShape::Pointer)
+            .on_hover(Msg::Hover(target))
+            .on_leave(Msg::Leave(target))
+            .on_click(Msg::MixerMoveStream {
+                direction,
+                stream_id: r.id,
+                device_id: dev.id,
+            })
+            .on_scroll(|_| Msg::Noop)
+            .child(
+                Rect::new()
+                    .size(Size::fill())
+                    .fill(bg)
+                    .corner_radius(0.logical_px())
+                    .border(1.logical_px(), border),
+            );
+
+        if active {
+            opt = opt.child(
+                Rect::new()
+                    .position(Position::absolute(0.logical_px(), 0.logical_px()))
+                    .size(Size::new(2.logical_px(), ROUTE_OPT_HEIGHT.logical_px()))
+                    .fill(MAUVE),
+            );
+        }
+
+        opts = opts.child(opt.child(content));
+    }
+
+    Group::new()
+        .key(("mixer-stream-route-picker", r.id))
+        .size(Size::new(Length::Fill, Length::Auto))
+        .child(
+            Rect::new()
+                .size(Size::fill())
+                .fill(CRUST)
+                .corner_radius(0.logical_px())
+                .border(1.logical_px(), SURFACE1),
         )
+        .child(opts)
         .into()
 }

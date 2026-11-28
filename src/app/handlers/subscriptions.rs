@@ -62,6 +62,12 @@ pub fn build_subscriptions(state: &State) -> Subscriptions<Msg> {
     subs.push(Dbus::udisks(Msg::UDisksUpdated));
     subs.push(Dbus::logind(Msg::LogindEvent));
     subs.push(Idle::notify(IDLE_TRIM_TIMEOUT, Msg::UserIdle));
+    #[cfg(not(test))]
+    subs.push(FileWatch::path(
+        "config-toml-watch",
+        state.config_path.clone(),
+        Msg::ConfigFileChanged,
+    ));
 
     // Single monitor-synchronized VSync subscription for all UI animations (0% idle CPU/GPU
     // once settled, automatic 60/120/144/240Hz adaptation, zero wakeups during DPMS off).

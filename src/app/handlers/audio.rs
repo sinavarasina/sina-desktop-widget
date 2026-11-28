@@ -48,6 +48,7 @@ pub fn handle_mixer_set_target(
         state.audio_target = target;
         state.audio_ui.profiles_open = false;
         state.audio_ui.routing_scroll_y = 0.0;
+        state.audio_ui.expanded_stream_route = None;
         state.play_sound(SoundCue::TabChanged, ctx);
     }
 }
@@ -56,6 +57,9 @@ pub fn handle_mixer_toggle_routing(state: &mut State, ctx: &EffectCtx<'_, crate:
     state.audio_ui.routing_open = !state.audio_ui.routing_open;
     state.audio_ui.profiles_open = false;
     state.audio_ui.routing_scroll_y = 0.0;
+    if state.audio_ui.routing_open {
+        state.audio_ui.expanded_stream_route = None;
+    }
     let cue = if state.audio_ui.routing_open {
         SoundCue::MenuPopup
     } else {
@@ -338,11 +342,56 @@ pub fn handle_mixer_capture_seek_click(
     }
 }
 
+pub fn handle_mixer_toggle_stream_route(
+    state: &mut State,
+    direction: AudioDirection,
+    stream_id: u32,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
+) {
+    if state.audio_ui.expanded_stream_route == Some((direction, stream_id)) {
+        state.audio_ui.expanded_stream_route = None;
+        state.play_sound(SoundCue::MenuPopdown, ctx);
+    } else {
+        state.audio_ui.expanded_stream_route = Some((direction, stream_id));
+        state.play_sound(SoundCue::MenuPopup, ctx);
+    }
+}
+
+pub fn handle_mixer_move_stream(
+    state: &mut State,
+    direction: AudioDirection,
+    stream_id: u32,
+    device_id: u32,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
+) {
+    if let Ok(ac) = ctx.audio() {
+        let _ = ac.move_stream(direction, stream_id, device_id);
+    }
+    if let Some(audio) = &mut state.audio
+        && let Some(stream) = Arc::make_mut(audio)
+            .streams
+            .iter_mut()
+            .find(|s| s.id == stream_id && s.direction == direction)
+    {
+        stream.device_id = Some(device_id);
+    }
+    state.audio_ui.expanded_stream_route = None;
+    state.play_sound(SoundCue::TabChanged, ctx);
+}
+
 pub fn handle_audio_updated(
     state: &mut State,
     snap: Arc<AudioSnapshot>,
     ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
 ) {
+    if let Some((dir, stream_id)) = state.audio_ui.expanded_stream_route
+        && !snap
+            .streams
+            .iter()
+            .any(|s| s.id == stream_id && s.direction == dir)
+    {
+        state.audio_ui.expanded_stream_route = None;
+    }
     state.audio = Some(snap);
     refresh_stream_icons(state, ctx);
 }

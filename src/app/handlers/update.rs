@@ -17,10 +17,10 @@ use super::annotate::{
 use super::audio::{
     handle_audio_updated, handle_mixer_balance_scroll, handle_mixer_balance_seek,
     handle_mixer_bar_pointer, handle_mixer_capture_scroll, handle_mixer_capture_seek_click,
-    handle_mixer_master_seek_click, handle_mixer_routing_scroll, handle_mixer_select_device,
-    handle_mixer_select_port, handle_mixer_select_profile, handle_mixer_set_target,
-    handle_mixer_stream_scroll, handle_mixer_stream_seek_click, handle_mixer_toggle_profiles,
-    handle_mixer_toggle_routing,
+    handle_mixer_master_seek_click, handle_mixer_move_stream, handle_mixer_routing_scroll,
+    handle_mixer_select_device, handle_mixer_select_port, handle_mixer_select_profile,
+    handle_mixer_set_target, handle_mixer_stream_scroll, handle_mixer_stream_seek_click,
+    handle_mixer_toggle_profiles, handle_mixer_toggle_routing, handle_mixer_toggle_stream_route,
 };
 use super::bluetooth::{
     handle_bluetooth_agent_event, handle_bt_agent_decision, handle_bt_bar_pointer,
@@ -55,11 +55,11 @@ use super::quick_menu::{
     handle_quick_menu_toggle_power, handle_quick_menu_toggle_toolbox,
 };
 use super::settings::{
-    handle_cycle_metric_placement, handle_list_scroll, handle_move_metric, handle_preview_sound,
-    handle_rail_scroll, handle_reset_defaults, handle_select_dropdown, handle_select_section,
-    handle_settings_ime, handle_settings_key, handle_step_setting, handle_toggle_dropdown,
-    handle_toggle_setting, handle_toggle_settings, handle_wallpaper_path_apply,
-    handle_wallpaper_path_clear, handle_wallpaper_path_focus,
+    handle_config_hot_reload, handle_cycle_metric_placement, handle_list_scroll,
+    handle_move_metric, handle_preview_sound, handle_rail_scroll, handle_reset_defaults,
+    handle_select_dropdown, handle_select_section, handle_settings_ime, handle_settings_key,
+    handle_step_setting, handle_toggle_dropdown, handle_toggle_setting, handle_toggle_settings,
+    handle_wallpaper_path_apply, handle_wallpaper_path_clear, handle_wallpaper_path_focus,
 };
 use super::tools::{
     handle_close_color_picker, handle_close_screenshot, handle_color_picker_capture_now,
@@ -681,6 +681,15 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
         Msg::MixerCaptureSeekClick { id, ev } => {
             handle_mixer_capture_seek_click(state, id, ev, ctx);
         }
+        Msg::MixerToggleStreamRoute {
+            direction,
+            stream_id,
+        } => handle_mixer_toggle_stream_route(state, direction, stream_id, ctx),
+        Msg::MixerMoveStream {
+            direction,
+            stream_id,
+            device_id,
+        } => handle_mixer_move_stream(state, direction, stream_id, device_id, ctx),
         Msg::CpuSampled(snap) => {
             let now = snap.timestamp;
             state.telemetry_graph.record_cpu(&snap);
@@ -897,6 +906,7 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
         Msg::SettingsResetDefaults => handle_reset_defaults(state, ctx),
         Msg::SettingsCycleMetricPlacement(id) => handle_cycle_metric_placement(state, id, ctx),
         Msg::SettingsMoveMetric { id, delta } => handle_move_metric(state, id, delta, ctx),
+        Msg::ConfigFileChanged(ev) => handle_config_hot_reload(state, ev, ctx),
         Msg::DesktopSpriteBlinkTick => state.desktop_sprite.step_blink(),
         Msg::DesktopSpriteMouthTick => state.desktop_sprite.step_mouth(),
         Msg::Hover(target) => state.update_hover(target, true),

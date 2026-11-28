@@ -19,6 +19,8 @@ pub struct AudioUiState {
     pub profiles_open: bool,
     /// Vertical scroll offset inside the Routing card viewport.
     pub routing_scroll_y: f32,
+    /// Inline per-app output/input device routing picker (`(direction, stream_id)`).
+    pub expanded_stream_route: Option<(AudioDirection, u32)>,
     /// First visible per-app row (scroll window over `streams`/`captures`).
     pub scroll_index: usize,
     pub marquee_tick: u32,
@@ -73,6 +75,7 @@ impl AudioUiState {
         self.routing_open = false;
         self.profiles_open = false;
         self.routing_scroll_y = 0.0;
+        self.expanded_stream_route = None;
     }
 
     pub fn advance_marquee(&mut self) {

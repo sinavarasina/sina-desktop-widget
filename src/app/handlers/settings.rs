@@ -521,3 +521,140 @@ pub fn handle_reset_defaults(state: &mut State, ctx: &mut EffectCtx<'_, crate::a
     state.save_config();
     state.play_sound(SoundCue::ToggleOn, ctx);
 }
+
+/// Applies external edits to `config.toml` live via `FileWatch::path` (0 threads, inotify calloop).
+/// Short-circuits cleanly when unchanged so internal `state.save_config()` calls never loop.
+pub fn handle_config_hot_reload(
+    state: &mut State,
+    ev: FileWatchEvent,
+    ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
+) {
+    if !matches!(
+        ev.kind,
+        FileWatchKind::Modified
+            | FileWatchKind::Created
+            | FileWatchKind::Renamed
+            | FileWatchKind::Overflow
+    ) {
+        return;
+    }
+
+    let Ok(contents) = std::fs::read_to_string(&state.config_path) else {
+        return;
+    };
+    if contents.trim().is_empty() {
+        return;
+    }
+
+    let reloaded = WidgetConfig::from_toml(&contents);
+    if reloaded == state.config {
+        return;
+    }
+
+    let prev = state.config.clone();
+    state.config = reloaded;
+
+    if !state.settings_ui.wallpaper_focused {
+        state.settings_ui.sync_from_config(&state.config);
+    }
+    state.settings_ui.open_dropdown = None;
+
+    if prev.general.clock_alt_default != state.config.general.clock_alt_default {
+        state.clock_alt = state.config.general.clock_alt_default;
+    }
+    if prev.general.foreground_booster != state.config.general.foreground_booster {
+        if state.config.general.foreground_booster {
+            state.booster.on_focus_change(
+                state.window_info.cgroup.as_ref(),
+                state.memory.as_ref(),
+                ctx,
+            );
+        } else {
+            state.booster.clear_active(ctx);
+        }
+    }
+
+    if prev.audio != state.config.audio {
+        state.sounds.apply_config(&state.config.audio);
+    }
+
+    if prev.wallpaper.enabled != state.config.wallpaper.enabled
+        || prev.wallpaper.path != state.config.wallpaper.path
+    {
+        state.settings_ui.wallpaper_error = None;
+        #[cfg(not(test))]
+        if state.config.wallpaper.enabled {
+            match load_configured_wallpaper(&state.config.wallpaper, ctx) {
+                Ok(asset) => replace_wallpaper_asset(state, asset, ctx),
+                Err(err) => {
+                    state.settings_ui.wallpaper_error = Some(err);
+                    let fallback = load_embedded_wallpaper(ctx);
+                    replace_wallpaper_asset(state, fallback, ctx);
+                }
+            }
+        } else {
+            replace_wallpaper_asset(state, None, ctx);
+        }
+    }
+
+    #[cfg(not(test))]
+    if prev.sprite.desktop_enabled != state.config.sprite.desktop_enabled {
+        if state.config.sprite.desktop_enabled {
+            if let DesktopPoseMode::Pinned(idx) = state.config.sprite.desktop_pose {
+                state.desktop_sprite.active_idx = idx;
+            }
+            state.desktop_sprite.ensure_loaded(ctx);
+        } else {
+            state.desktop_sprite.unload_and_evict(ctx);
+        }
+    } else if prev.sprite.desktop_pose != state.config.sprite.desktop_pose
+        && state.config.sprite.desktop_enabled
+        && let DesktopPoseMode::Pinned(pose_idx) = state.config.sprite.desktop_pose
+    {
+        state.desktop_sprite.set_pose_instant(pose_idx, ctx);
+    }
+    if prev.sprite.quick_menu_pose != state.config.sprite.quick_menu_pose {
+        state
+            .quick_menu
+            .set_sprite_pose(state.config.sprite.quick_menu_pose, ctx);
+    }
+
+    if !state.config.widgets.show_notifications {
+        state.notifications.close_center();
+    }
+    if !state.config.widgets.show_mpris {
+        state.mpris.close_popup();
+    }
+    if !state.config.widgets.show_tray {
+        state.tray_menu = None;
+    }
+    if prev.widgets.visualizer_mode != state.config.widgets.visualizer_mode {
+        state.visualizer.mode = state.config.widgets.visualizer_mode;
+        state.visualizer.frame_seq = state.visualizer.frame_seq.wrapping_add(1);
+    }
+    if !state.config.widgets.show_visualizer {
+        state.visualizer.reset_immediate();
+    }
+    if state.config.widgets.drawer_metrics().is_empty() {
+        state.drawer_anim.snap_closed();
+        state.drawer_leave_deadline = None;
+    }
+    for slot in &state.config.widgets.right_metrics {
+        if slot.placement == MetricPlacement::Hidden {
+            match slot.id {
+                RightMetricId::Audio => state.audio_ui.close_popup(),
+                RightMetricId::Disk => state.disk_ui.close_popup(),
+                RightMetricId::Bluetooth => state.bt_ui.close_popup(),
+                RightMetricId::Cpu
+                | RightMetricId::Memory
+                | RightMetricId::Gpu
+                | RightMetricId::Network
+                    if state.telemetry_graph.active.metric_id() == slot.id =>
+                {
+                    state.telemetry_graph.close();
+                }
+                _ => {}
+            }
+        }
+    }
+}

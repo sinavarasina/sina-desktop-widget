@@ -247,6 +247,15 @@ pub enum Msg {
         id: u32,
         ev: PointerEvent,
     },
+    MixerToggleStreamRoute {
+        direction: AudioDirection,
+        stream_id: u32,
+    },
+    MixerMoveStream {
+        direction: AudioDirection,
+        stream_id: u32,
+        device_id: u32,
+    },
     CpuSampled(CpuSnapshot),
     GpuSampled(GpuSnapshot),
     TelemetryBarPointerDown {
@@ -307,6 +316,7 @@ pub enum Msg {
         id: RightMetricId,
         delta: i32,
     },
+    ConfigFileChanged(FileWatchEvent),
     DesktopSpriteBlinkTick,
     DesktopSpriteMouthTick,
     Hover(HoverTarget),
