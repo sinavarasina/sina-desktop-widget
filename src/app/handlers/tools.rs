@@ -10,8 +10,8 @@ use crate::app::clipboard::temp_open_image_path;
 use crate::app::color_picker::ColorPickerPhase;
 use crate::app::msg::Msg;
 use crate::app::screenshot::{
-    PreviewInit, ScreenshotMode, ScreenshotPhase, ScreenshotStart, WindowTarget,
-    crop_and_encode_png, default_screenshot_path,
+    PreviewInit, ScreenshotCommitOutcome, ScreenshotMode, ScreenshotPhase, ScreenshotStart,
+    WindowTarget, crop_encode_and_save_screenshot, default_screenshot_path,
 };
 use crate::app::state::{SoundCue, State};
 use crate::app::zoom::CAPTURE_SETTLE_DELAY;
@@ -192,7 +192,6 @@ fn commit_color_pick(state: &mut State, ctx: &mut EffectCtx<'_, Msg>) {
     if let Some(asset) = state.color_picker.close_immediate() {
         ctx.unload_image(asset);
     }
-    ctx.trim_memory();
     state.play_sound(SoundCue::ToggleOn, ctx);
 }
 
@@ -204,7 +203,6 @@ pub fn handle_close_color_picker(state: &mut State, ctx: &mut EffectCtx<'_, Msg>
     if let Some(asset) = state.color_picker.close_immediate() {
         ctx.unload_image(asset);
     }
-    ctx.trim_memory();
     if was_active {
         state.play_sound(SoundCue::MenuPopdown, ctx);
     }
@@ -336,7 +334,7 @@ pub fn handle_screenshot_captured(
                     state.screenshot.viewport_w,
                     state.screenshot.viewport_h,
                 );
-                commit_screenshot_frame(state, sc, rect, ctx);
+                commit_screenshot_frame(state, Arc::new(sc.clone()), rect, ctx);
                 return;
             }
             match ctx.load_rgba_image(
@@ -521,66 +519,84 @@ fn commit_current_screenshot(
     let Some(frame) = state.screenshot.frame.clone() else {
         return;
     };
-    commit_screenshot_frame(state, &frame, rect, ctx);
+    commit_screenshot_frame(state, frame, rect, ctx);
 }
 
 fn commit_screenshot_frame(
     state: &mut State,
-    frame: &ScreencopyFrame,
+    frame: Arc<ScreencopyFrame>,
     rect: (f32, f32, f32, f32),
     ctx: &mut EffectCtx<'_, Msg>,
 ) {
     let copy = state.screenshot.copy_to_clipboard;
-    let save = state.screenshot.save_to_file;
+    let save_path = state
+        .screenshot
+        .save_to_file
+        .then(|| default_screenshot_path(LocalDateTime::now()));
     let vw = state.screenshot.viewport_w;
     let vh = state.screenshot.viewport_h;
+    let seq = state.screenshot.next_commit_seq();
 
-    match crop_and_encode_png(frame, rect, vw, vh) {
-        Ok((png_bytes, pw, ph)) => {
-            let mut saved_path = None;
-            if save {
-                let path = default_screenshot_path(LocalDateTime::now());
-                if let Some(parent) = path.parent() {
-                    let _ = std::fs::create_dir_all(parent);
-                }
-                if let Err(err) = std::fs::write(&path, &png_bytes) {
-                    state.screenshot.last_error = Some(err.to_string());
-                } else {
-                    state.screenshot.last_saved_path = Some(path.clone());
-                    saved_path = Some(path);
-                }
+    // Unmount and unload the fullscreen overlay immediately so the UI never freezes while
+    // PNG encoding, disk I/O, and thumbnail downscaling run on WayWi's background worker.
+    if let Some(asset) = state.screenshot.close_immediate() {
+        ctx.unload_image(asset);
+    }
+
+    ctx.spawn_blocking(
+        move || crop_encode_and_save_screenshot(&frame, rect, vw, vh, save_path),
+        move |res| Msg::ScreenshotCommitted {
+            seq,
+            copy,
+            outcome: Arc::new(res),
+        },
+    );
+}
+
+pub fn handle_screenshot_committed(
+    state: &mut State,
+    seq: u64,
+    copy: bool,
+    outcome: &Arc<std::result::Result<ScreenshotCommitOutcome, String>>,
+    ctx: &mut EffectCtx<'_, Msg>,
+) {
+    if seq != state.screenshot.commit_seq {
+        return;
+    }
+    match outcome.as_ref() {
+        Ok(done) => {
+            if let Some(ref err) = done.save_error {
+                state.screenshot.last_error = Some(err.clone());
+            } else if let Some(ref path) = done.saved_path {
+                state.screenshot.last_saved_path = Some(path.clone());
             }
             if copy {
                 let _ = ctx.set_clipboard(
                     ClipboardSelection::Clipboard,
-                    vec![(String::from("image/png"), png_bytes.clone())],
+                    vec![(String::from("image/png"), done.png_bytes.clone())],
                 );
             }
-            if let Some(asset) = state.screenshot.close_immediate() {
-                ctx.unload_image(asset);
-            }
-            if let Ok(thumb) = ctx.load_image_bytes(&png_bytes)
-                && let Some(old_thumb) = state.screenshot.show_preview(PreviewInit {
-                    thumb,
-                    width_px: pw,
-                    height_px: ph,
-                    saved_path,
-                    png_bytes,
-                    copied: copy,
-                })
-                && !state.clipboard.uses_asset(old_thumb.id)
+            if let Ok(thumb) = ctx.load_rgba_image(
+                done.thumb_w,
+                done.thumb_h,
+                (done.thumb_w as usize) * 4,
+                true,
+                &done.thumb_rgba,
+            ) && let Some(old_thumb) = state.screenshot.show_preview(PreviewInit {
+                thumb,
+                width_px: done.width_px,
+                height_px: done.height_px,
+                saved_path: done.saved_path.clone(),
+                png_bytes: done.png_bytes.clone(),
+                copied: copy,
+            }) && !state.clipboard.uses_asset(old_thumb.id)
             {
                 ctx.unload_image(old_thumb);
             }
-            ctx.trim_memory();
             state.play_sound(SoundCue::ToggleOn, ctx);
         }
         Err(err) => {
-            state.screenshot.last_error = Some(err);
-            if let Some(asset) = state.screenshot.close_immediate() {
-                ctx.unload_image(asset);
-            }
-            ctx.trim_memory();
+            state.screenshot.last_error = Some(err.clone());
             state.play_sound(SoundCue::DialogError, ctx);
         }
     }
@@ -665,7 +681,6 @@ pub fn handle_close_screenshot(state: &mut State, ctx: &mut EffectCtx<'_, Msg>) 
     if let Some(asset) = state.screenshot.close_immediate() {
         ctx.unload_image(asset);
     }
-    ctx.trim_memory();
     if was_active {
         state.play_sound(SoundCue::MenuPopdown, ctx);
     }

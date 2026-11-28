@@ -136,7 +136,6 @@ pub fn open_zoom_live(state: &mut State, target_zoom: f32, ctx: &mut EffectCtx<'
         Instant::now(),
     ) {
         ctx.unload_image(old_asset);
-        ctx.trim_memory();
     }
     state.play_sound(SoundCue::ToggleOn, ctx);
 }
@@ -241,7 +240,6 @@ pub fn handle_close_zoom(state: &mut State, ctx: &mut EffectCtx<'_, Msg>) {
         if let Some(asset) = state.zoom.close_immediate() {
             ctx.unload_image(asset);
         }
-        ctx.trim_memory();
     }
     if was_active {
         state.play_sound(SoundCue::MenuPopdown, ctx);

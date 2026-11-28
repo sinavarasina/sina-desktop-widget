@@ -15,9 +15,6 @@ pub fn handle_toggle_annotate(state: &mut State, ctx: &mut EffectCtx<'_, crate::
     let ws = state.active_workspace_key();
     if state.annotate.is_active() {
         state.annotate.close(&ws);
-        if !state.annotate.should_mount_surface(&ws) {
-            ctx.trim_memory();
-        }
         state.play_sound(SoundCue::MenuPopdown, ctx);
     } else {
         close_other_screen_tools(state, Some("annotate"), ctx);
@@ -26,13 +23,10 @@ pub fn handle_toggle_annotate(state: &mut State, ctx: &mut EffectCtx<'_, crate::
     }
 }
 
-pub fn handle_close_annotate(state: &mut State, ctx: &mut EffectCtx<'_, crate::app::msg::Msg>) {
+pub fn handle_close_annotate(state: &mut State, ctx: &EffectCtx<'_, crate::app::msg::Msg>) {
     if state.annotate.is_active() {
         let ws = state.active_workspace_key();
         state.annotate.close(&ws);
-        if !state.annotate.should_mount_surface(&ws) {
-            ctx.trim_memory();
-        }
         state.play_sound(SoundCue::MenuPopdown, ctx);
     }
 }
@@ -338,22 +332,19 @@ pub fn handle_annotate_redo(state: &mut State, ctx: &EffectCtx<'_, crate::app::m
 
 pub fn handle_annotate_clear_workspace(
     state: &mut State,
-    ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     let ws = state.active_workspace_key();
     if state.annotate.clear_workspace(&ws) {
-        // Free cached Canvas pixmaps/textures alongside the dropped vector buffers.
-        ctx.trim_memory();
         state.play_sound(SoundCue::TrashEmpty, ctx);
     }
 }
 
 pub fn handle_annotate_clear_all(
     state: &mut State,
-    ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
+    ctx: &EffectCtx<'_, crate::app::msg::Msg>,
 ) {
     if state.annotate.clear_all() {
-        ctx.trim_memory();
         state.play_sound(SoundCue::TrashEmpty, ctx);
     }
 }

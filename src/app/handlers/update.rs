@@ -65,11 +65,11 @@ use super::tools::{
     handle_close_color_picker, handle_close_screenshot, handle_color_picker_capture_now,
     handle_color_picker_captured, handle_color_picker_key, handle_color_picker_pointer_down,
     handle_color_picker_pointer_move, handle_color_picker_scroll, handle_screenshot_capture_now,
-    handle_screenshot_captured, handle_screenshot_key, handle_screenshot_pointer_down,
-    handle_screenshot_pointer_move, handle_screenshot_pointer_up, handle_screenshot_preview_copy,
-    handle_screenshot_preview_delete, handle_screenshot_preview_dismiss,
-    handle_screenshot_preview_folder, handle_screenshot_preview_open,
-    handle_screenshot_preview_timeout, handle_screenshot_set_mode,
+    handle_screenshot_captured, handle_screenshot_committed, handle_screenshot_key,
+    handle_screenshot_pointer_down, handle_screenshot_pointer_move, handle_screenshot_pointer_up,
+    handle_screenshot_preview_copy, handle_screenshot_preview_delete,
+    handle_screenshot_preview_dismiss, handle_screenshot_preview_folder,
+    handle_screenshot_preview_open, handle_screenshot_preview_timeout, handle_screenshot_set_mode,
 };
 use super::zoom::{
     handle_close_zoom, handle_toolbox_launch, handle_zoom_capture_now, handle_zoom_captured,
@@ -304,6 +304,9 @@ pub fn update_state(state: &mut State, msg: Msg, ctx: &mut EffectCtx<'_, crate::
         Msg::ScreenshotCaptureNow { seq } => handle_screenshot_capture_now(state, seq, ctx),
         Msg::ScreenshotCaptured { seq, frame } => {
             handle_screenshot_captured(state, seq, &frame, ctx);
+        }
+        Msg::ScreenshotCommitted { seq, copy, outcome } => {
+            handle_screenshot_committed(state, seq, copy, &outcome, ctx);
         }
         Msg::ScreenshotSetMode(mode) => handle_screenshot_set_mode(state, mode, ctx),
         Msg::ScreenshotToggleCopy => {

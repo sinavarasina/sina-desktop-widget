@@ -326,9 +326,6 @@ pub fn handle_ipc_control(
                 state.annotate.open();
             } else {
                 state.annotate.close(&ws);
-                if !state.annotate.should_mount_surface(&ws) {
-                    ctx.trim_memory();
-                }
             }
             play_overlay_transition(state, was_open, state.annotate.is_active(), ctx);
         }

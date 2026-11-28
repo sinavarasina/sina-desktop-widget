@@ -219,18 +219,13 @@ impl ClipboardState {
         ctx: &mut EffectCtx<'_, crate::app::msg::Msg>,
         keep_asset: Option<AssetId>,
     ) {
-        let mut unloaded_any = false;
         for entry in &mut self.entries {
             if let ClipboardEntryKind::Image { thumb, .. } = &mut entry.kind
                 && let Some(asset) = thumb.take()
                 && keep_asset != Some(asset.id)
             {
                 ctx.unload_image(asset);
-                unloaded_any = true;
             }
-        }
-        if unloaded_any {
-            ctx.trim_memory();
         }
     }
 
@@ -301,16 +296,24 @@ impl ClipboardState {
             return;
         }
 
-        let mut thumb = ctx.load_image_bytes(&snap.bytes).ok();
-        let (width_px, height_px) = thumb.map_or((0, 0), |a| (a.width, a.height));
-        // If the popup is closed, release the decoded RGBA8 buffer immediately; compressed bytes
-        // stay in RAM and `ensure_thumbs_loaded` re-decodes on popup open.
-        if !self.is_popup_visible()
-            && let Some(asset) = thumb.take()
-            && keep_asset != Some(asset.id)
-        {
-            ctx.unload_image(asset);
-        }
+        let (thumb, width_px, height_px) = if self.is_popup_visible() {
+            let loaded = ctx.load_image_bytes(&snap.bytes).ok();
+            let (w, h) = loaded.map_or((0, 0), |a| (a.width, a.height));
+            (loaded, w, h)
+        } else if let Some((w, h)) = png_ihdr_dimensions(&snap.bytes) {
+            // Popup is closed: read PNG dimensions directly from IHDR in O(1) without blocking
+            // the UI thread on a full-resolution decode just to unload it immediately.
+            (None, w, h)
+        } else {
+            let loaded = ctx.load_image_bytes(&snap.bytes).ok();
+            let (w, h) = loaded.map_or((0, 0), |a| (a.width, a.height));
+            if let Some(asset) = loaded
+                && keep_asset != Some(asset.id)
+            {
+                ctx.unload_image(asset);
+            }
+            (None, w, h)
+        };
         let entry = ClipboardEntry {
             id: self.alloc_id(),
             pinned: false,
@@ -411,20 +414,16 @@ impl ClipboardState {
     ) -> bool {
         let before = self.entries.len();
         let mut kept = Vec::with_capacity(self.entries.len());
-        let mut unloaded_any = false;
         for entry in self.entries.drain(..) {
             if entry.pinned {
                 kept.push(entry);
-            } else if unload_entry_asset(&entry, ctx, keep_asset) {
-                unloaded_any = true;
+            } else {
+                unload_entry_asset(&entry, ctx, keep_asset);
             }
         }
         kept.shrink_to_fit();
         self.entries = kept;
         self.scroll_index = 0;
-        if unloaded_any {
-            ctx.trim_memory();
-        }
         self.entries.len() != before
     }
 
@@ -496,6 +495,18 @@ fn unload_entry_asset(
     } else {
         false
     }
+}
+
+/// Reads `(width, height)` from a PNG IHDR chunk in O(1) without decoding pixel data.
+#[must_use]
+fn png_ihdr_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    const PNG_SIG: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
+    if bytes.len() < 24 || &bytes[0..8] != PNG_SIG || &bytes[12..16] != b"IHDR" {
+        return None;
+    }
+    let w = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]);
+    let h = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
+    (w > 0 && h > 0).then_some((w, h))
 }
 
 /// Parses `#rrggbb` or `#rgb` hex color strings into a [`Color`].

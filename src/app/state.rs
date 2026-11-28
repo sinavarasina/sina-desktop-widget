@@ -272,16 +272,11 @@ impl State {
         }
         if self.annotate.is_animating() {
             self.annotate.advance_animation(now);
-            let ws = self.active_workspace_key();
-            if !self.annotate.should_mount_surface(&ws) {
-                ctx.trim_memory();
-            }
         }
         if self.zoom.is_animating() {
             let res = self.zoom.advance(now);
             if let Some(old_snapshot) = res.unloaded_snapshot {
                 ctx.unload_image(old_snapshot);
-                ctx.trim_memory();
             }
             if let Some(live_z) = res.live_zoom_update
                 && let Ok(hc) = ctx.hyprland()
@@ -294,11 +289,9 @@ impl State {
         }
         if self.screenshot.is_animating_preview()
             && let Some(old_thumb) = self.screenshot.advance_preview_animation(now)
+            && !self.clipboard.uses_asset(old_thumb.id)
         {
-            if !self.clipboard.uses_asset(old_thumb.id) {
-                ctx.unload_image(old_thumb);
-            }
-            ctx.trim_memory();
+            ctx.unload_image(old_thumb);
         }
         if self.visualizer.is_decaying() {
             self.visualizer.advance_decay(now);

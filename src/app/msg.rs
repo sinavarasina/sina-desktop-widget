@@ -17,7 +17,7 @@ use super::disk::DiskMenuAction;
 use super::ipc::{IpcAction, IpcTarget};
 use super::mpris::MprisControlAction;
 use super::quick_menu::PowerAction;
-use super::screenshot::ScreenshotMode;
+use super::screenshot::{ScreenshotCommitOutcome, ScreenshotMode};
 use super::telemetry_graph::TelemetryGraphKind;
 use super::toolbox::ToolboxTool;
 #[cfg(test)]
@@ -91,6 +91,11 @@ pub enum Msg {
     ScreenshotCaptured {
         seq: u64,
         frame: Arc<std::result::Result<ScreencopyFrame, String>>,
+    },
+    ScreenshotCommitted {
+        seq: u64,
+        copy: bool,
+        outcome: Arc<std::result::Result<ScreenshotCommitOutcome, String>>,
     },
     ScreenshotSetMode(ScreenshotMode),
     ScreenshotToggleCopy,
